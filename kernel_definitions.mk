@@ -159,7 +159,6 @@ endif
 ifeq ($(GKI_KERNEL),1)
   ifeq "$(KERNEL_DEFCONFIG)" "vendor/$(TARGET_BOARD_PLATFORM)-qgki_defconfig"
     $(info Additional GKI images will be built)
-    BOARD_KERNEL_BINARIES := kernel kernel-gki
     INSTALLED_KERNEL_TARGET := $(foreach k,$(BOARD_KERNEL_BINARIES), $(PRODUCT_OUT)/$(k))
 
     # Create new definitions for building an additional GKI kernel on the side
@@ -210,6 +209,8 @@ BOARD_VENDOR_RAMDISK_KERNEL_MODULES_ARCHIVE_$(GKI_TARGET_MODULES_DIR) := $(GKI_K
 $(BOARD_VENDOR_RAMDISK_KERNEL_MODULES_ARCHIVE_$(GKI_TARGET_MODULES_DIR)): $(GKI_TARGET_PREBUILT_KERNEL)
 endif
 endif
+
+$(BOARD_VENDOR_RAMDISK_KERNEL_MODULES): $(TARGET_PREBUILT_KERNEL)
 
 # Add RTIC DTB to dtb.img if RTIC MPGen is enabled.
 # Note: unfortunately we can't define RTIC DTS + DTB rule here as the
