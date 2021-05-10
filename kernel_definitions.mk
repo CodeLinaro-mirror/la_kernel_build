@@ -111,6 +111,7 @@ BUILD_ROOT_LOC := ../../..
 KERNEL_OUT := $(TARGET_OUT_INTERMEDIATES)/kernel/$(TARGET_KERNEL)
 KERNEL_SYMLINK := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
 KERNEL_USR := $(KERNEL_SYMLINK)/usr
+KERNEL_USR_TS := $(TARGET_OUT_INTERMEDIATES)/kernelusr.time
 
 KERNEL_CONFIG := $(KERNEL_OUT)/.config
 
@@ -122,7 +123,9 @@ ifeq ($(GKI_KERNEL),1)
 GKI_PLATFORM_NAME := $(shell echo $(KERNEL_DEFCONFIG) | sed -r "s/(-gki_defconfig|-qgki_defconfig|-qgki-consolidate_defconfig|-qgki-debug_defconfig)$///")
 GKI_PLATFORM_NAME := $(shell echo $(GKI_PLATFORM_NAME) | sed "s/vendor\///g")
 TARGET_USES_UNCOMPRESSED_KERNEL := $(shell grep "CONFIG_BUILD_ARM64_UNCOMPRESSED_KERNEL=y" $(TARGET_KERNEL_SOURCE)/arch/arm64/configs/vendor/$(GKI_PLATFORM_NAME)_GKI.config)
-KERNEL_GENERATE_DEFCONFIG := $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/configs/$(KERNEL_DEFCONFIG)
+
+# Generate the defconfig file from the fragments
+_x := $(shell ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) KERN_OUT=$(KERNEL_OUT) $(TARGET_KERNEL_MAKE_ENV) MAKE_PATH=$(MAKE_PATH) TARGET_BUILD_VARIANT=${TARGET_BUILD_VARIANT} $(TARGET_KERNEL_SOURCE)/scripts/gki/generate_defconfig.sh $(KERNEL_DEFCONFIG))
 else
 TARGET_USES_UNCOMPRESSED_KERNEL := $(shell grep "CONFIG_BUILD_ARM64_UNCOMPRESSED_KERNEL=y" $(TARGET_KERNEL_SOURCE)/arch/arm64/configs/$(KERNEL_DEFCONFIG))
 endif
@@ -157,7 +160,6 @@ endif
 ifeq ($(GKI_KERNEL),1)
   ifeq "$(KERNEL_DEFCONFIG)" "vendor/$(TARGET_BOARD_PLATFORM)-qgki_defconfig"
     $(info Additional GKI images will be built)
-    BOARD_KERNEL_BINARIES := kernel kernel-gki
     INSTALLED_KERNEL_TARGET := $(foreach k,$(BOARD_KERNEL_BINARIES), $(PRODUCT_OUT)/$(k))
 
     # Create new definitions for building an additional GKI kernel on the side
@@ -172,6 +174,9 @@ ifeq ($(GKI_KERNEL),1)
 
     BOARD_KERNEL_MODULE_DIRS := $(GKI_TARGET_MODULES_DIR)
     BOARD_KERNEL-GKI_BOOTIMAGE_PARTITION_SIZE := 0x06000000
+
+    # Generate the GKI defconfig
+    _x := $(shell ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) KERN_OUT=$(KERNEL_OUT) $(TARGET_KERNEL_MAKE_ENV) MAKE_PATH=$(MAKE_PATH) TARGET_BUILD_VARIANT=${TARGET_BUILD_VARIANT} $(TARGET_KERNEL_SOURCE)/scripts/gki/generate_defconfig.sh $(GKI_KERNEL_DEFCONFIG))
   endif
 endif
 
@@ -206,6 +211,8 @@ $(BOARD_VENDOR_RAMDISK_KERNEL_MODULES_ARCHIVE_$(GKI_TARGET_MODULES_DIR)): $(GKI_
 endif
 endif
 
+$(BOARD_VENDOR_RAMDISK_KERNEL_MODULES): $(TARGET_PREBUILT_KERNEL)
+
 # Add RTIC DTB to dtb.img if RTIC MPGen is enabled.
 # Note: unfortunately we can't define RTIC DTS + DTB rule here as the
 # following variable/ tools (needed for DTS generation)
@@ -220,19 +227,6 @@ endif
 MAKE_PATH := $(SOURCE_ROOT)/prebuilts/build-tools/linux-x86/bin/
 
 # Helper functions
-
-ifeq ($(GKI_KERNEL),1)
-# Generate the defconfig file from fragments
-# $(1): The defconfig to generate. For example, vendor/lahaina-qgki_defconfig
-define generate-defconfig
-	set -x; \
-	ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) KERN_OUT=$(KERNEL_OUT) $(TARGET_KERNEL_MAKE_ENV) MAKE_PATH=$(MAKE_PATH) $(TARGET_KERNEL_SOURCE)/scripts/gki/generate_defconfig.sh $(1); \
-	set +x
-endef
-else
-define generate-defconfig
-endef
-endif
 
 # Build the kernel
 # $(1): KERNEL_DEFCONFIG to build for
@@ -264,29 +258,32 @@ define build-kernel
 endef
 
 # Android Kernel make rules
+# Create kernelusr.time file and use its timestamp later to modify the TS of $(KERNEL_USR). \
+# this will ensure in subsequent builds, i.e. no-op incremental builds, modules depends on $(KERNEL_USR) \
+# will not get recompiled.
 
-$(KERNEL_HEADERS_INSTALL): $(KERNEL_OUT) $(DTC) $(UFDT_APPLY_OVERLAY)
-	$(call generate-defconfig,$(KERNEL_DEFCONFIG)); \
+$(KERNEL_HEADERS_INSTALL): $(DTC) $(UFDT_APPLY_OVERLAY) | $(KERNEL_OUT)
 	$(call build-kernel,$(KERNEL_DEFCONFIG),$(KERNEL_OUT),$(KERNEL_MODULES_OUT),$(KERNEL_HEADERS_INSTALL),1,$(TARGET_PREBUILT_INT_KERNEL))
+	touch $(KERNEL_USR_TS)
 
 $(KERNEL_OUT):
 	mkdir -p $(KERNEL_OUT)
 
-$(KERNEL_USR): $(KERNEL_HEADERS_INSTALL)
-	rm -rf $(KERNEL_SYMLINK)
-	ln -s kernel/$(TARGET_KERNEL) $(KERNEL_SYMLINK)
+$(GKI_KERNEL_OUT):
+	mkdir -p $(GKI_KERNEL_OUT)
+
+$(KERNEL_USR): | $(KERNEL_HEADERS_INSTALL)
+	if [ -d "$(KERNEL_SYMLINK)" ] && [ ! -L "$(KERNEL_SYMLINK)" ]; then \
+	rm -rf $(KERNEL_SYMLINK); \
+	ln -s kernel/$(TARGET_KERNEL) $(KERNEL_SYMLINK); \
+	fi
 
 $(TARGET_PREBUILT_KERNEL): $(KERNEL_OUT) $(DTC) $(KERNEL_USR)
 	echo "Building the requested kernel.."; \
-	$(call generate-defconfig,$(KERNEL_DEFCONFIG)); \
 	$(call build-kernel,$(KERNEL_DEFCONFIG),$(KERNEL_OUT),$(KERNEL_MODULES_OUT),$(KERNEL_HEADERS_INSTALL),0,$(TARGET_PREBUILT_INT_KERNEL))
 
-# Make GKI_TARGET_PREBUILT_KERNEL dependent on TARGET_PREBUILT_KERNEL just so
-# that the builds are serialzed. This is just to avoid hogging CPU resoruces
-# and to avoid any potential race-conditions.
-$(GKI_TARGET_PREBUILT_KERNEL): $(DTC) $(TARGET_PREBUILT_KERNEL)
+$(GKI_TARGET_PREBUILT_KERNEL): $(DTC) $(UFDT_APPLY_OVERLAY) $(GKI_KERNEL_OUT)
 	echo "Building GKI kernel.."; \
-	$(call generate-defconfig,$(GKI_KERNEL_DEFCONFIG)); \
 	$(call build-kernel,$(GKI_KERNEL_DEFCONFIG),$(GKI_KERNEL_OUT),$(GKI_KERNEL_MODULES_OUT),$(GKI_KERNEL_HEADERS_INSTALL),0,$(GKI_TARGET_PREBUILT_INT_KERNEL))
 
 $(INSTALLED_KERNEL_TARGET): $(TARGET_PREBUILT_KERNEL) $(GKI_TARGET_PREBUILT_KERNEL)
@@ -294,6 +291,7 @@ $(INSTALLED_KERNEL_TARGET): $(TARGET_PREBUILT_KERNEL) $(GKI_TARGET_PREBUILT_KERN
 	if [ ! -z "$(GKI_TARGET_PREBUILT_KERNEL)" ]; then \
 		cp $(GKI_TARGET_PREBUILT_KERNEL) $(PRODUCT_OUT)/kernel-gki; \
 	fi
+	touch $(KERNEL_USR) -r $(KERNEL_USR_TS)
 
 # RTIC DTS to DTB (if MPGen enabled;
 # and make sure we don't break the build if rtic_mp.dts missing)

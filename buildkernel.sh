@@ -80,8 +80,13 @@ build_kernel()
 	echo "======================"
 	echo "Building kernel"
 	set -x
+	if [ -f "${ROOT_DIR}/prebuilts/build-tools/linux-x86/bin/toybox" ]; then
+		NCORES=$(${ROOT_DIR}/prebuilts/build-tools/linux-x86/bin/toybox nproc)
+	else
+		NCORES=8
+	fi
 	(cd ${OUT_DIR} && \
-	${MAKE_PATH}make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} HOSTCFLAGS="${TARGET_INCLUDES}" HOSTLDFLAGS="${TARGET_LINCLUDES}" O=${OUT_DIR} ${CC_ARG} ${MAKE_ARGS} -j$(nproc))
+	${MAKE_PATH}make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} HOSTCFLAGS="${TARGET_INCLUDES}" HOSTLDFLAGS="${TARGET_LINCLUDES}" O=${OUT_DIR} ${CC_ARG} ${MAKE_ARGS} -j${NCORES})
 	set +x
 }
 
@@ -146,7 +151,8 @@ copy_modules_to_prebuilt()
 	PREBUILT_OUT=$1
 
 	# Clean the DLKM directory to remove stale modules
-	rm -rf ${KERNEL_MODULES_OUT}
+	rm -rf ${KERNEL_MODULES_OUT}/*.ko
+	rm -rf ${KERNEL_MODULES_OUT}/*.zip
 
 	mkdir -p ${KERNEL_MODULES_OUT}
 
