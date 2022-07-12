@@ -1,12 +1,16 @@
 # Kleaf - Building Android Kernels with Bazel
 
-**Note:** THIS IS EXPERIMENTAL AND INCOMPLETE. USE WITH CAUTION!
-
 ## Table of contents
 
 [Introduction to Kleaf](docs/kleaf.md)
 
 [Building your kernels and drivers with Bazel](docs/impl.md)
+
+[`build.sh` build configs](docs/build_configs.md)
+
+[Support ABI monitoring (GKI)](docs/abi.md)
+
+[Support ABI monitoring (Device)](docs/abi_device.md)
 
 [Handling SCM version](docs/scmversion.md)
 
@@ -17,3 +21,17 @@
 [Kleaf testing](docs/testing.md)
 
 [Cheatsheet](docs/cheatsheet.md)
+
+### Configurations
+
+`--config=release`: [Release builds](docs/release.md)
+
+`--config=fast`: [Make local builds faster](docs/fast.md)
+
+`--config=local`: [Sandboxing](docs/sandbox.md)
+
+`--config=stamp`: [Handling SCM version](docs/scmversion.md)
+
+`--lto`: [Disable LTO during development](docs/lto.md)
+
+`--kbuild_symtypes`: [KBUILD\_SYMTYPES](docs/symtypes.md)
