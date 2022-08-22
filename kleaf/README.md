@@ -20,6 +20,8 @@
 
 [Kleaf testing](docs/testing.md)
 
+[Building against downloaded prebuilts](docs/download_prebuilt.md)
+
 [Cheatsheet](docs/cheatsheet.md)
 
 ### Configurations
@@ -35,3 +37,5 @@
 `--lto`: [Disable LTO during development](docs/lto.md)
 
 `--kbuild_symtypes`: [KBUILD\_SYMTYPES](docs/symtypes.md)
+
+`--kasan`: [kasan](docs/kasan.md)

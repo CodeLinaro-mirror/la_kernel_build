@@ -1065,7 +1065,11 @@ if [ -n "${MODULES}" ]; then
 
     MODULES_ROOT_DIR=$(echo ${INITRAMFS_STAGING_DIR}/lib/modules/*)
     cp ${MODULES_ROOT_DIR}/modules.load ${DIST_DIR}/modules.load
-    cp ${MODULES_ROOT_DIR}/modules.load ${DIST_DIR}/vendor_boot.modules.load
+    if [ -n "${BUILD_VENDOR_BOOT_IMG}" ]; then
+      cp ${MODULES_ROOT_DIR}/modules.load ${DIST_DIR}/vendor_boot.modules.load
+    elif [ -n "${BUILD_VENDOR_KERNEL_BOOT}" ]; then
+      cp ${MODULES_ROOT_DIR}/modules.load ${DIST_DIR}/vendor_kernel_boot.modules.load
+    fi
     echo "${MODULES_OPTIONS}" > ${MODULES_ROOT_DIR}/modules.options
     if [ -e "${MODULES_ROOT_DIR}/modules.blocklist" ]; then
       cp ${MODULES_ROOT_DIR}/modules.blocklist ${DIST_DIR}/modules.blocklist
@@ -1077,34 +1081,7 @@ if [ -n "${MODULES}" ]; then
 fi
 
 if [ "${BUILD_SYSTEM_DLKM}" = "1"  ]; then
-  echo "========================================================"
-  echo " Creating system_dlkm image"
-
-  rm -rf ${SYSTEM_DLKM_STAGING_DIR}
-  create_modules_staging "${SYSTEM_DLKM_MODULES_LIST:-${MODULES_LIST}}" ${MODULES_STAGING_DIR} \
-    ${SYSTEM_DLKM_STAGING_DIR} "${MODULES_BLOCKLIST}" "-e"
-
-  SYSTEM_DLKM_ROOT_DIR=$(echo ${SYSTEM_DLKM_STAGING_DIR}/lib/modules/*)
-  cp ${SYSTEM_DLKM_ROOT_DIR}/modules.load ${DIST_DIR}/system_dlkm.modules.load
-  # Re-sign the stripped modules using kernel build time key
-  find ${SYSTEM_DLKM_STAGING_DIR} -type f -name "*.ko" \
-    -exec ${OUT_DIR}/scripts/sign-file sha1 \
-    ${OUT_DIR}/certs/signing_key.pem \
-    ${OUT_DIR}/certs/signing_key.x509 {} \;
-
-  mkfs.erofs -zlz4hc "${DIST_DIR}/system_dlkm.img" "${SYSTEM_DLKM_STAGING_DIR}"
-  if [ $? -ne 0 ]; then
-    echo "ERROR: system_dlkm image creation failed" >&2
-    exit 1
-  fi
-
-  # Archive system_dlkm staging directory
-  tar -czf "${DIST_DIR}/system_dlkm_staging_archive.tar.gz" -C "${SYSTEM_DLKM_STAGING_DIR}" .
-
-  # No need to sign the image as modules are signed
-  avbtool add_hashtree_footer \
-    --partition_name system_dlkm \
-    --image "${DIST_DIR}/system_dlkm.img"
+  build_system_dlkm
 fi
 
 # Building abl.elf
@@ -1161,7 +1138,8 @@ fi
 echo "========================================================"
 echo " Files copied to ${DIST_DIR}"
 
-if [ -n "${BUILD_BOOT_IMG}" -o -n "${BUILD_VENDOR_BOOT_IMG}" ] ; then
+if [ -n "${BUILD_BOOT_IMG}" -o -n "${BUILD_VENDOR_BOOT_IMG}" \
+      -o -n "${BUILD_VENDOR_KERNEL_BOOT}" ] ; then
   build_boot_images
 fi
 
