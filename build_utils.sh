@@ -92,6 +92,7 @@ function create_modules_staging() {
   local dest_stage=$3
   local modules_blocklist_file=$4
   local depmod_flags=$5
+  local list_order=$6
 
   rm -rf ${dest_dir}
   mkdir -p ${dest_dir}/kernel
@@ -165,7 +166,12 @@ function create_modules_staging() {
 
     # grep the modules.order for any KOs in the modules list
     cp ${dest_dir}/modules.order ${old_modules_list}
-    ! grep -w -f ${modules_list_filter} ${old_modules_list} > ${dest_dir}/modules.order
+    if [ "${list_order}" = "1" ]; then
+      sed -i 's/.*\///g' ${old_modules_list}
+      ! grep -x -f ${old_modules_list} ${modules_list_filter} > ${dest_dir}/modules.order
+    else
+      ! grep -w -f ${modules_list_filter} ${old_modules_list} > ${dest_dir}/modules.order
+    fi
     rm -f ${modules_list_filter} ${old_modules_list}
   fi
 
@@ -196,7 +202,19 @@ function create_modules_staging() {
     # Trim modules from tree that aren't mentioned in modules.order
     (
       cd ${dest_dir}
-      find * -type f -name "*.ko" | grep -v -w -f modules.order -f $used_blocklist_modules - | xargs -r rm
+      if [ "${list_order}" = "1" ]; then
+        find . -type f -name '*.ko' -printf "%f\n" > modules.name.full
+        cat modules.order $used_blocklist_modules > modules.name.need
+        grep -v -x -f modules.name.need modules.name.full > modules.name.remove
+        # This is done to insert escaped directory boundary '\/' in front of every line (eg \/a.ko)
+        # It is for matching entire module's name with 'grep -f' instead of 'grep -w -f'
+        # so that b-a.ko is not same with a.ko
+        sed -i 's/^/\\\/&/' modules.name.remove
+        find * -type f -name "*.ko" | grep -f modules.name.remove - | xargs -r rm
+        rm -rf modules.name.full modules.name.need modules.name.remove
+      else
+        find * -type f -name "*.ko" | grep -v -w -f modules.order -f $used_blocklist_modules - | xargs -r rm
+     fi
     )
     rm $used_blocklist_modules
   fi
