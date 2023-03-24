@@ -75,6 +75,7 @@
 #                        $ANDROID_BUILD_TOP/out/$BRANCH and $KP_ROOT_DIR/out/$BRANCH
 #   DIST_DIR           - Kernel Platform dist folder for the KERNEL_TARGET and KERNEL_VARIANT
 #   RECOMPILE_KERNEL   - Recompile the kernel platform
+#   EXTRA_KBUILD_ARGS  - Arguments to pass to kernel build (build_with_bazel.py)
 #
 # To compile out-of-tree kernel objects and set up the prebuilt UAPI headers,
 # these environment variables must be set.
@@ -141,6 +142,12 @@ trap "rm -rf ${TEMP_KP_OUT_DIR}" exit
 )
 
 ################################################################################
+# If KERNEL_VARIANT is still unset at this point, grab it from the brunch output
+if [ -z "$KERNEL_VARIANT" ]; then
+  KERNEL_VARIANT=$(cd "$ROOT_DIR" && source build/_setup_env.sh && echo "$VARIANT")
+fi
+
+################################################################################
 # Determine output folder
 # ANDROID_KP_OUT_DIR is the output directory from Android Build System perspective
 ANDROID_KP_OUT_DIR="${3:-${OUT_DIR}}"
@@ -194,10 +201,17 @@ if [ "${RECOMPILE_KERNEL}" == "1" ]; then
   echo
   echo "  Recompiling kernel"
 
-  (
-    cd ${ROOT_DIR}
-    SKIP_MRPROPER=1 OUT_DIR=${ANDROID_KP_OUT_DIR} ./build/build.sh
-  )
+  # shellcheck disable=SC2086
+  "${ROOT_DIR}/build_with_bazel.py" \
+    -t "$KERNEL_TARGET" "$KERNEL_VARIANT" $EXTRA_KBUILD_ARGS \
+    --out_dir "${ANDROID_KP_OUT_DIR}" && ret="$?" || ret="$?"
+
+  # Modify the output directory's permissions so cleanup can occur later
+  find "${ROOT_DIR}/out/bazel" -type d -exec chmod 0755 {} +
+
+  if [ "$ret" -ne 0 ]; then
+    exit "$ret"
+  fi
 
   COPY_NEEDED=1
 fi
@@ -206,47 +220,51 @@ fi
 # Set up recompile and copy variables for edk2
 ANDROID_ABL_OUT_DIR=${ANDROID_KERNEL_OUT}/kernel-abl
 
-if [ ! -e "${ANDROID_ABL_OUT_DIR}/abl-user/unsigned_abl.elf" ] && \
-  [ ! -e "${ANDROID_ABL_OUT_DIR}/abl-userdebug/unsigned_abl.elf" ]; then
+if [ ! -e "${ANDROID_ABL_OUT_DIR}/abl-${TARGET_BUILD_VARIANT}/unsigned_abl.elf" ] || \
+    ! diff -q "${ANDROID_ABL_OUT_DIR}/abl-${TARGET_BUILD_VARIANT}/unsigned_abl.elf" \
+  "${ANDROID_KP_OUT_DIR}/dist/unsigned_abl_${TARGET_BUILD_VARIANT}.elf" ; then
   COPY_ABL_NEEDED=1
 fi
 
-for variant in "userdebug" "user"
-do
-  if [ -e "${ANDROID_KP_OUT_DIR}/dist/unsigned_abl_${variant}.elf" ] && \
-    ! diff -q "${ANDROID_ABL_OUT_DIR}/abl-${variant}/unsigned_abl.elf" \
-    "${ANDROID_KP_OUT_DIR}/dist/unsigned_abl_${variant}.elf" ; then
-    COPY_ABL_NEEDED=1
-  fi
-done
-
-if [ ! -e "${ANDROID_KP_OUT_DIR}/dist/unsigned_abl_user.elf" ] && \
-  [ ! -e "${ANDROID_KP_OUT_DIR}/dist/unsigned_abl_userdebug.elf" ] && \
-  [ "${COPY_ABL_NEEDED}" == "1" ]; then
+if [ ! -e "${ANDROID_KP_OUT_DIR}/dist/unsigned_abl_${TARGET_BUILD_VARIANT}.elf" ] && \
+   [ "${COPY_ABL_NEEDED}" == "1" ]; then
   RECOMPILE_ABL=1
 fi
 
 if [ "${RECOMPILE_ABL}" == "1" -o "${COPY_ABL_NEEDED}" == "1" ]; then
-  rm -rf ${ANDROID_ABL_OUT_DIR}
+  rm -rf ${ANDROID_ABL_OUT_DIR}/abl-${TARGET_BUILD_VARIANT}
 fi
 
 ################################################################################
-if [ "${RECOMPILE_ABL}" == "1" ]; then
-  if [ "${RECOMPILE_KERNEL}" == "1" -a -n "${ABL_SRC}" ]; then
-   echo "edk2 image already be generated!"
-  else
-    echo
-    echo "  Recompiling edk2"
+if [ "${RECOMPILE_ABL}" == "1" -a -n "${TARGET_BUILD_VARIANT}" ]; then
+  echo
+  echo "  Recompiling edk2"
+
+    # Make sure Bazel extensions are linked properly
+    if [ ! -f "${ROOT_DIR}/build/msm_kernel_extensions.bzl" ]; then
+      ln -fs "../msm-kernel/msm_kernel_extensions.bzl" "${ROOT_DIR}/build/msm_kernel_extensions.bzl"
+    fi
+    if [ ! -f "${ROOT_DIR}/build/abl_extensions.bzl" ]; then
+      ln -fs "../bootable/bootloader/edk2/abl_extensions.bzl" "${ROOT_DIR}/build/abl_extensions.bzl"
+    fi
 
     (
-      cd ${ROOT_DIR}
-      ABL_OUT_DIR=${ANDROID_KP_OUT_DIR} \
-      ABL_IMAGE_DIR=${ANDROID_KP_OUT_DIR}/dist \
-      ./build/build_abl.sh ${KERNEL_TARGET}
+      cd "${ROOT_DIR}"
+
+      ./tools/bazel run \
+        --"//bootable/bootloader/edk2:target_build_variant=${TARGET_BUILD_VARIANT}" \
+        "//msm-kernel:${KERNEL_TARGET}_${KERNEL_VARIANT}_abl_dist" \
+        -- --dist_dir "${ANDROID_KP_OUT_DIR}/dist" && ret="$?" || ret="$?"
+
+      # Modify the output directory's permissions so cleanup can occur later
+      find out/bazel -type d -exec chmod 0755 {} +
+
+      if [ "$ret" -ne 0 ]; then
+        exit "$ret"
+      fi
     )
 
-    COPY_ABL_NEEDED=1
-  fi
+  COPY_ABL_NEEDED=1
 fi
 
 ################################################################################
@@ -337,9 +355,11 @@ if [ "${COPY_NEEDED}" == "1" ]; then
   rm -rf ${ANDROID_KERNEL_OUT}/host
   cp -r ${ANDROID_KP_OUT_DIR}/host ${ANDROID_KERNEL_OUT}/
 
-  rm -rf ${ANDROID_KERNEL_OUT}/debug
-  if [ -e ${ANDROID_KP_OUT_DIR}/debug ]; then
-    cp -r ${ANDROID_KP_OUT_DIR}/debug ${ANDROID_KERNEL_OUT}/
+  rm -rf "${ANDROID_KERNEL_OUT}/debug"
+  debug_tar="${ANDROID_KP_OUT_DIR}/dist/${KERNEL_TARGET}_${KERNEL_VARIANT}_debug.tar.gz"
+  if [ -f "$debug_tar" ]; then
+    mkdir -p "${ANDROID_KERNEL_OUT}/debug"
+    tar -C "${ANDROID_KERNEL_OUT}/debug" -xf "$debug_tar"
   fi
 
   if [ -z "${KERNEL_VARIANT}" ]; then
@@ -354,8 +374,9 @@ fi
 
 ################################################################################
 if [ "${COPY_ABL_NEEDED}" == "1" ]; then
-  [ -e "${ANDROID_ABL_OUT_DIR}" ] && rm -rf ${ANDROID_ABL_OUT_DIR}
-  for variant in "userdebug" "user"
+  ABL_BUILD_VARIANT=("${TARGET_BUILD_VARIANT}")
+  [ -z "${ABL_BUILD_VARIANT}" ] && ABL_BUILD_VARIANT=("userdebug" "user")
+  for variant in "${ABL_BUILD_VARIANT[@]}"
   do
     for file in LinuxLoader_${variant}.debug unsigned_abl_${variant}.elf ; do
       if [ -e ${ANDROID_KP_OUT_DIR}/dist/${file} ]; then
