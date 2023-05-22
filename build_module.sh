@@ -271,8 +271,15 @@ for EXT_MOD in ${EXT_MODULES}; do
           "filter('${TARGET_PRODUCT/_/-}_${VARIANT/_/-}_.*_dist$', ${bazel_pkg}/...)") \
      && [ -n "$build_target" ]
   then
+
+    build_flags=("--lto=${LTO:-full}")
+    if [ "$ALLOW_UNSAFE_DDK_HEADERS" = "true" ]; then
+      build_flags+=("--allow_ddk_unsafe_headers")
+    fi
+
     # Run the dist command passing in the output directory from Android build system
-    ./tools/bazel run --lto="${LTO:-full}" "$build_target" -- --dist_dir="${OUT_DIR}/${EXT_MOD_REL}" && ret="$?" || ret="$?"
+    ./tools/bazel run "${build_flags[@]}" "$build_target" \
+      -- --dist_dir="${OUT_DIR}/${EXT_MOD_REL}" && ret="$?" || ret="$?"
 
     # Modify the output directory's permissions so cleanup can occur later
     find out/bazel -type d -exec chmod 0775 {} +
@@ -280,6 +287,35 @@ for EXT_MOD in ${EXT_MODULES}; do
     if [ "$ret" -ne 0 ]; then
       exit "$ret"
     fi
+
+    # The Module.symvers file is named "<target>_<variant>_Modules.symvers, but other modules are
+    # looking for just "Module.symvers". Concatenate any of them into one Module.symvers file.
+    cat "${OUT_DIR}/${EXT_MOD_REL}"/*_Module.symvers > "${OUT_DIR}/${EXT_MOD_REL}/Module.symvers"
+
+    # Intermediate directories aren't generated automatically, so we need to create them manually
+    if [ -n "$INTERMEDIATE_DIR" ]; then
+      mkdir -p "$(dirname "$INTERMEDIATE_DIR")"
+      rm -rf "${INTERMEDIATE_DIR}/${EXT_MOD_REL}"
+      cp -ar "${OUT_DIR}/${EXT_MOD_REL}" "$INTERMEDIATE_DIR"
+      for ko in "${OUT_DIR}/${EXT_MOD_REL}"/*.ko; do
+        rm -rf "$(dirname "$INTERMEDIATE_DIR")/$(basename "$ko")_intermediates"
+        cp -ar "${OUT_DIR}/${EXT_MOD_REL}" \
+          "$(dirname "$INTERMEDIATE_DIR")/$(basename "$ko")_intermediates"
+      done
+    fi
+
+    # We need to manually copy .ko's into subdirectories if they have them
+    for ko in $KO_DIRS; do
+      if echo "$ko" | grep -q '/'; then
+        ko_name="$(basename "$ko")"
+        if [ ! -f "${OUT_DIR}/${EXT_MOD_REL}/${ko_name}" ]; then
+          continue
+        fi
+        dir="$(dirname "$ko")"
+        mkdir -p "${OUT_DIR}/${EXT_MOD_REL}/${dir}"
+        cp -a "${OUT_DIR}/${EXT_MOD_REL}/${ko_name}" "${OUT_DIR}/${EXT_MOD_REL}/${dir}"
+      fi
+    done
   else
     # Fall back on legacy make if Bazel build is not present
     echo "warning - building kernel modules with legacy make. Please migrate to DDK."
