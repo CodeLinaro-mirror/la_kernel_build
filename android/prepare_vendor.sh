@@ -325,23 +325,22 @@ if [ "${COPY_NEEDED}" == "1" ]; then
   if [ -n "${second_stage_kos}" ]; then
     mkdir -p ${ANDROID_KERNEL_OUT}/vendor_dlkm
     cp ${second_stage_kos} ${ANDROID_KERNEL_OUT}/vendor_dlkm
+    if [ -e ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist ]; then
+      cp ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist \
+        ${ANDROID_KERNEL_OUT}/vendor_dlkm/modules.blocklist
+    fi
+
+    if [ -e ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.load ]; then
+      cp ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.load \
+        ${ANDROID_KERNEL_OUT}/vendor_dlkm/modules.load
+    fi
+
+    if [ -e ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.blocklist ]; then
+      cp ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.blocklist \
+        ${ANDROID_KERNEL_OUT}/vendor_dlkm/system_dlkm.modules.blocklist
+    fi
   else
     echo "  WARNING!! No vendor_dlkm (second stage) modules found"
-  fi
-
-  if [ -e ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist ]; then
-    cp ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist \
-      ${ANDROID_KERNEL_OUT}/vendor_dlkm/modules.blocklist
-  fi
-
-  if [ -e ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.load ]; then
-    cp ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.load \
-      ${ANDROID_KERNEL_OUT}/vendor_dlkm/modules.load
-  fi
-
-  if [ -e ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.blocklist ]; then
-    cp ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.blocklist \
-      ${ANDROID_KERNEL_OUT}/vendor_dlkm/system_dlkm.modules.blocklist
   fi
 
   for file in Image vmlinux System.map .config Module.symvers kernel-uapi-headers.tar.gz ; do
