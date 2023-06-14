@@ -15,14 +15,13 @@
 # Implementation details. These aren't part of the public API.
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "bool_setting")
 
 bzl_library(
     name = "impl",
     srcs = [
-        "abi/abi_diff.bzl",
         "abi/abi_dump.bzl",
-        "abi/abi_prop.bzl",
         "abi/abi_stgdiff.bzl",
         "abi/abi_transitions.bzl",
         "abi/base_kernel_utils.bzl",
@@ -41,6 +40,7 @@ bzl_library(
         "compile_commands_utils.bzl",
         "constants.bzl",
         "ddk/ddk_conditional_filegroup.bzl",
+        "ddk/ddk_config.bzl",
         "ddk/ddk_headers.bzl",
         "ddk/ddk_module.bzl",
         "ddk/ddk_submodule.bzl",
@@ -59,7 +59,6 @@ bzl_library(
         "kernel_compile_commands.bzl",
         "kernel_config.bzl",
         "kernel_config_settings.bzl",
-        "kernel_config_transition.bzl",
         "kernel_dtstree.bzl",
         "kernel_env.bzl",
         "kernel_filegroup.bzl",
@@ -68,7 +67,6 @@ bzl_library(
         "kernel_module.bzl",
         "kernel_module_group.bzl",
         "kernel_modules_install.bzl",
-        "kernel_toolchain_aspect.bzl",
         "kernel_uapi_headers.bzl",
         "kernel_uapi_headers_cc_library.bzl",
         "kernel_unstripped_modules_archive.bzl",
@@ -156,6 +154,23 @@ bool_setting(
     visibility = ["//visibility:public"],
 )
 
+config_setting(
+    name = "lto_is_set_to_none",
+    flag_values = {"//build/kernel/kleaf:lto": "none"},
+    # All kernel_* from different packages can see this
+    visibility = ["//visibility:public"],
+)
+
+selects.config_setting_group(
+    name = "lto_is_default_and_kasan_is_true",
+    match_all = [
+        "//build/kernel/kleaf:lto_is_default",
+        "//build/kernel/kleaf:kasan_is_true",
+    ],
+    # All kernel_* from different packages can see this
+    visibility = ["//visibility:public"],
+)
+
 py_binary(
     name = "ddk/gen_makefiles",
     srcs = ["ddk/gen_makefiles.py"],
@@ -175,6 +190,28 @@ py_binary(
     name = "print_gcno_mapping",
     srcs = ["print_gcno_mapping.py"],
     visibility = ["//visibility:public"],
+)
+
+sh_binary(
+    name = "write_depset",
+    srcs = ["write_depset.sh"],
+    # All kernel_* / ddk_* from different packages can see this
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
+    name = "ddk/analyze_inputs",
+    srcs = ["ddk/analyze_inputs.py"],
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
+    name = "ddk/gen_ddk_headers",
+    srcs = ["ddk/gen_ddk_headers.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//build/kernel/kleaf:buildozer_command_builder",
+    ],
 )
 
 # Local build platforms

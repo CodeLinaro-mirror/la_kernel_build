@@ -17,151 +17,52 @@
 load("//build/bazel_common_rules/exec:exec.bzl", "exec")
 load("//build/kernel/kleaf:update_source_file.bzl", "update_source_file")
 load("//build/kernel/kleaf:fail.bzl", "fail_rule")
-load(":abi/abi_diff.bzl", "abi_diff")
 load(":abi/abi_stgdiff.bzl", "stgdiff")
 load(":abi/abi_dump.bzl", "abi_dump")
-load(":abi/abi_prop.bzl", "abi_prop")
 load(":abi/extracted_symbols.bzl", "extracted_symbols")
 load(":abi/get_src_kmi_symbol_list.bzl", "get_src_kmi_symbol_list")
 load(":abi/protected_exports.bzl", "protected_exports")
 load(":abi/get_src_protected_exports_files.bzl", "get_src_protected_exports_list", "get_src_protected_modules_list")
+load(":abi/abi_transitions.bzl", "with_vmlinux_transition")
+load(":common_providers.bzl", "KernelBuildAbiInfo")
 load(":kernel_build.bzl", "kernel_build")
-load(":utils.bzl", "utils")
 
 # TODO(b/242072873): Delete once all use cases migrate to kernel_abi.
 def kernel_build_abi(
         name,
-        define_abi_targets = None,
-        # for kernel_abi
-        kernel_modules = None,
-        module_grouping = None,
-        abi_definition = None,
-        kmi_enforced = None,
-        unstripped_modules_archive = None,
-        kmi_symbol_list_add_only = None,
-        # A subset of common attributes accepted by kernel_build_abi.
-        # https://bazel.build/reference/be/common-definitions#common-attributes
-        tags = None,
-        features = None,
-        testonly = None,
-        visibility = None,
-        # for kernel_build
+        # buildifier: disable=unused-variable
         **kwargs):
     """**Deprecated**. Use [`kernel_build`](#kernel_build) (with `collect_unstripped_modules = True`) and [`kernel_abi`](#kernel_abi) directly.
 
-    Declare multiple targets to support ABI monitoring.
-
-    This macro is meant to be used in place of the [`kernel_build`](#kernel_build)
-    marco. All arguments in `kwargs` are passed to `kernel_build` directly.
-
-    For example, you may have the following declaration. (For actual definition
-    of `kernel_aarch64`, see
-    [`define_common_kernels()`](#define_common_kernels).
-
-    ```
-    kernel_build_abi(name = "kernel_aarch64", ...)
-    ```
-
-    The `kernel_build_abi` invocation is equivalent to the following:
-
-    ```
-    kernel_build(
-        name = "kernel_aarch64",
-        collect_unstripped_modules = True,
-        ...
-    )
-    kernel_abi(name = "kernel_aarch64_abi", ...)
-    ```
-
     Args:
-      name: Name of the main `kernel_build`.
-      define_abi_targets: See [`kernel_abi.define_abi_targets`](#kernel_abi-define_abi_targets)
-      kernel_modules: See [`kernel_abi.kernel_modules`](#kernel_abi-kernel_modules)
-      module_grouping: See [`kernel_abi.module_grouping`](#kernel_abi-module_grouping)
-      abi_definition: See [`kernel_abi.abi_definition_xml`](#kernel_abi-abi_definition_xml)
-      kmi_enforced: See [`kernel_abi.kmi_enforced`](#kernel_abi-kmi_enforced)
-      unstripped_modules_archive: See [`kernel_abi.unstripped_modules_archive`](#kernel_abi-unstripped_modules_archive)
-      kmi_symbol_list_add_only: See [`kernel_abi.kmi_symbol_list_add_only`](#kernel_abi-kmi_symbol_list_add_only)
-      tags: [tags](https://bazel.build/reference/be/common-definitions#common.tags)
-      visibility: [visibility](https://bazel.build/reference/be/common-definitions#common.visibility)
-      features: [features](https://bazel.build/reference/be/common-definitions#common.features)
-      testonly: [testonly](https://bazel.build/reference/be/common-definitions#common.testonly)
-      **kwargs: Passed directly to [`kernel_build`](#kernel_build).
+      name: name
+      **kwargs: kwargs
 
     Deprecated:
       Use [`kernel_build`](#kernel_build) (with `collect_unstripped_modules = True`) and
       [`kernel_abi`](#kernel_abi) directly.
     """
+    fail("""{}//{}:{}: kernel_build_abi is deprecated. Split into kernel_build and kernel_abi.
 
-    kwargs = dict(kwargs)
-    if kwargs.get("collect_unstripped_modules") == None:
-        kwargs["collect_unstripped_modules"] = True
+See build/kernel/kleaf/docs/abi_device.md for details.
+""".format(native.repository_name(), native.package_name(), name))
 
-    # buildifier: disable=print
-    print("""
-WARNING: kernel_build_abi is deprecated. Split into kernel_build and kernel_abi.
+def _kmi_symbol_checks_impl(ctx):
+    kmi_strict_mode_out = ctx.attr.kernel_build[KernelBuildAbiInfo].kmi_strict_mode_out
+    kmi_strict_mode_out = depset([kmi_strict_mode_out]) if kmi_strict_mode_out else None
+    return DefaultInfo(files = kmi_strict_mode_out)
 
-You may try copy-pasting the following definition to BUILD.bazel
-(note: this is not necessarily accurate and likely unformatted):
-
-kernel_build(
-    {kwargs},
-)
-
-kernel_abi(
-    {abi_kwargs},
-)
-""".format(
-        kwargs = utils.kwargs_to_def(
-            name = name,
-            tags = tags,
-            visibility = visibility,
-            features = features,
-            testonly = testonly,
-            **kwargs
+kmi_symbol_checks = rule(
+    doc = "Returns kmi symbol checks for a `kernel_build`.",
+    implementation = _kmi_symbol_checks_impl,
+    attrs = {
+        "kernel_build": attr.label(providers = [KernelBuildAbiInfo]),
+        "_allowlist_function_transition": attr.label(
+            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
         ),
-        abi_kwargs = utils.kwargs_to_def(
-            name = name + "_abi",
-            define_abi_targets = define_abi_targets,
-            kernel_modules = kernel_modules,
-            module_grouping = module_grouping,
-            abi_definition = abi_definition,
-            kmi_enforced = kmi_enforced,
-            unstripped_modules_archive = unstripped_modules_archive,
-            kmi_symbol_list_add_only = kmi_symbol_list_add_only,
-            tags = tags,
-            visibility = visibility,
-            features = features,
-            testonly = testonly,
-        ),
-    ))
-
-    kernel_abi(
-        name = name + "_abi",
-        kernel_build = name,
-        define_abi_targets = define_abi_targets,
-        kernel_modules = kernel_modules,
-        module_grouping = module_grouping,
-        kmi_symbol_list_add_only = kmi_symbol_list_add_only,
-        abi_definition_xml = abi_definition,
-        kmi_enforced = kmi_enforced,
-        unstripped_modules_archive = unstripped_modules_archive,
-        # common attributes
-        tags = tags,
-        visibility = visibility,
-        features = features,
-        testonly = testonly,
-    )
-
-    kernel_build(
-        name = name,
-        # common attributes
-        tags = tags,
-        visibility = visibility,
-        features = features,
-        testonly = testonly,
-        **kwargs
-    )
+    },
+    cfg = with_vmlinux_transition,
+)
 
 def kernel_abi(
         name,
@@ -170,7 +71,6 @@ def kernel_abi(
         kernel_modules = None,
         module_grouping = None,
         abi_definition_stg = None,
-        abi_definition_xml = None,
         kmi_enforced = None,
         unstripped_modules_archive = None,
         kmi_symbol_list_add_only = None,
@@ -246,12 +146,11 @@ def kernel_abi(
         list will simply be a sorted list of symbols used by all the kernel
         modules.
       abi_definition_stg: Location of the ABI definition in STG format.
-      abi_definition_xml: Location of the ABI definition in XML format.
       kmi_enforced: This is an indicative option to signal that KMI is enforced.
         If set to `True`, KMI checking tools respects it and
         reacts to it by failing if KMI differences are detected.
       unstripped_modules_archive: A [`kernel_unstripped_modules_archive`](#kernel_unstripped_modules_archive)
-        which name is specified in `abi.prop`.
+        which name is specified in `abi.prop`. DEPRECATED.
       kmi_symbol_list_add_only: If unspecified or `None`, it is `False` by
         default. If `True`,
         then any symbols in the symbol list that would have been
@@ -268,6 +167,12 @@ def kernel_abi(
 
     if define_abi_targets == None:
         define_abi_targets = True
+
+    if unstripped_modules_archive != None:
+        # buildifier: disable=print
+        print("WARNING: unstripped_modules_archive is DEPRECATED, and" +
+              " will be REMOVED in the future, consider removing it" +
+              " from {}".format(name))
 
     private_kwargs = kwargs | {
         "visibility": ["//visibility:private"],
@@ -294,9 +199,7 @@ def kernel_abi(
             module_grouping = module_grouping,
             kmi_symbol_list_add_only = kmi_symbol_list_add_only,
             abi_definition_stg = abi_definition_stg,
-            abi_definition_xml = abi_definition_xml,
             kmi_enforced = kmi_enforced,
-            unstripped_modules_archive = unstripped_modules_archive,
             abi_dump_target = name + "_dump",
             **kwargs
         )
@@ -352,9 +255,7 @@ def _define_abi_targets(
         module_grouping,
         kmi_symbol_list_add_only,
         abi_definition_stg,
-        abi_definition_xml,
         kmi_enforced,
-        unstripped_modules_archive,
         abi_dump_target,
         **kwargs):
     """Helper to `_define_other_targets` when `define_abi_targets = True.`
@@ -374,6 +275,12 @@ def _define_abi_targets(
 
     get_src_kmi_symbol_list(
         name = name + "_src_kmi_symbol_list",
+        kernel_build = kernel_build,
+        **private_kwargs
+    )
+
+    kmi_symbol_checks(
+        name = name + "_kmi_symbol_checks",
         kernel_build = kernel_build,
         **private_kwargs
     )
@@ -422,29 +329,12 @@ def _define_abi_targets(
     default_outputs += _define_abi_definition_targets(
         name = name,
         abi_definition_stg = abi_definition_stg,
-        abi_definition_xml = abi_definition_xml,
         kmi_enforced = kmi_enforced,
         kmi_symbol_list = name + "_src_kmi_symbol_list",
         protected_exports_list = name + "_src_protected_exports_list",
+        kmi_symbol_checks = name + "_kmi_symbol_checks",
         **private_kwargs
     )
-
-    out_file = None
-    if abi_definition_xml:
-        out_file = name + "_out_file_xml"
-
-    # Ok to override as STG takes preference.
-    if abi_definition_stg:
-        out_file = name + "_out_file"
-    abi_prop(
-        name = name + "_prop",
-        kmi_definition = out_file,
-        kmi_enforced = kmi_enforced,
-        kernel_build = kernel_build,
-        modules_archive = unstripped_modules_archive,
-        **private_kwargs
-    )
-    default_outputs.append(name + "_prop")
 
     native.filegroup(
         name = name,
@@ -455,10 +345,10 @@ def _define_abi_targets(
 def _define_abi_definition_targets(
         name,
         abi_definition_stg,
-        abi_definition_xml,
         kmi_enforced,
         kmi_symbol_list,
         protected_exports_list,
+        kmi_symbol_checks,
         **kwargs):
     """Helper to `_define_abi_targets`.
 
@@ -468,136 +358,6 @@ def _define_abi_definition_targets(
     """
 
     default_outputs = []
-
-    if not abi_definition_xml:
-        # For kernel_abi_dist to use when abi_definition_xml is empty.
-        exec(
-            name = name + "_diff_executable_xml",
-            script = "",
-            **kwargs
-        )
-        default_outputs.append(name + "_diff_executable_xml")
-
-        fail_rule(
-            name = name + "_update_xml",
-            message = "{} target does not exist.\n".format(
-                          name + "_update",
-                      ) +
-                      "See kleaf/docs/abi.md for more information.",
-        )
-    else:
-        native.filegroup(
-            name = name + "_out_file_xml",
-            srcs = [name + "_dump"],
-            output_group = "abi_out_file_xml",
-            **kwargs
-        )
-
-        abi_diff(
-            name = name + "_diff_xml",
-            baseline = abi_definition_xml,
-            new = name + "_out_file_xml",
-            kmi_enforced = kmi_enforced,
-            **kwargs
-        )
-        default_outputs.append(name + "_diff_xml")
-
-        # The default outputs of _diff does not contain the executable,
-        # but the reports. Use this filegroup to select the executable
-        # so rootpath in _update works.
-        native.filegroup(
-            name = name + "_diff_executable_xml",
-            srcs = [name + "_diff_xml"],
-            output_group = "executable",
-            **kwargs
-        )
-
-        native.filegroup(
-            name = name + "_diff_git_message_xml",
-            srcs = [name + "_diff_xml"],
-            output_group = "git_message_xml",
-            **kwargs
-        )
-
-        update_source_file(
-            name = name + "_update_definition_xml",
-            src = name + "_out_file_xml",
-            dst = abi_definition_xml,
-            **kwargs
-        )
-
-        exec(
-            name = name + "_nodiff_update_xml",
-            data = [
-                name + "_extracted_symbols",
-                name + "_protected_exports",
-                name + "_update_definition_xml",
-                kmi_symbol_list,
-                protected_exports_list,
-            ],
-            script = """
-                # Ensure that symbol list is updated
-                    if ! diff -q $(rootpath {src_symbol_list}) $(rootpath {dst_symbol_list}); then
-                    echo "ERROR: symbol list must be updated before updating ABI definition. To update, execute 'tools/bazel run //{package}:{update_symbol_list_label}'." >&2
-                    exit 1
-                    fi
-                # Ensure that protected exports list is updated
-                    if ! diff -q $(rootpath {src_protected_exports_list}) $(rootpath {dst_protected_exports_list}); then
-                    echo "ERROR: protected exports list must be updated before updating ABI definition. To update, execute 'tools/bazel run //{package}:{update_protected_exports_label}'." >&2
-                    exit 1
-                    fi
-                # Update abi_definition
-                    $(rootpath {update_definition})
-                """.format(
-                src_protected_exports_list = name + "_protected_exports",
-                dst_protected_exports_list = protected_exports_list,
-                src_symbol_list = name + "_extracted_symbols",
-                dst_symbol_list = kmi_symbol_list,
-                package = native.package_name(),
-                update_protected_exports_label = name + "_update_protected_exports",
-                update_symbol_list_label = name + "_update_symbol_list",
-                update_definition = name + "_update_definition_xml",
-            ),
-            **kwargs
-        )
-
-        exec(
-            name = name + "_update_xml",
-            data = [
-                abi_definition_xml,
-                name + "_diff_git_message_xml",
-                name + "_diff_executable_xml",
-                name + "_nodiff_update_xml",
-            ],
-            script = """
-                # Update abi_definition
-                    $(rootpath {nodiff_update})
-                # Create git commit if requested
-                    if [[ $1 == "--commit" ]]; then
-                        real_abi_def="$(realpath $(rootpath {abi_definition}))"
-                        git -C $(dirname ${{real_abi_def}}) add $(basename ${{real_abi_def}})
-                        git -C $(dirname ${{real_abi_def}}) commit -F $(realpath $(rootpath {git_message}))
-                    fi
-                # Check return code of diff_abi and kmi_enforced
-                    set +e
-                    $(rootpath {diff})
-                    rc=$?
-                    set -e
-                # Prompt for editing the commit message
-                    if [[ $1 == "--commit" ]]; then
-                        echo
-                        echo "INFO: git commit created. Execute the following to edit the commit message:"
-                        echo "        git -C $(dirname $(rootpath {abi_definition})) commit --amend"
-                    fi
-                    exit $rc
-                """.format(
-                diff = name + "_diff_executable_xml",
-                nodiff_update = name + "_nodiff_update_xml",
-                abi_definition = abi_definition_xml,
-                git_message = name + "_diff_git_message_xml",
-            ),
-            **kwargs
-        )
 
     if not abi_definition_stg:
         # For kernel_abi_dist to use when abi_definition is empty.
@@ -660,6 +420,9 @@ def _define_abi_definition_targets(
                 name + "_update_definition",
                 kmi_symbol_list,
                 protected_exports_list,
+                # This is unused in the script, but placed here just to ensure
+                # the checks are executed.
+                kmi_symbol_checks,
             ],
             script = """
                 # Ensure that symbol list is updated
