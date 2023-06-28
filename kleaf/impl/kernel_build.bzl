@@ -109,6 +109,7 @@ def kernel_build(
         module_signing_key = None,
         system_trusted_key = None,
         modules_prepare_force_generate_headers = None,
+        defconfig_fragments = None,
         **kwargs):
     """Defines a kernel build target with all dependent targets.
 
@@ -390,6 +391,12 @@ def kernel_build(
         dtstree: Device tree support.
         modules_prepare_force_generate_headers: If `True` it forces generation of
           additional headers as part of modules_prepare.
+        defconfig_fragments: A list of targets that are applied to the defconfig.
+
+          As a convention, files should usually be named `<prop>_defconfig`
+          (e.g. `kasan_defconfig`) or `<prop>_<value>_defconfig` (e.g. `lto_none_defconfig`)
+          to provide human-readable hints during the build. The prefix should
+          describe what the defconfig does. However, this is not a requirement.
         **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
@@ -439,6 +446,12 @@ def kernel_build(
         "//conditions:default": "default",
     })
 
+    if defconfig_fragments == None:
+        defconfig_fragments = []
+    defconfig_fragments.append(
+        Label("//build/kernel/kleaf:defconfig_fragment"),
+    )
+
     toolchain_constraints = []
     if toolchain_version != None:
         toolchain_constraint = "//prebuilts/clang/host/linux-x86/kleaf:{}".format(toolchain_version)
@@ -478,6 +491,7 @@ def kernel_build(
         make_goals = make_goals,
         target_platform = name + "_platform_target",
         exec_platform = name + "_platform_exec",
+        defconfig_fragments = defconfig_fragments,
         **internal_kwargs
     )
 
@@ -523,6 +537,7 @@ def kernel_build(
         module_signing_key = module_signing_key,
         system_trusted_key = system_trusted_key,
         lto = lto,
+        defconfig_fragments = defconfig_fragments,
         **internal_kwargs
     )
 
@@ -1809,6 +1824,11 @@ _kernel_build = rule(
             executable = True,
             cfg = "exec",
         ),
+        "_cache_dir_config_tags": attr.label(
+            default = "//build/kernel/kleaf/impl:cache_dir_config_tags",
+            executable = True,
+            cfg = "exec",
+        ),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
         "_config_is_local": attr.label(default = "//build/kernel/kleaf:config_local"),
         "_cache_dir": attr.label(default = "//build/kernel/kleaf:cache_dir"),
@@ -1952,6 +1972,13 @@ def _kmi_symbol_list_strict_mode(ctx, all_output_files, all_module_names_file):
               IGNORED because --kasan is set!".format(this_label = ctx.label))
         return None
 
+    # Skip for the --kasan_sw_tags targets as they are not valid GKI release targets
+    if ctx.attr._kasan_sw_tags[BuildSettingInfo].value:
+        # buildifier: disable=print
+        print("\nWARNING: {this_label}: Attribute kmi_symbol_list_strict_mode\
+              IGNORED because --kasan_sw_tags is set!".format(this_label = ctx.label))
+        return None
+
     # Skip for the --kcsan targets as they are not valid GKI release targets
     if ctx.attr._kcsan[BuildSettingInfo].value:
         # buildifier: disable=print
@@ -2046,6 +2073,9 @@ def _kmi_symbol_list_violations_check(ctx, modules_staging_archive):
     # and can disable the runtime symbol protection with CONFIG_SIG_PROTECT=n
     # if required.
     if ctx.attr._kasan[BuildSettingInfo].value:
+        return None
+
+    if ctx.attr._kasan_sw_tags[BuildSettingInfo].value:
         return None
 
     # Skip for --kcsan build as they are not valid GKI releasae configurations.
