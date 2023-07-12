@@ -278,7 +278,8 @@ for EXT_MOD in ${EXT_MODULES}; do
      && [ -n "$build_target" ]
   then
 
-    build_flags=("--lto=${LTO:-full}")
+    mapfile -t build_flags < "${KERNEL_KIT}/build_opts.txt"
+
     if [ "$ALLOW_UNSAFE_DDK_HEADERS" = "true" ]; then
       build_flags+=("--allow_ddk_unsafe_headers")
     fi
