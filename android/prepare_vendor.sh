@@ -318,6 +318,7 @@ if [ "${COPY_NEEDED}" == "1" ]; then
   fi
 
   rm -rf ${ANDROID_KERNEL_OUT}/system_dlkm/*
+  rm -rf ${ANDROID_PRODUCT_OUT}/system_dlkm*
   system_dlkm_archive="${ANDROID_KP_OUT_DIR}/dist/system_dlkm_staging_archive.tar.gz"
   if [ -e "$system_dlkm_archive" ]; then
     mkdir -p "${ANDROID_KERNEL_OUT}/system_dlkm/"
@@ -350,6 +351,18 @@ if [ "${COPY_NEEDED}" == "1" ]; then
   if [ -e ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.blocklist ]; then
     cp ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.blocklist \
       ${ANDROID_KERNEL_OUT}/vendor_dlkm/system_dlkm.modules.blocklist
+  fi
+
+  if [ -e "${ANDROID_KP_OUT_DIR}/dist/board_extra_cmdline_${KERNEL_TARGET}_${KERNEL_VARIANT}" ];
+  then
+    cp "${ANDROID_KP_OUT_DIR}/dist/board_extra_cmdline_${KERNEL_TARGET}_${KERNEL_VARIANT}" \
+      "${ANDROID_KERNEL_OUT}/extra_cmdline"
+  fi
+
+  if [ -e "${ANDROID_KP_OUT_DIR}/dist/board_extra_bootconfig_${KERNEL_TARGET}_${KERNEL_VARIANT}" ];
+  then
+    cp "${ANDROID_KP_OUT_DIR}/dist/board_extra_bootconfig_${KERNEL_TARGET}_${KERNEL_VARIANT}" \
+      "${ANDROID_KERNEL_OUT}/extra_bootconfig"
   fi
 
   for file in Image vmlinux System.map .config Module.symvers kernel-uapi-headers.tar.gz ; do

@@ -191,6 +191,15 @@ if [ ! -e "${KERNEL_KIT}/.config" ]; then
   exit 1
 fi
 
+# Set the LTO based on the .config
+if grep -q "CONFIG_LTO_NONE=y" "${KERNEL_KIT}/.config"; then
+  LTO=none
+elif grep -q "CONFIG_LTO_.*_THIN=y" "${KERNEL_KIT}/.config"; then
+  LTO=thin
+else
+  LTO=full
+fi
+
 if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
   echo "========================================================"
   echo " Prepare to compile modules from ${KERNEL_KIT}"
@@ -257,18 +266,32 @@ for EXT_MOD in ${EXT_MODULES}; do
   # Create a link to the module's tree within kernel_platform
   (cd "$ROOT_DIR" && ln -fs "../${top_dir}")
 
-  # Search within the module dir and one level up for a BUILD.bazel file
-  if [ -f "${module_path}/BUILD.bazel" ]; then
-    bazel_pkg="//${module_path}"
-  elif [ -f "${module_path}/../BUILD.bazel" ]; then
-    bazel_pkg="//$(dirname "$module_path")"
+  # Search for the module package by looking up from the module_path
+  pkg_path="$module_path"
+  until [ -f "${pkg_path}/BUILD.bazel" ]; do
+    pkg_path="$(dirname "$pkg_path")"
+
+    # If we see a WORKSPACE file, we've gone too far
+    if [ -f "${pkg_path}/WORKSPACE" ]; then
+      echo "error - no Bazel package associated with $module_path"
+      pkg_path=""
+      break
+    fi
+  done
+
+  if [ $TARGET_PRODUCT == "msmnile_au" ]; then
+     btgt="gen3auto"
+  elif [ $TARGET_PRODUCT == "sm6150_au" ]; then
+     btgt="sdmsteppeauto"
+  else
+     btgt=${TARGET_PRODUCT}
   fi
 
   # Query for a target that matches the pattern for module distribution
   if [ "$ENABLE_DDK_BUILD" = "true" ] \
-     && [ -n "$bazel_pkg" ] \
+     && [ -n "$pkg_path" ] \
      && build_target=$(./tools/bazel query --ui_event_filters=-info --noshow_progress \
-          "filter('${TARGET_PRODUCT/_/-}_${VARIANT/_/-}_.*_dist$', ${bazel_pkg}/...)") \
+          "filter('${btgt/_/-}_${VARIANT/_/-}_.*_dist$', //${pkg_path}/...)") \
      && [ -n "$build_target" ]
   then
 
@@ -290,7 +313,8 @@ for EXT_MOD in ${EXT_MODULES}; do
 
     # The Module.symvers file is named "<target>_<variant>_Modules.symvers, but other modules are
     # looking for just "Module.symvers". Concatenate any of them into one Module.symvers file.
-    cat "${OUT_DIR}/${EXT_MOD_REL}"/*_Module.symvers > "${OUT_DIR}/${EXT_MOD_REL}/Module.symvers"
+    cat "${OUT_DIR}/${EXT_MOD_REL}/${TARGET_PRODUCT}_${VARIANT}"_*_Module.symvers \
+      > "${OUT_DIR}/${EXT_MOD_REL}/Module.symvers"
 
     # Intermediate directories aren't generated automatically, so we need to create them manually
     if [ -n "$INTERMEDIATE_DIR" ]; then
