@@ -220,10 +220,11 @@ class Stamp(object):
         all_projects.extend(self.projects)
 
         for proj in all_projects:
-            candidate = os.path.join(proj, "scripts/setlocalversion")
-            if os.access(candidate, os.X_OK):
-                self.setlocalversion = os.path.realpath(candidate)
-                return
+            if os.path.exists(proj):
+                candidate = os.path.join(proj, "scripts/setlocalversion")
+                if os.access(candidate, os.X_OK):
+                    self.setlocalversion = os.path.realpath(candidate)
+                    return
 
     def get_localversion_all(self) -> dict[str, PathCollectible]:
         all_projects = set()
@@ -271,7 +272,7 @@ class Stamp(object):
 
         return {
             proj: self.async_get_source_date_epoch(proj)
-            for proj in all_projects
+            for proj in filter(os.path.exists, all_projects)
         }
 
     def async_get_source_date_epoch(self, rel_path) -> PathCollectible:
