@@ -247,28 +247,6 @@ def _config_keys(ctx):
 
     return struct(configs = configs, deps = deps)
 
-def _config_debug(ctx):
-    """Return configs for --debug.
-
-    TODO: elsk@ to clean up b/294390500
-
-    Args:
-        ctx: ctx
-    Returns:
-        A struct, where `configs` is a list of arguments to `scripts/config`,
-        and `deps` is a list of input files.
-    """
-    lto = ctx.attr.lto
-    debug = ctx.attr.debug[BuildSettingInfo].value
-
-    if not debug:
-        return struct(configs = [], deps = [])
-
-    if lto != "none":
-        fail("{}: --debug requires --lto=none, but --lto is {}".format(ctx.label, lto))
-
-    return struct(configs = [], deps = [])
-
 def _config_kasan(ctx):
     """Return configs for --kasan.
 
@@ -288,7 +266,7 @@ def _config_kasan(ctx):
         fail("{}: cannot have both --kasan and --kasan_sw_tags simultaneously".format(ctx.label))
 
     if lto != "none":
-        fail("{}: --kasan requires --lto=none, but --lto is {}".format(ctx.label, lto))
+        fail("{}: --kasan requires --lto=none or default, but --lto is {}".format(ctx.label, lto))
 
     if trim_nonlisted_kmi_utils.get_value(ctx):
         fail("{}: --kasan requires trimming to be disabled".format(ctx.label))
@@ -323,7 +301,7 @@ def _config_kasan_sw_tags(ctx):
         fail("{}: cannot have both --kasan and --kasan_sw_tags simultaneously".format(ctx.label))
 
     if lto != "none":
-        fail("{}: --kasan_sw_tags requires --lto=none, but --lto is {}".format(ctx.label, lto))
+        fail("{}: --kasan_sw_tags requires --lto=none or default, but --lto is {}".format(ctx.label, lto))
 
     if trim_nonlisted_kmi_utils.get_value(ctx):
         fail("{}: --kasan_sw_tags requires trimming to be disabled".format(ctx.label))
@@ -353,7 +331,7 @@ def _config_kcsan(ctx):
         return struct(configs = [], deps = [])
 
     if lto != "none":
-        fail("{}: --kcsan requires --lto=none, but --lto is {}".format(ctx.label, lto))
+        fail("{}: --kcsan requires --lto=none or default, but --lto is {}".format(ctx.label, lto))
 
     if trim_nonlisted_kmi_utils.get_value(ctx):
         fail("{}: --kcsan requires trimming to be disabled".format(ctx.label))
@@ -386,7 +364,6 @@ def _reconfig(ctx):
     check_defconfig_fragments_cmd = ""
 
     for fn in (
-        _config_debug,
         _config_lto,
         _config_trim,
         _config_kcsan,
