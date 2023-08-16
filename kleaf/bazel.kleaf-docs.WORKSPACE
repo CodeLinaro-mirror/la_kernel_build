@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Define various platforms
+load("//build/kernel/kleaf:workspace.bzl", "define_kleaf_workspace")
 
-build:android_arm --platforms=//build/kernel/kleaf/impl:android_arm
-build:android_arm64 --platforms=//build/kernel/kleaf/impl:android_arm64
-build:android_x86_64 --platforms=//build/kernel/kleaf/impl:android_x86_64
-build:android_riscv64 --platforms=//build/kernel/kleaf/impl:android_riscv64
+define_kleaf_workspace(include_remote_java_tools_repo = True)
 
-# --config=hermetic_cc is already the default.
+# Optional epilog for analysis testing.
+load("//build/kernel/kleaf:workspace_epilog.bzl", "define_kleaf_workspace_epilog")
+
+define_kleaf_workspace_epilog()

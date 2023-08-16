@@ -12,11 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Define various platforms
+"""
+Like a filegroup but for a single label.
+"""
 
-build:android_arm --platforms=//build/kernel/kleaf/impl:android_arm
-build:android_arm64 --platforms=//build/kernel/kleaf/impl:android_arm64
-build:android_x86_64 --platforms=//build/kernel/kleaf/impl:android_x86_64
-build:android_riscv64 --platforms=//build/kernel/kleaf/impl:android_riscv64
+def _file_impl(ctx):
+    return DefaultInfo(files = depset(ctx.files.src))
 
-# --config=hermetic_cc is already the default.
+file = rule(
+    doc = "Like a filegroup but for a single label.",
+    implementation = _file_impl,
+    attrs = {
+        "src": attr.label(allow_files = True),
+    },
+)

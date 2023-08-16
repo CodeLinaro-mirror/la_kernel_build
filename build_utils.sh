@@ -17,6 +17,7 @@
 # rel_path <to> <from>
 # Generate relative directory path to reach directory <to> from <from>
 function rel_path() {
+  echo "WARNING: rel_path is deprecated. For Kleaf builds, use 'realpath $1 --relative-to $2' instead." >&2
   ${ROOT_DIR}/build/kernel/build-tools/path/linux-x86/realpath "$1" --relative-to="$2"
 }
 
@@ -24,7 +25,8 @@ function rel_path() {
 # rel_path2 <to> <from>
 # Generate relative directory path to reach directory <to> from <from>
 function rel_path2() {
-  rel_path "$@"
+  echo "ERROR: rel_path2 is deprecated. For Kleaf builds, use 'realpath $1 --relative-to $2' instead." >&2
+  exit 1
 }
 
 # $1 directory of kernel modules ($1/lib/modules/x.y)
@@ -200,6 +202,7 @@ function build_system_dlkm() {
   local system_dlkm_root_dir=$(echo ${SYSTEM_DLKM_STAGING_DIR}/lib/modules/*)
   cp ${system_dlkm_root_dir}/modules.load ${DIST_DIR}/system_dlkm.modules.load
   local system_dlkm_props_file
+  local system_dlkm_file_contexts
 
   if [ -f "${system_dlkm_root_dir}/modules.blocklist" ]; then
     cp "${system_dlkm_root_dir}/modules.blocklist" "${DIST_DIR}/system_dlkm.modules.blocklist"
@@ -214,12 +217,19 @@ function build_system_dlkm() {
 
   if [ -z "${SYSTEM_DLKM_PROPS}" ]; then
     system_dlkm_props_file="$(mktemp)"
-    echo -e "system_dlkm_fs_type=${SYSTEM_DLKM_FS_TYPE}\n" >> ${system_dlkm_props_file}
+    system_dlkm_file_contexts="$(mktemp)"
+    echo -e "fs_type=${SYSTEM_DLKM_FS_TYPE}\n" >> ${system_dlkm_props_file}
     echo -e "use_dynamic_partition_size=true\n" >> ${system_dlkm_props_file}
     if [[ "${SYSTEM_DLKM_FS_TYPE}" == "ext4" ]]; then
       echo -e "ext_mkuserimg=mkuserimg_mke2fs\n" >> ${system_dlkm_props_file}
       echo -e "ext4_share_dup_blocks=true\n" >> ${system_dlkm_props_file}
+      echo -e "extfs_rsv_pct=0\n" >> ${system_dlkm_props_file}
+      echo -e "journal_size=0\n" >> ${system_dlkm_props_file}
     fi
+    echo -e "mount_point=system_dlkm\n" >> ${system_dlkm_props_file}
+    echo -e "selinux_fc=${system_dlkm_file_contexts}\n" >> ${system_dlkm_props_file}
+
+    echo -e "/system_dlkm(/.*)? u:object_r:system_dlkm_file:s0" > ${system_dlkm_file_contexts}
   else
     system_dlkm_props_file="${SYSTEM_DLKM_PROPS}"
     if [[ -f "${ROOT_DIR}/${system_dlkm_props_file}" ]]; then
@@ -248,6 +258,11 @@ function build_system_dlkm() {
   build_image "${SYSTEM_DLKM_STAGING_DIR}" "${system_dlkm_props_file}" \
     "${DIST_DIR}/system_dlkm.img" /dev/null
 
+  if [ -z "${SYSTEM_DLKM_PROPS}" ]; then
+    rm ${system_dlkm_props_file}
+    rm ${system_dlkm_file_contexts}
+  fi
+
   # No need to sign the image as modules are signed
   avbtool add_hashtree_footer \
     --partition_name system_dlkm \
@@ -257,7 +272,10 @@ function build_system_dlkm() {
   tar -czf "${DIST_DIR}/system_dlkm_staging_archive.tar.gz" -C "${SYSTEM_DLKM_STAGING_DIR}" .
 }
 
+# $1 if set, generate the vendor_dlkm_staging_archive.tar.gz archive
 function build_vendor_dlkm() {
+  local vendor_dlkm_archive=$1
+
   echo "========================================================"
   echo " Creating vendor_dlkm image"
 
@@ -326,6 +344,11 @@ function build_vendor_dlkm() {
 
   build_image "${VENDOR_DLKM_STAGING_DIR}" "${vendor_dlkm_props_file}" \
     "${DIST_DIR}/vendor_dlkm.img" /dev/null
+
+  if [ -n "${vendor_dlkm_archive}" ]; then
+    # Archive vendor_dlkm_staging_dir
+    tar -czf "${DIST_DIR}/vendor_dlkm_staging_archive.tar.gz" -C "${VENDOR_DLKM_STAGING_DIR}" .
+  fi
 }
 
 function build_super() {
@@ -664,6 +687,8 @@ function build_gki_artifacts_info() {
   artifacts_info="${artifacts_info} --prop KERNEL_RELEASE:${KERNEL_RELEASE}"
 
   echo "${artifacts_info}" > "$1"
+
+  echo "kernel_release=${KERNEL_RELEASE}" >> "$1"
 }
 
 # build_gki_boot_images <uncompressed kernel path>.
@@ -710,10 +735,12 @@ function build_gki_boot_images() {
     GKI_MKBOOTIMG_ARGS+=("--output" "${boot_image_path}")
     "${MKBOOTIMG_PATH}" "${GKI_MKBOOTIMG_ARGS[@]}"
 
-    gki_add_avb_footer "${boot_image_path}" \
-      "$(gki_get_boot_img_size "${compression}")"
-    gki_dry_run_certify_bootimg "${boot_image_path}" \
-      "${GKI_ARTIFACTS_INFO_FILE}"
+    if [[ -z "${BUILD_GKI_BOOT_SKIP_AVB}" ]]; then
+      gki_add_avb_footer "${boot_image_path}" \
+        "$(gki_get_boot_img_size "${compression}")"
+      gki_dry_run_certify_bootimg "${boot_image_path}" \
+        "${GKI_ARTIFACTS_INFO_FILE}"
+    fi
     images_to_pack+=("${boot_image}")
   done
 

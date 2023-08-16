@@ -16,9 +16,8 @@
 
 load(":kernel_module.bzl", "kernel_module")
 load(":ddk/makefiles.bzl", "makefiles")
-load(":ddk/ddk_conditional_filegroup.bzl", "ddk_conditional_filegroup")
+load(":ddk/ddk_conditional_filegroup.bzl", "flatten_conditional_srcs")
 load(":ddk/ddk_config.bzl", "ddk_config")
-load(":utils.bzl", "utils")
 
 def ddk_module(
         name,
@@ -34,6 +33,7 @@ def ddk_module(
         copts = None,
         kconfig = None,
         defconfig = None,
+        generate_btf = None,
         **kwargs):
     """
     Defines a DDK (Driver Development Kit) module.
@@ -354,6 +354,8 @@ def ddk_module(
 
           An item declared in `kconfig` without a specific value in `defconfig`
           uses default value specified in `kconfig`.
+        generate_btf: Allows generation of BTF type information for the module.
+          See [kernel_module.generate_btf](#kernel_module-generate_btf)
         **kwargs: Additional attributes to the internal rule.
           See complete list
           [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
@@ -365,6 +367,7 @@ def ddk_module(
         kconfig = kconfig,
         kernel_build = kernel_build,
         module_deps = deps,
+        generate_btf = generate_btf,
     )
 
     kernel_module(
@@ -374,6 +377,7 @@ def ddk_module(
         # Set it to empty list, not None, so kernel_module() doesn't fallback to {name}.ko.
         # _kernel_module_impl infers the list of outs from internal_ddk_makefiles_dir.
         outs = [],
+        generate_btf = generate_btf,
         internal_ddk_makefiles_dir = ":{name}_makefiles".format(name = name),
         # This is used in build_cleaner.
         internal_module_symvers_name = "{name}_Module.symvers".format(name = name),
@@ -386,31 +390,11 @@ def ddk_module(
     private_kwargs = dict(kwargs)
     private_kwargs["visibility"] = ["//visibility:private"]
 
-    flattened_conditional_srcs = []
-    if conditional_srcs:
-        for config, config_srcs_dict in conditional_srcs.items():
-            for config_value, config_srcs in config_srcs_dict.items():
-                if type(config_value) != "bool":
-                    fail("{workspace}//{package}:{name}: expected value of config {config} must be a bool, but got {config_value} of type {value_type}".format(
-                        workspace = native.repository_name(),
-                        package = native.package_name(),
-                        name = name,
-                        config_value = config_value,
-                        config = config,
-                        value_type = type(config_value),
-                    ))
-                fg_name = "{name}_{config}_{value}_srcs".format(
-                    name = name,
-                    config = config,
-                    value = utils.normalize(str(config_value)),
-                )
-                ddk_conditional_filegroup(
-                    name = fg_name,
-                    config = config,
-                    value = config_value,
-                    srcs = config_srcs,
-                )
-                flattened_conditional_srcs.append(fg_name)
+    flattened_conditional_srcs = flatten_conditional_srcs(
+        module_name = name,
+        conditional_srcs = conditional_srcs,
+        **private_kwargs
+    )
 
     makefiles(
         name = name + "_makefiles",

@@ -40,6 +40,7 @@ load(
     "KernelBuildMixedTreeInfo",
     "KernelBuildOriginalEnvInfo",
     "KernelBuildUapiInfo",
+    "KernelBuildUnameInfo",
     "KernelCmdsInfo",
     "KernelEnvAndOutputsInfo",
     "KernelEnvAttrInfo",
@@ -57,6 +58,7 @@ load(
     "TOOLCHAIN_VERSION_FILENAME",
 )
 load(":debug.bzl", "debug")
+load(":file.bzl", "file")
 load(":kernel_config.bzl", "kernel_config")
 load(":kernel_config_settings.bzl", "kernel_config_settings")
 load(":kernel_env.bzl", "kernel_env")
@@ -81,6 +83,7 @@ def kernel_build(
         name,
         build_config,
         outs,
+        keep_module_symvers = None,
         srcs = None,
         module_outs = None,
         implicit_outs = None,
@@ -126,6 +129,10 @@ def kernel_build(
         name: The final kernel target name, e.g. `"kernel_aarch64"`.
         build_config: Label of the build.config file, e.g. `"build.config.gki.aarch64"`.
         kconfig_ext: Label of an external Kconfig.ext file sourced by the GKI kernel.
+        keep_module_symvers: If set to True, a copy of the default output `Module.symvers` is kept.
+          * To avoid collisions in mixed build distribution packages, the file is renamed
+            as `$(name)_Module.symvers`.
+          * Default is False.
         srcs: The kernel sources (a `glob()`). If unspecified or `None`, it is the following:
           ```
           glob(
@@ -138,9 +145,11 @@ def kernel_build(
               ],
           )
           ```
-        arch: Target architecture. Default is `arm64`.
+        arch: [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes).
+          Target architecture. Default is `arm64`.
 
-          Value should be one of `arm64`, `x86_64` or `riscv64`.
+          Value should be one of `arm64`, `x86_64` or `riscv64`, or
+          `arm` (for 32-bit).
 
           This must be consistent to `ARCH` in build configs if the latter
           is specified. Otherwise, a warning / error may be raised.
@@ -286,10 +295,10 @@ def kernel_build(
 
         kmi_symbol_list: A label referring to the main KMI symbol list file. See `additional_kmi_symbol_lists`.
 
-          This is the Bazel equivalent of `ADDTIONAL_KMI_SYMBOL_LISTS`.
+          This is the Bazel equivalent of `ADDITIONAL_KMI_SYMBOL_LISTS`.
         additional_kmi_symbol_lists: A list of labels referring to additional KMI symbol list files.
 
-          This is the Bazel equivalent of `ADDTIONAL_KMI_SYMBOL_LISTS`.
+          This is the Bazel equivalent of `ADDITIONAL_KMI_SYMBOL_LISTS`.
 
           Let
           ```
@@ -362,7 +371,8 @@ def kernel_build(
 
           If the value is `"false"`; or the value is `"auto"` and
           `--kbuild_symtypes` is not specified, then `KBUILD_SYMTYPES=`.
-        toolchain_version: The toolchain version to depend on.
+        toolchain_version: [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes).
+          The toolchain version to depend on.
         strip_modules: If `None` or not specified, default is `False`.
           If set to `True`, debug information for distributed modules is stripped.
 
@@ -386,6 +396,7 @@ def kernel_build(
     modules_prepare_target_name = name + "_modules_prepare"
     uapi_headers_target_name = name + "_uapi_headers"
     headers_target_name = name + "_headers"
+    src_kmi_symbol_list_target_name = name + "_src_kmi_symbol_list"
     kmi_symbol_list_target_name = name + "_kmi_symbol_list"
     abi_symbollist_target_name = name + "_kmi_symbol_list_abi_symbollist"
     raw_kmi_symbol_list_target_name = name + "_raw_kmi_symbol_list"
@@ -404,6 +415,9 @@ def kernel_build(
     if strip_modules == None:
         strip_modules = False
 
+    if arch == None:
+        arch = "arm64"
+
     trim_nonlisted_kmi = trim_nonlisted_kmi_utils.selected_attr(trim_nonlisted_kmi)
 
     internal_kwargs = dict(kwargs)
@@ -421,24 +435,57 @@ def kernel_build(
         "//conditions:default": "default",
     })
 
+    toolchain_constraints = []
+    if toolchain_version != None:
+        toolchain_constraint = "//prebuilts/clang/host/linux-x86/kleaf:{}".format(toolchain_version)
+        toolchain_constraints.append(Label(toolchain_constraint))
+    else:
+        # use default toolchain, e.g.
+        # //prebuilts/clang/host/linux-x86/kleaf:android_arm64_clang_toolchain
+        pass
+
+    native.platform(
+        name = name + "_platform_target",
+        constraint_values = [
+            "@platforms//os:android",
+            "@platforms//cpu:{}".format(arch),
+        ] + toolchain_constraints,
+        **internal_kwargs
+    )
+
+    native.platform(
+        name = name + "_platform_exec",
+        constraint_values = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ] + toolchain_constraints,
+        **internal_kwargs
+    )
+
     kernel_env(
         name = env_target_name,
         build_config = build_config,
         kconfig_ext = kconfig_ext,
         dtstree = dtstree,
         srcs = srcs,
-        toolchain_version = toolchain_version,
         kbuild_symtypes = kbuild_symtypes,
         trim_nonlisted_kmi = trim_nonlisted_kmi,
         lto = lto,
         make_goals = make_goals,
-        arch = arch,
+        target_platform = name + "_platform_target",
+        exec_platform = name + "_platform_exec",
         **internal_kwargs
     )
 
-    all_kmi_symbol_lists = []
-    if kmi_symbol_list:
-        all_kmi_symbol_lists.append(kmi_symbol_list)
+    # Wrap in a target so kmi_symbol_list is configurable. A select() value cannot be
+    # embedded in the all_kmi_symbol_lists below.
+    file(
+        name = src_kmi_symbol_list_target_name,
+        src = kmi_symbol_list,
+        **internal_kwargs
+    )
+
+    all_kmi_symbol_lists = [src_kmi_symbol_list_target_name]
     if additional_kmi_symbol_lists:
         all_kmi_symbol_lists += additional_kmi_symbol_lists
 
@@ -459,7 +506,7 @@ def kernel_build(
     raw_kmi_symbol_list(
         name = raw_kmi_symbol_list_target_name,
         env = env_target_name,
-        src = abi_symbollist_target_name if all_kmi_symbol_lists else None,
+        src = abi_symbollist_target_name,
         **internal_kwargs
     )
 
@@ -468,7 +515,7 @@ def kernel_build(
         env = env_target_name,
         srcs = srcs,
         trim_nonlisted_kmi = trim_nonlisted_kmi,
-        raw_kmi_symbol_list = raw_kmi_symbol_list_target_name if all_kmi_symbol_lists else None,
+        raw_kmi_symbol_list = raw_kmi_symbol_list_target_name,
         module_signing_key = module_signing_key,
         system_trusted_key = system_trusted_key,
         lto = lto,
@@ -488,6 +535,7 @@ def kernel_build(
     _kernel_build(
         name = name,
         config = config_target_name,
+        keep_module_symvers = keep_module_symvers,
         srcs = srcs,
         outs = kernel_utils.transform_kernel_build_outs(name, "outs", outs),
         module_outs = kernel_utils.transform_kernel_build_outs(name, "module_outs", module_outs),
@@ -498,10 +546,10 @@ def kernel_build(
         base_kernel = base_kernel,
         modules_prepare = modules_prepare_target_name,
         kmi_symbol_list_strict_mode = kmi_symbol_list_strict_mode,
-        raw_kmi_symbol_list = raw_kmi_symbol_list_target_name if all_kmi_symbol_lists else None,
+        raw_kmi_symbol_list = raw_kmi_symbol_list_target_name,
         kernel_uapi_headers = uapi_headers_target_name,
         collect_unstripped_modules = collect_unstripped_modules,
-        combined_abi_symbollist = abi_symbollist_target_name if all_kmi_symbol_lists else None,
+        combined_abi_symbollist = abi_symbollist_target_name,
         enable_interceptor = enable_interceptor,
         strip_modules = strip_modules,
         src_protected_exports_list = protected_exports_list,
@@ -1038,6 +1086,105 @@ def get_grab_cmd_step(ctx, src_dir):
         cmd_dir = cmd_dir,
     )
 
+def _get_copy_module_symvers_step(ctx):
+    """Returns a step for keeping a copy of Module.symvers from `OUT_DIR`.
+
+    Returns:
+      A struct with fields (inputs, tools, outputs, cmd)
+    """
+    copy_module_symvers_cmd = ""
+    outputs = []
+
+    if ctx.attr.keep_module_symvers:
+        module_symvers_copy = ctx.actions.declare_file("{}/{}_Module.symvers".format(
+            ctx.label.name,
+            ctx.label.name,
+        ))
+        outputs.append(module_symvers_copy)
+        copy_module_symvers_cmd = """
+           cp -f ${{OUT_DIR}}/Module.symvers {module_symvers_copy}
+        """.format(
+            module_symvers_copy = module_symvers_copy.path,
+        )
+    return struct(
+        inputs = [],
+        tools = [],
+        cmd = copy_module_symvers_cmd,
+        outputs = outputs,
+    )
+
+def _get_modinst_step(ctx, modules_staging_dir):
+    module_strip_flag = "INSTALL_MOD_STRIP="
+    if ctx.attr.strip_modules:
+        module_strip_flag += "1"
+
+    base_kernel = base_kernel_utils.get_base_kernel(ctx)
+
+    cmd = ""
+    inputs = []
+    tools = []
+
+    if base_kernel:
+        cmd += """
+          # Check that base_kernel has the same KMI as the current kernel_build
+            (
+                base_release=$(cat {base_kernel_release_file})
+                base_kmi=$({get_kmi_string} --keep_sublevel ${{base_release}})
+                my_release=$(cat ${{OUT_DIR}}/include/config/kernel.release)
+                my_kmi=$({get_kmi_string} --keep_sublevel ${{my_release}})
+                if [[ "${{base_kmi}}" != "${{my_kmi}}" ]]; then
+                    echo "ERROR: KMI or sublevel mismatch before running make modules_install:" >&2
+                    echo "  {label}: ${{my_kmi}} (from ${{my_release}})" >&2
+                    echo "  {base_kernel_label}: ${{base_kmi}} (from ${{base_release}})" >&2
+                fi
+            )
+
+          # Fix up kernel.release to be the one from {base_kernel_label} before installing modules
+            cp -L {base_kernel_release_file} ${{OUT_DIR}}/include/config/kernel.release
+        """.format(
+            get_kmi_string = ctx.executable._get_kmi_string.path,
+            label = ctx.label,
+            base_kernel_label = base_kernel.label,
+            base_kernel_release_file = base_kernel[KernelBuildUnameInfo].kernel_release.path,
+        )
+        inputs.append(base_kernel[KernelBuildUnameInfo].kernel_release)
+        tools.append(ctx.executable._get_kmi_string)
+
+    cmd += """
+         # Set variables and create dirs for modules
+           mkdir -p {modules_staging_dir}
+         # Install modules
+           if grep -q "\\bmodules\\b" <<< "{make_goals}" ; then
+               make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} DEPMOD=true O=${{OUT_DIR}} {module_strip_flag} INSTALL_MOD_PATH=$(realpath {modules_staging_dir}) modules_install
+           else
+               # Workaround as this file is required, hence just produce a placeholder.
+               touch {internal_outs_under_out_dir}
+           fi
+    """.format(
+        modules_staging_dir = modules_staging_dir,
+        internal_outs_under_out_dir = " ".join(["${{OUT_DIR}}/{}".format(item) for item in _kernel_build_internal_outs]),
+        module_strip_flag = module_strip_flag,
+        make_goals = ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals,
+    )
+
+    if base_kernel:
+        cmd += """
+          # Check that `make modules_install` does not revert include/config/kernel.release
+            if diff -q {base_kernel_release} ${{OUT_DIR}}/include/config/kernel.release; then
+                echo "ERROR: make modules_install modifies include/config/kernel.release." >&2
+                echo "   This is not expected; please file a bug!" >&2
+            fi
+        """.format(
+            base_kernel_release = base_kernel[KernelBuildUnameInfo].kernel_release.path,
+        )
+
+    return struct(
+        inputs = inputs,
+        tools = tools,
+        cmd = cmd,
+        outputs = [],
+    )
+
 def _build_main_action(
         ctx,
         kbuild_mixed_tree_ret,
@@ -1084,6 +1231,10 @@ def _build_main_action(
         common_config_tags = ctx.attr.config[KernelEnvAttrInfo].common_config_tags,
         symlink_name = "build",
     )
+    modinst_step = _get_modinst_step(
+        ctx = ctx,
+        modules_staging_dir = modules_staging_dir,
+    )
     grab_intree_modules_step = _get_grab_intree_modules_step(
         ctx = ctx,
         has_any_modules = bool(all_output_names.modules),
@@ -1102,6 +1253,7 @@ def _build_main_action(
     compile_commands_step = compile_commands_utils.kernel_build_step(ctx)
     grab_gdb_scripts_step = kgdb.get_grab_gdb_scripts_step(ctx)
     grab_kbuild_output_step = _get_grab_kbuild_output_step(ctx)
+    copy_module_symvers_step = _get_copy_module_symvers_step(ctx)
     check_remaining_modules_step = _get_check_remaining_modules_step(
         ctx = ctx,
         all_module_names_file = all_module_names_file,
@@ -1111,6 +1263,7 @@ def _build_main_action(
     steps = (
         interceptor_step,
         cache_dir_step,
+        modinst_step,
         grab_intree_modules_step,
         grab_unstripped_modules_step,
         grab_symtypes_step,
@@ -1119,32 +1272,23 @@ def _build_main_action(
         compile_commands_step,
         grab_gdb_scripts_step,
         grab_kbuild_output_step,
+        copy_module_symvers_step,
         check_remaining_modules_step,
     )
-
-    module_strip_flag = "INSTALL_MOD_STRIP="
-    if ctx.attr.strip_modules:
-        module_strip_flag += "1"
 
     # Build the command for the main action.
     command = ctx.attr.config[KernelEnvAndOutputsInfo].get_setup_script(
         data = ctx.attr.config[KernelEnvAndOutputsInfo].data,
         restore_out_dir_cmd = cache_dir_step.cmd,
     )
+
     make_goals = ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals
     command += """
            {kbuild_mixed_tree_cmd}
          # Actual kernel build
            {interceptor_command_prefix} make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} {make_goals}
-         # Set variables and create dirs for modules
-           mkdir -p {modules_staging_dir}
          # Install modules
-           if grep -q "\\bmodules\\b" <<< "{make_goals}" ; then
-               make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} DEPMOD=true O=${{OUT_DIR}} {module_strip_flag} INSTALL_MOD_PATH=$(realpath {modules_staging_dir}) modules_install
-           else
-               # Workaround as this file is required, hence just produce a placeholder.
-               touch {internal_outs_under_out_dir}
-           fi
+           {modinst_cmd}
          # Archive headers in OUT_DIR
            find ${{OUT_DIR}} -name *.h -print0                          \
                | tar czf {out_dir_kernel_headers_tar}                   \
@@ -1173,6 +1317,8 @@ def _build_main_action(
            {grab_intree_modules_cmd}
          # Grab unstripped in-tree modules
            {grab_unstripped_intree_modules_cmd}
+         # Make a copy of Module.symvers
+           {copy_module_symvers_cmd}
            if grep -q "\\bmodules\\b" <<< "{make_goals}"; then
              # Check if there are remaining *.ko files
                {check_remaining_modules_cmd}
@@ -1188,8 +1334,8 @@ def _build_main_action(
         kbuild_mixed_tree_arg = kbuild_mixed_tree_ret.arg,
         dtstree_arg = "--srcdir ${OUT_DIR}/${dtstree}",
         ruledir = ruledir,
-        internal_outs_under_out_dir = " ".join(["${{OUT_DIR}}/{}".format(item) for item in _kernel_build_internal_outs]),
         all_output_names_minus_modules = " ".join(all_output_names.non_modules),
+        modinst_cmd = modinst_step.cmd,
         grab_intree_modules_cmd = grab_intree_modules_step.cmd,
         grab_unstripped_intree_modules_cmd = grab_unstripped_modules_step.cmd,
         grab_symtypes_cmd = grab_symtypes_step.cmd,
@@ -1201,11 +1347,11 @@ def _build_main_action(
         check_remaining_modules_cmd = check_remaining_modules_step.cmd,
         modules_staging_dir = modules_staging_dir,
         modules_staging_archive_self = modules_staging_archive_self.path,
-        module_strip_flag = module_strip_flag,
         out_dir_kernel_headers_tar = out_dir_kernel_headers_tar.path,
         interceptor_command_prefix = interceptor_step.command_prefix,
         label = ctx.label,
         make_goals = " ".join(make_goals),
+        copy_module_symvers_cmd = copy_module_symvers_step.cmd,
     )
 
     # all inputs that |command| needs
@@ -1262,6 +1408,7 @@ def _build_main_action(
         compile_commands_out_dir = compile_commands_step.compile_commands_out_dir,
         gcno_outputs = grab_gcno_step.outputs,
         gcno_mapping = grab_gcno_step.gcno_mapping,
+        module_symvers_outputs = copy_module_symvers_step.outputs,
     )
 
 def _env_and_outputs_info_get_setup_script(data, restore_out_dir_cmd):
@@ -1361,6 +1508,9 @@ def _create_infos(
         interceptor_output = main_action_ret.interceptor_output,
         compile_commands_with_vars = main_action_ret.compile_commands_with_vars,
         compile_commands_out_dir = main_action_ret.compile_commands_out_dir,
+    )
+
+    kernel_build_uname_info = KernelBuildUnameInfo(
         kernel_release = all_output_files["internal_outs"]["include/config/kernel.release"],
     )
 
@@ -1395,6 +1545,13 @@ def _create_infos(
         restore_outputs_cmd = ext_mod_env_and_outputs_info_setup_restore_outputs,
     )
 
+    # For kernel_module() that require all kernel_build outputs
+    ext_mod_env_and_all_outputs_info = _create_env_and_outputs_info(
+        pre_info = ctx.attr.modules_prepare[KernelEnvAndOutputsInfo],
+        restore_outputs_cmd_deps = env_and_outputs_info_dependencies,
+        restore_outputs_cmd = env_and_outputs_info_setup_restore_outputs,
+    )
+
     # For kernel_modules_install()
     ext_modinst_env_and_outputs_info = _create_env_and_outputs_info(
         pre_info = ctx.attr.modules_prepare[KernelEnvAndOutputsInfo],
@@ -1408,7 +1565,8 @@ def _create_infos(
         module_scripts = module_srcs.module_scripts,
         module_kconfig = module_srcs.module_kconfig,
         config_env_and_outputs_info = ctx.attr.config[KernelEnvAndOutputsInfo],
-        modules_env_and_outputs_info = ext_mod_env_and_outputs_info,
+        modules_env_and_minimal_outputs_info = ext_mod_env_and_outputs_info,
+        modules_env_and_all_outputs_info = ext_mod_env_and_all_outputs_info,
         modules_install_env_and_outputs_info = ext_modinst_env_and_outputs_info,
         collect_unstripped_modules = ctx.attr.collect_unstripped_modules,
         strip_modules = ctx.attr.strip_modules,
@@ -1422,9 +1580,16 @@ def _create_infos(
         kernel_uapi_headers = depset(transitive = kernel_uapi_depsets, order = "postorder"),
     )
 
+    if ctx.files.combined_abi_symbollist:
+        if len(ctx.files.combined_abi_symbollist) > 1:
+            fail("{}: combined_abi_symbollist must only provide at most one file".format(ctx.label))
+        combined_abi_symbollist = ctx.files.combined_abi_symbollist[0]
+    else:
+        combined_abi_symbollist = None
+
     kernel_build_abi_info = KernelBuildAbiInfo(
         trim_nonlisted_kmi = trim_nonlisted_kmi_utils.get_value(ctx),
-        combined_abi_symbollist = ctx.file.combined_abi_symbollist,
+        combined_abi_symbollist = combined_abi_symbollist,
         module_outs_file = all_module_names_file,
         modules_staging_archive = modules_staging_archive,
         base_modules_staging_archive = base_kernel_utils.get_base_modules_staging_archive(ctx),
@@ -1476,9 +1641,12 @@ def _create_infos(
     default_info_files.append(all_module_names_file)
     if kmi_strict_mode_out:
         default_info_files.append(kmi_strict_mode_out)
+    default_info_files.extend(main_action_ret.module_symvers_outputs)
     default_info_files.extend(main_action_ret.gcno_outputs)
     if kmi_symbol_list_violations_check_out:
         default_info_files.append(kmi_symbol_list_violations_check_out)
+    if ctx.file.src_protected_modules_list:
+        default_info_files.append(ctx.file.src_protected_modules_list)
     default_info = DefaultInfo(
         files = depset(default_info_files),
         # For kernel_build_test
@@ -1493,6 +1661,7 @@ def _create_infos(
         kernel_build_info,
         kernel_build_module_info,
         kernel_build_uapi_info,
+        kernel_build_uname_info,
         kernel_build_abi_info,
         kernel_unstripped_modules_info,
         in_tree_modules_info,
@@ -1582,6 +1751,9 @@ _kernel_build = rule(
             ],
             doc = "the kernel_config target",
         ),
+        "keep_module_symvers": attr.bool(
+            doc = "If true, a copy of `Module.symvers` is kept, with the name `{name}_Module.symvers`",
+        ),
         "srcs": attr.label_list(mandatory = True, doc = "kernel sources", allow_files = True),
         "outs": attr.string_list(),
         "module_outs": attr.string_list(doc = "output *.ko files"),
@@ -1609,8 +1781,8 @@ _kernel_build = rule(
         ),
         "kmi_symbol_list_strict_mode": attr.bool(),
         "raw_kmi_symbol_list": attr.label(
-            doc = "Label to abi_symbollist.raw.",
-            allow_single_file = True,
+            doc = "Label to abi_symbollist.raw. Must be 0 or 1 file.",
+            allow_files = True,
         ),
         "collect_unstripped_modules": attr.bool(),
         "enable_interceptor": attr.bool(),
@@ -1621,6 +1793,11 @@ _kernel_build = rule(
         ),
         "_check_symbol_protection": attr.label(
             default = "//build/kernel:check_buildtime_symbol_protection",
+            executable = True,
+            cfg = "exec",
+        ),
+        "_get_kmi_string": attr.label(
+            default = "//build/kernel/kleaf/impl:get_kmi_string",
             executable = True,
             cfg = "exec",
         ),
@@ -1638,7 +1815,11 @@ _kernel_build = rule(
         # `_kernel_build` target.
         "modules_prepare": attr.label(providers = [KernelEnvAndOutputsInfo]),
         "kernel_uapi_headers": attr.label(),
-        "combined_abi_symbollist": attr.label(allow_single_file = True, doc = "The **combined** `abi_symbollist` file, consist of `kmi_symbol_list` and `additional_kmi_symbol_lists`."),
+        "combined_abi_symbollist": attr.label(
+            doc = """The **combined** `abi_symbollist` file, consist of `kmi_symbol_list` and
+                `additional_kmi_symbol_lists`. Must be 0 or 1 file.""",
+            allow_files = True,
+        ),
         "strip_modules": attr.bool(default = False, doc = "if set, debug information won't be kept for distributed modules.  Note, modules will still be stripped when copied into the ramdisk."),
         "src_protected_exports_list": attr.label(allow_single_file = True),
         "src_protected_modules_list": attr.label(allow_single_file = True),
@@ -1760,10 +1941,19 @@ def _kmi_symbol_list_strict_mode(ctx, all_output_files, all_module_names_file):
               IGNORED because --kasan is set!".format(this_label = ctx.label))
         return None
 
+    # Skip for the --kcsan targets as they are not valid GKI release targets
+    if ctx.attr._kcsan[BuildSettingInfo].value:
+        # buildifier: disable=print
+        print("\nWARNING: {this_label}: Attribute kmi_symbol_list_strict_mode\
+              IGNORED because --kcsan is set!".format(this_label = ctx.label))
+        return None
+
     if not ctx.attr.kmi_symbol_list_strict_mode:
         return None
-    if not ctx.file.raw_kmi_symbol_list:
+    if not ctx.files.raw_kmi_symbol_list:
         fail("{}: kmi_symbol_list_strict_mode requires kmi_symbol_list or additional_kmi_symbol_lists.")
+    if len(ctx.files.raw_kmi_symbol_list) > 1:
+        fail("{}: raw_kmi_symbol_list must only provide at most one file".format(ctx.label))
 
     vmlinux = all_output_files["outs"].get("vmlinux")
     if not vmlinux:
@@ -1774,9 +1964,9 @@ def _kmi_symbol_list_strict_mode(ctx, all_output_files, all_module_names_file):
 
     inputs = [
         module_symvers,
-        ctx.file.raw_kmi_symbol_list,
         all_module_names_file,
     ]
+    inputs += ctx.files.raw_kmi_symbol_list  # This is 0 or 1 file
     transitive_inputs = [ctx.attr.config[KernelEnvAndOutputsInfo].inputs]
     tools = [ctx.executable._verify_ksymtab]
     transitive_tools = [ctx.attr.config[KernelEnvAndOutputsInfo].tools]
@@ -1798,7 +1988,7 @@ def _kmi_symbol_list_strict_mode(ctx, all_output_files, all_module_names_file):
         all_module_names_file = all_module_names_file.path,
         verify_ksymtab = ctx.executable._verify_ksymtab.path,
         module_symvers = module_symvers.path,
-        raw_kmi_symbol_list = ctx.file.raw_kmi_symbol_list.path,
+        raw_kmi_symbol_list = ctx.files.raw_kmi_symbol_list[0].path,
         out = out.path,
     )
     debug.print_scripts(ctx, command, what = "kmi_symbol_list_strict_mode")
@@ -1828,14 +2018,23 @@ def _kmi_symbol_list_violations_check(ctx, modules_staging_archive):
     if not ctx.attr._kmi_symbol_list_violations_check[BuildSettingInfo].value:
         return None
 
-    if not ctx.file.raw_kmi_symbol_list:
+    if not ctx.files.raw_kmi_symbol_list:
         return None
+    if len(ctx.files.raw_kmi_symbol_list) > 1:
+        fail("{}: raw_kmi_symbol_list must only provide at most one file".format(ctx.label))
 
     # Skip for --kasan build as they are not valid GKI releasae configurations.
     # Downstreams are expect to build kernel+modules+vendor modules locally
     # and can disable the runtime symbol protection with CONFIG_SIG_PROTECT=n
     # if required.
     if ctx.attr._kasan[BuildSettingInfo].value:
+        return None
+
+    # Skip for --kcsan build as they are not valid GKI releasae configurations.
+    # Downstreams are expect to build kernel+modules+vendor modules locally
+    # and can disable the runtime symbol protection with CONFIG_SIG_PROTECT=n
+    # if required.
+    if ctx.attr._kcsan[BuildSettingInfo].value:
         return None
 
     # Skip for the --kgdb targets as they are not valid GKI release targets
@@ -1846,9 +2045,9 @@ def _kmi_symbol_list_violations_check(ctx, modules_staging_archive):
         return None
 
     inputs = [
-        ctx.file.raw_kmi_symbol_list,
         modules_staging_archive,
     ]
+    inputs += ctx.files.raw_kmi_symbol_list  # This is 0 or 1 file
     tools = [ctx.executable._check_symbol_protection]
 
     # llvm-nm is needed to extract symbols.
@@ -1878,7 +2077,7 @@ def _kmi_symbol_list_violations_check(ctx, modules_staging_archive):
         intermediates_dir = intermediates_dir,
         modules_staging_archive = modules_staging_archive.path,
         out = out.path,
-        raw_kmi_symbol_list = ctx.file.raw_kmi_symbol_list.path,
+        raw_kmi_symbol_list = ctx.files.raw_kmi_symbol_list[0].path,
     )
 
     debug.print_scripts(ctx, command, what = "kmi_symbol_list_violations_check")

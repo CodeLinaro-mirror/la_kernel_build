@@ -16,11 +16,13 @@
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
+load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
     ":kernel.bzl",
     "kernel_abi",
     "kernel_abi_dist",
     "kernel_build",
+    "kernel_build_config",
     "kernel_compile_commands",
     "kernel_filegroup",
     "kernel_images",
@@ -118,6 +120,9 @@ _COLLECT_UNSTRIPPED_MODULES = True
 
 # Always strip modules for common kernels.
 _STRIP_MODULES = True
+
+# Always keep a copy of Module.symvers for common kernels.
+_KEEP_MODULE_SYMVERS = True
 
 # glob() must be executed in a BUILD thread, so this cannot be a global
 # variable.
@@ -527,6 +532,18 @@ def define_common_kernels(
     if visibility == None:
         visibility = ["//visibility:public"]
 
+    # Workaround to set KERNEL_DIR correctly and
+    #  avoid using the fallback (directory of the config).
+    set_kernel_dir_cmd = "KERNEL_DIR=\"{common_package}\"".format(
+        common_package = native.package_name(),
+    )
+    write_file(
+        name = "set_kernel_dir_build_config",
+        content = [set_kernel_dir_cmd, ""],
+        out = "set_kernel_dir_build_config/build.config",
+        visibility = visibility,
+    )
+
     default_target_configs = None  # _default_target_configs is lazily evaluated.
     if target_configs == None:
         target_configs = {}
@@ -587,6 +604,16 @@ def define_common_kernels(
             allow_unknown_keys = True,
         )
 
+        kernel_build_config(
+            name = name + "_build_config",
+            srcs = [
+                # do not sort
+                ":set_kernel_dir_build_config",
+                arch_config["build_config"],
+                Label("//build/kernel/kleaf:gki_build_config_fragment"),
+            ],
+        )
+
         kernel_build(
             name = name,
             srcs = [name + "_sources"],
@@ -599,12 +626,13 @@ def define_common_kernels(
                 "certs/signing_key.pem",
                 "certs/signing_key.x509",
             ],
-            build_config = arch_config["build_config"],
+            build_config = name + "_build_config",
             enable_interceptor = arch_config.get("enable_interceptor"),
             visibility = visibility,
             collect_unstripped_modules = _COLLECT_UNSTRIPPED_MODULES,
             strip_modules = _STRIP_MODULES,
             toolchain_version = toolchain_version,
+            keep_module_symvers = _KEEP_MODULE_SYMVERS,
             **kernel_build_kwargs
         )
 
@@ -802,8 +830,7 @@ def define_common_kernels(
 
     string_flag(
         name = "kernel_kythe_corpus",
-        # TODO(b/201801372): Remove the default value once build bots are configured properly.
-        build_setting_default = "android.googlesource.com/kernel/superproject//common-android-mainline",
+        build_setting_default = "",
     )
 
     kernel_kythe(
@@ -883,6 +910,7 @@ def _define_prebuilts(target_configs, **kwargs):
                 "//conditions:default": ":" + name + "_module_outs_file",
             }),
             protected_modules_list = target_configs[name].get("protected_modules_list"),
+            gki_artifacts = name + "_gki_artifacts_download_or_build",
             **kwargs
         )
 
@@ -946,10 +974,10 @@ def _define_common_kernels_additional_tests(
         expected_modules_options = fake_modules_options,
     )
 
-    native.genrule(
+    write_file(
         name = name + "_empty_modules_options",
-        outs = [name + "_empty_modules_options/modules.options"],
-        cmd = ": > $@",
+        out = name + "_empty_modules_options/modules.options",
+        content = [],
     )
 
     kernel_images(
