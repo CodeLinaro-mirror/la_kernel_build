@@ -123,8 +123,6 @@ def _config_gcov(ctx):
         # TODO(b/291710318) Allow section mismatch when using GCOV_PROFILE_ALL
         #  modpost: vmlinux.o: section mismatch in reference: cpumask_andnot (section: .text) -> efi_systab_phys (section: .init.data)
         _config.enable("SECTION_MISMATCH_WARN_ONLY"),
-        # TODO: Re-enable when https://github.com/ClangBuiltLinux/linux/issues/1778 is fixed.
-        _config.disable("CFI_CLANG"),
     ]
     return struct(configs = configs, deps = [])
 
@@ -256,31 +254,15 @@ def _config_kasan(ctx):
         A struct, where `configs` is a list of arguments to `scripts/config`,
         and `deps` is a list of input files.
     """
-    lto = ctx.attr.lto
     kasan = ctx.attr.kasan[BuildSettingInfo].value
 
     if not kasan:
         return struct(configs = [], deps = [])
 
-    if ctx.attr.kasan_sw_tags[BuildSettingInfo].value:
-        fail("{}: cannot have both --kasan and --kasan_sw_tags simultaneously".format(ctx.label))
-
-    if lto != "none":
-        fail("{}: --kasan requires --lto=none or default, but --lto is {}".format(ctx.label, lto))
-
     if trim_nonlisted_kmi_utils.get_value(ctx):
         fail("{}: --kasan requires trimming to be disabled".format(ctx.label))
 
-    configs = [
-        _config.enable("KASAN"),
-        _config.enable("KASAN_INLINE"),
-        _config.enable("KCOV"),
-        _config.disable("RANDOMIZE_BASE"),
-        _config.disable("KASAN_OUTLINE"),
-        _config.set_val("FRAME_WARN", 0),
-        _config.disable("SHADOW_CALL_STACK"),
-    ]
-    return struct(configs = configs, deps = [])
+    return struct(configs = [], deps = [])
 
 def _config_kasan_sw_tags(ctx):
     """Return configs for --kasan_sw_tags.
@@ -291,29 +273,15 @@ def _config_kasan_sw_tags(ctx):
         A struct, where `configs` is a list of arguments to `scripts/config`,
         and `deps` is a list of input files.
     """
-    lto = ctx.attr.lto
     kasan_sw_tags = ctx.attr.kasan_sw_tags[BuildSettingInfo].value
 
     if not kasan_sw_tags:
         return struct(configs = [], deps = [])
 
-    if ctx.attr.kasan[BuildSettingInfo].value:
-        fail("{}: cannot have both --kasan and --kasan_sw_tags simultaneously".format(ctx.label))
-
-    if lto != "none":
-        fail("{}: --kasan_sw_tags requires --lto=none or default, but --lto is {}".format(ctx.label, lto))
-
     if trim_nonlisted_kmi_utils.get_value(ctx):
         fail("{}: --kasan_sw_tags requires trimming to be disabled".format(ctx.label))
 
-    configs = [
-        _config.enable("KASAN"),
-        _config.enable("KASAN_SW_TAGS"),
-        _config.enable("KASAN_OUTLINE"),
-        _config.disable("KASAN_HW_TAGS"),
-        _config.set_val("FRAME_WARN", 0),
-    ]
-    return struct(configs = configs, deps = [])
+    return struct(configs = [], deps = [])
 
 def _config_kcsan(ctx):
     """Return configs for --kcsan.
@@ -324,36 +292,15 @@ def _config_kcsan(ctx):
         A struct, where `configs` is a list of arguments to `scripts/config`,
         and `deps` is a list of input files.
     """
-    lto = ctx.attr.lto
     kcsan = ctx.attr.kcsan[BuildSettingInfo].value
 
     if not kcsan:
         return struct(configs = [], deps = [])
 
-    if lto != "none":
-        fail("{}: --kcsan requires --lto=none or default, but --lto is {}".format(ctx.label, lto))
-
     if trim_nonlisted_kmi_utils.get_value(ctx):
         fail("{}: --kcsan requires trimming to be disabled".format(ctx.label))
 
-    configs = [
-        _config.enable("KCSAN"),
-        _config.enable("KCSAN_VERBOSE"),
-        _config.disable("KCSAN_KCOV_BROKEN"),
-        _config.enable("KCOV"),
-        _config.enable("KCOV_ENABLE_COMPARISONS"),
-        _config.enable("PROVE_LOCKING"),
-        _config.disable("KASAN"),
-        _config.disable("KASAN_STACK"),
-        _config.disable("RANDOMIZE_BASE"),
-        _config.set_val("FRAME_WARN", 0),
-        _config.disable("KASAN_HW_TAGS"),
-        _config.disable("CFI"),
-        _config.disable("CFI_PERMISSIVE"),
-        _config.disable("CFI_CLANG"),
-        _config.disable("SHADOW_CALL_STACK"),
-    ]
-    return struct(configs = configs, deps = [])
+    return struct(configs = [], deps = [])
 
 def _reconfig(ctx):
     """Return a command and extra inputs to re-configure `.config` file."""

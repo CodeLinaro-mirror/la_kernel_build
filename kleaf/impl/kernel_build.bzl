@@ -57,8 +57,8 @@ load(
     "TOOLCHAIN_VERSION_FILENAME",
 )
 load(":debug.bzl", "debug")
-load(":file_selector.bzl", "file_selector")
 load(":file.bzl", "file")
+load(":file_selector.bzl", "file_selector")
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
 load(":kernel_config.bzl", "kernel_config")
 load(":kernel_config_settings.bzl", "kernel_config_settings")
@@ -687,6 +687,9 @@ def _get_defconfig_fragments(
     additional_fragments = [
         Label("//build/kernel/kleaf:defconfig_fragment"),
         Label("//build/kernel/kleaf/impl/defconfig:debug"),
+        Label("//build/kernel/kleaf/impl/defconfig:kasan_any_mode"),
+        Label("//build/kernel/kleaf/impl/defconfig:{}_kasan_sw_tags".format(kernel_build_arch)),
+        Label("//build/kernel/kleaf/impl/defconfig:kcsan"),
     ]
 
     btf_debug_info_target = kernel_build_name + "_defconfig_fragment_btf_debug_info"

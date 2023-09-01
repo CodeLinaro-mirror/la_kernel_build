@@ -18,6 +18,26 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
+load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
+load("//build/kernel/kleaf/artifact_tests:device_modules_test.bzl", "device_modules_test")
+load("//build/kernel/kleaf/artifact_tests:kernel_test.bzl", "initramfs_modules_options_test")
+load(
+    "//build/kernel/kleaf/impl:constants.bzl",
+    "MODULE_OUTS_FILE_OUTPUT_GROUP",
+    "MODULE_OUTS_FILE_SUFFIX",
+    "TOOLCHAIN_VERSION_FILENAME",
+)
+load("//build/kernel/kleaf/impl:gki_artifacts.bzl", "gki_artifacts", "gki_artifacts_prebuilts")
+load("//build/kernel/kleaf/impl:kernel_sbom.bzl", "kernel_sbom")
+load("//build/kernel/kleaf/impl:merge_kzip.bzl", "merge_kzip")
+load("//build/kernel/kleaf/impl:out_headers_allowlist_archive.bzl", "out_headers_allowlist_archive")
+load(
+    ":constants.bzl",
+    "CI_TARGET_MAPPING",
+    "DEFAULT_GKI_OUTS",
+    "GKI_DOWNLOAD_CONFIGS",
+    "X86_64_OUTS",
+)
 load(
     ":kernel.bzl",
     "kernel_abi",
@@ -31,26 +51,6 @@ load(
     "kernel_modules_install",
     "kernel_unstripped_modules_archive",
     "merged_kernel_uapi_headers",
-)
-load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
-load("//build/kernel/kleaf/artifact_tests:kernel_test.bzl", "initramfs_modules_options_test")
-load("//build/kernel/kleaf/artifact_tests:device_modules_test.bzl", "device_modules_test")
-load("//build/kernel/kleaf/impl:gki_artifacts.bzl", "gki_artifacts", "gki_artifacts_prebuilts")
-load("//build/kernel/kleaf/impl:kernel_sbom.bzl", "kernel_sbom")
-load("//build/kernel/kleaf/impl:merge_kzip.bzl", "merge_kzip")
-load("//build/kernel/kleaf/impl:out_headers_allowlist_archive.bzl", "out_headers_allowlist_archive")
-load(
-    "//build/kernel/kleaf/impl:constants.bzl",
-    "MODULE_OUTS_FILE_OUTPUT_GROUP",
-    "MODULE_OUTS_FILE_SUFFIX",
-    "TOOLCHAIN_VERSION_FILENAME",
-)
-load(
-    ":constants.bzl",
-    "CI_TARGET_MAPPING",
-    "DEFAULT_GKI_OUTS",
-    "GKI_DOWNLOAD_CONFIGS",
-    "X86_64_OUTS",
 )
 load(":print_debug.bzl", "print_debug")
 
@@ -97,6 +97,7 @@ def _default_target_configs():
         "arch": "arm64",
         "build_config": "build.config.gki.aarch64",
         "outs": DEFAULT_GKI_OUTS,
+        "gki_system_dlkm_modules": "android/gki_system_dlkm_modules_arm64",
     }
 
     gki_boot_img_sizes = {
@@ -127,6 +128,7 @@ def _default_target_configs():
         # Assume BUILD_GKI_ARTIFACTS=1
         "build_gki_artifacts": True,
         "gki_boot_img_sizes": gki_boot_img_sizes,
+        "gki_system_dlkm_modules": "android/gki_system_dlkm_modules_riscv64",
     }
 
     # Common configs for x86_64 and x86_64_debug
@@ -140,6 +142,7 @@ def _default_target_configs():
             # Assume BUILD_GKI_BOOT_IMG_SIZE is the following
             "": "67108864",
         },
+        "gki_system_dlkm_modules": "android/gki_system_dlkm_modules_x86_64",
     }
 
     return {
@@ -616,6 +619,7 @@ def _define_common_kernel(
         module_implicit_outs = None,
         protected_exports_list = None,
         protected_modules_list = None,
+        gki_system_dlkm_modules = None,
         make_goals = None,
         abi_definition_stg = None,
         kmi_enforced = None,
@@ -638,6 +642,7 @@ def _define_common_kernel(
         module_implicit_outs = module_implicit_outs,
         protected_exports_list = protected_exports_list,
         protected_modules_list = protected_modules_list,
+        gki_system_dlkm_modules = gki_system_dlkm_modules,
         make_goals = make_goals,
         abi_definition_stg = abi_definition_stg,
         kmi_enforced = kmi_enforced,
@@ -773,8 +778,9 @@ def _define_common_kernel(
         kernel_modules_install = name + "_modules_install",
         # Sync with GKI_DOWNLOAD_CONFIGS, "images"
         build_system_dlkm = True,
+        system_dlkm_fs_types = ["erofs", "ext4"],
         # Keep in sync with build.config.gki* MODULES_LIST
-        modules_list = "android/gki_system_dlkm_modules",
+        modules_list = gki_system_dlkm_modules,
     )
 
     if build_gki_artifacts:

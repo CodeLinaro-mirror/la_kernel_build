@@ -64,7 +64,6 @@ _HERMETIC_TOOLS = [
     "build-tools/path/linux-x86/env",
     "build-tools/path/linux-x86/expr",
     "build-tools/path/linux-x86/fec",
-    "build-tools/path/linux-x86/find",
     "build-tools/path/linux-x86/flex",
     "build-tools/path/linux-x86/getconf",
     "build-tools/path/linux-x86/grep",
@@ -282,21 +281,33 @@ _ADDITIONAL_TOYS = [
     "kleaf_internal_do_not_use/tar",
 ]
 
+# Hacks to allow duplicate keys in hermetic_tools.symlinks.
+# This can't be an alias because it resolves to the same target during
+# analysis phase.
+filegroup(
+    name = "hermetic_tools_toybox_flock_alias",
+    srcs = ["//prebuilts/build-tools:linux-x86/bin/toybox"],
+    visibility = ["//visibility:private"],
+)
+
 hermetic_tools(
     name = "hermetic-tools",
     aliases = _DEPRECATED_DO_NOT_ADD_MORE_ALIASES,
     symlinks = select({
         "//build/kernel/kleaf:debug_cache_dir_conflict_needs_flock": {
-            "//prebuilts/build-tools:linux-x86/bin/toybox": ":".join(
-                _ADDITIONAL_TOYS + ["flock"],
-            ),
+            ":hermetic_tools_toybox_flock_alias": "flock",
+        },
+        "//conditions:default": {},
+    }) | select({
+        "//build/kernel/kleaf:workaround_btrfs_b292212788_is_true": {
+            "@kleaf_host_tools//:find": "find",
         },
         "//conditions:default": {
-            "//prebuilts/build-tools:linux-x86/bin/toybox": ":".join(
-                _ADDITIONAL_TOYS,
-            ),
+            "build-tools/path/linux-x86/find": "find",
         },
     }) | {
+        "//prebuilts/build-tools:linux-x86/bin/toybox": ":".join(_ADDITIONAL_TOYS),
+
         # Host tools
         "@kleaf_host_tools//:bash": "bash",
         "@kleaf_host_tools//:sh": "sh",
@@ -397,6 +408,7 @@ py_binary(
 py_library(
     name = "symbol_extraction",
     srcs = ["abi/symbol_extraction.py"],
+    imports = ["abi"],
     visibility = ["//visibility:private"],
 )
 

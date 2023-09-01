@@ -22,7 +22,7 @@ load(
     "GKI_ARTIFACTS_AARCH64_OUTS",
     "MODULES_STAGING_ARCHIVE",
     "MODULE_OUTS_FILE_SUFFIX",
-    "SYSTEM_DLKM_OUTS",
+    "SYSTEM_DLKM_COMMON_OUTS",
     "TOOLCHAIN_VERSION_FILENAME",
 )
 
@@ -70,7 +70,8 @@ GKI_DOWNLOAD_CONFIGS = [
     },
     {
         "target_suffix": "images",
-        "outs": SYSTEM_DLKM_OUTS,
+        # TODO(b/297934577): Update GKI prebuilts to download system_dlkm.<fs>.img
+        "outs": SYSTEM_DLKM_COMMON_OUTS,
     },
     {
         "target_suffix": "toolchain_version",
@@ -126,9 +127,12 @@ GKI_DOWNLOAD_CONFIGS = [
 # Key: Bazel target name in common_kernels.bzl
 # repo_name: name of download_artifacts_repo in bazel.WORKSPACE
 # outs: list of outs associated with that target name
+# arch: Architecture associated with this mapping.
 CI_TARGET_MAPPING = {
     # TODO(b/206079661): Allow downloaded prebuilts for x86_64 and debug targets.
     "kernel_aarch64": {
+        "arch": "arm64",
+        # TODO: Rename this when more architectures are added.
         "repo_name": "gki_prebuilts",
         "outs": DEFAULT_GKI_OUTS + [
             "kernel_aarch64" + MODULE_OUTS_FILE_SUFFIX,
