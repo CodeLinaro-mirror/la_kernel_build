@@ -2,22 +2,16 @@
 
 **Note**:
 You may view the documentation for the following Bazel rules and macros on
-Android Continuous Integration:
-
-[https://ci.android.com/builds/latest/branches/aosp_kernel-common-android-mainline/targets/kleaf_docs/view/index.html](https://ci.android.com/builds/latest/branches/aosp_kernel-common-android-mainline/targets/kleaf_docs/view/index.html)
+Android Continuous Integration. See
+[API Reference and Documentation for all rules](api_reference.md).
 
 ## Manifest changes
 
 Make the following changes to the kernel manifest to support Bazel build.
 
-* Add `.source_date_epoch_dir` symlink to your `${KERNEL_DIR}`
-  * The date of the last commit in this directory
-    determines `$SOURCE_DATE_EPOCH`.
-    See [SOURCE\_DATE\_EPOCH](https://reproducible-builds.org/docs/source-date-epoch/).
-  * **NOTE**: This is subject to change. In the future, this may not be required
-      any more.
 * Add `tools/bazel` symlink to `build/kernel/kleaf/bazel.sh`
 * Add `WORKSPACE` symlink to `build/kernel/kleaf/bazel.WORKSPACE`
+  * See [workspace.md](workspace.md) for building with a custom workspace.
 * Dependent repositories for Bazel, including:
     * [prebuilts/bazel/linux-x86\_64](https://android.googlesource.com/platform/prebuilts/bazel/linux-x86_64/)
     * [prebuilts/jdk/jdk11](https://android.googlesource.com/platform/prebuilts/jdk/jdk11/)
@@ -68,6 +62,42 @@ kernel_build(
 ```
 
 ## Building kernel modules and DTB files
+
+### Step 0: (Optional) Create a skeleton `BUILD.bazel` file
+
+This step automates most of the following steps for you.
+
+First, install
+[Buildozer](https://github.com/bazelbuild/buildtools/tree/master/buildozer).
+Make sure that it is available in `$PATH`, or under `$GOPATH/bin`, or under
+`$HOME/go/bin`. See the script below for details on how `buildozer` is searched
+for.
+
+Next, execute `build_config_to_bazel.py` script. Set `BUILD_CONFIG` accordingly
+if you don't have a top level `build.config` file. Example:
+
+```shell
+$ BUILD_CONFIG=common-modules/virtual-device/build.config.virtual_device.x86_64 \
+    build/kernel/kleaf/build_config_to_bazel.py
+```
+
+Sample output:
+
+```text
+fixed /home/elsk/android/kernel/common-modules/virtual-device/BUILD.bazel
+```
+
+Then, examine the modified file(s), indicated in the command output.
+There may be several `FIXME` comments that requires human intervention.
+Go through the steps below to fix them accordingly.
+
+**NOTE**: Human intervention is still required for the generated file.
+
+**NOTE**: The script may modify multiple files. All of them should be examined.
+
+**NOTE**: The file is generated based on a number of heuristics. Even if some
+attributes aren't commented with `FIXME`, they may not be 100% correct. Go
+through the steps below to fix the file to suit your needs.
 
 ### Step 1: (Optional) Define a target to build in-tree drivers and DTB files {#step-1}
 
@@ -193,16 +223,6 @@ copy_to_dist_dir(
 )
 ```
 
-... or if you want to be strictly consistent with the behavior of `build.sh`:
-
-```text
-load("@kernel_toolchain_info//:dict.bzl", "BRANCH")
-copy_to_dist_dir(
-   # ...
-   dist_dir = "out/{branch}/dist".format(branch = BRANCH)
-)
-```
-
 Add the following to the `data` attribute of the `copy_to_dist_dir` target so
 that the outputs are analogous to those produced by `build/build.sh`:
 
@@ -275,12 +295,10 @@ here: https://docs.bazel.build/versions/main/configurable-attributes.html
 
 In general, inputs to a target are configurable, while declared outputs are not.
 One exception is that the `kernel_build` rule provides limited support
-of `select()` in `outs` and `module_outs` attributes. See documentations
-of `kernel_build` for details.
+of `select()` in `outs` and `module_outs` attributes. See
+[documentations](api_reference.md) of `kernel_build` for details.
 
-[https://ci.android.com/builds/latest/branches/aosp_kernel-common-android-mainline/targets/kleaf_docs/view/index.html](https://ci.android.com/builds/latest/branches/aosp_kernel-common-android-mainline/targets/kleaf_docs/view/index.html)
-
-### `bazelrc` files
+### .bazelrc files
 
 By default, the `.bazelrc` (symlink to `build/kernel/kleaf/common.bazelrc`)
 tries to import the following two files if they exist:

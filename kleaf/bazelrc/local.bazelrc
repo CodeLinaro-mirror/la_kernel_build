@@ -12,11 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Various configs for disabling as many sandboxes as possible.
+# --config=local: Disable as many sandboxes as possible.
+# See build/kernel/kleaf/docs/sandbox.md
 
 # Let rules know what configs we are using now
 build:local --//build/kernel/kleaf:config_local
 
-# A list of actions to skip sandboxing.
-build:local --strategy KernelConfig=local
-build:local --strategy KernelBuild=local
+# See kernel_module() for details.
+build --strategy=KernelModuleProcessWrapperSandbox=processwrapper-sandbox
+
+# Other strategies are configured on a per-action basis. Check out all callers
+# to kernel_utils.local_exec_requirements to see the full list of
+# actions that respects --config=local.

@@ -64,11 +64,24 @@ Example:
 
 This means a kernel module dependency is missing.
 
-Solution: Add the `kernel_module` in `foo` to `kernel_module_deps` of the build
-rule.
+**Solution**:
+
+* Try the Kleaf [`build_cleaner`](build_cleaner.md).
+* If that doesn't work, manually add the `kernel_module` in `foo` to
+  `deps` of the build rule.
 
 Example:
 [Power Reset module depends on BMS](https://android.googlesource.com/kernel/google-modules/power/reset/+/refs/heads/android-gs-raviole-mainline/BUILD.bazel).
+
+## ERROR: modpost: "foo" [.../mod_using_foo.ko] undefined! {#modpost-symbol-undefined}
+
+**Solution**:
+
+* First, ensure the `Module.symvers` file from the module defining `foo` is
+  present. See [this section](#module-symvers-missing).
+* For `kernel_module`s, set `KBUILD_EXTRA_SYMBOLS` accordingly in `Makefile`. Example:
+  [Makefile for Power Reset module](https://android.googlesource.com/kernel/google-modules/power/reset/+/refs/heads/android-gs-raviole-mainline/Makefile)
+  . This is unnecessary for `ddk_module` because `Makefile` is generated.
 
 ## Exception: Unable to find \[some file\] in any of the following directories: ... {#no-files-match}
 
@@ -243,14 +256,20 @@ For details, see [scmversion.md](scmversion.md).
 
 ## rm: cannot remove 'out/bazel/output_user_root/<hash>/execroot/\_\_main\_\_/bazel-out/k8-fastbuild/bin/<...>
 
+**Note**: `--experimental_writable_outputs` is now enabled by default. If you
+still see this error, it may be due to left-over directories from builds before
+`--experimental_writable_outputs` is enabled. You may execute
+`tools/bazel clean` one last time. Then, you should no longer need to run
+`tools/bazel clean` before `rm -rf out/`.
+
 If you try to `rm -rf out/` and get the above message, this is because Bazel
-removes the write permission on output binaries.
+removes the write permission on output directories.
 
 Unlike with `build.sh`, it is no longer needed to clean the output
 directory for consistency of build results.
 
 However, if you need to clean the `out/` directory to
-save disk space, you may run `bazel clean`. See
+save disk space, you may run `tools/bazel clean`. See
 documentation for the `clean` command
 [here](https://bazel.build/docs/user-manual#cleaning-build-outputs).
 
@@ -284,6 +303,53 @@ to prevent this in the future. See [sandbox.md](sandbox.md).
 See
 [CL:2082199](https://android-review.googlesource.com/2082199) for an example.
 
+## `signing_key.pem` not found
+
+If you see an error like the following:
+
+```text
+At main.c:172:
+- SSL error:02000002:system library:OPENSSL_internal:No such file or directory: external/boringssl/src/crypto/bio/file.c:98
+- SSL error:1100006e:BIO routines:OPENSSL_internal:NO_SUCH_FILE: external/boringssl/src/crypto/bio/file.c:102
+sign-file: <execroot>/common/certs/signing_key.pem
+```
+
+Add the following line to defconfig, or config fragment:
+
+```text
+# CONFIG_MODULE_SIG_ALL is not set
+```
+
+See the following change for an example:
+
+[ANDROID: kleaf: convert fips140 to kleaf](https://android-review.googlesource.com/c/kernel/common/+/2212995)
+
+## unterminated call to function 'wildcard': missing ')'.  Stop. {#unterminated-call-to-function-wildcard}
+
+If you see an error like the following when using `--config=local`:
+
+```
+ERROR: <...>/BUILD.bazel:5:14: Building external kernel module <...> failed: (Exit 2): bash failed: error executing command (from target <...>) /bin/bash -c ... (remaining 1 argument skipped)
+<path>/.<filename>.o.cmd:5: *** unterminated call to function 'wildcard': missing ')'.  Stop.
+```
+
+This is a known issue with `--config=local`. The root cause of the issue is
+unknown. If you see this error, please file a bug with the following
+information:
+
+- Rebuild with
+  `--verbose_failures --debug_cache_dir_conflict=detect --profile=/tmp/command.profile.gz`
+- Record the full build log
+- Provide `/tmp/command.profile.gz`; see
+  [JSON trace profile](https://bazel.build/advanced/performance/json-trace-profile)
+
+After filing the bug, you may use one of the methods below to work around the
+issue:
+
+- You may run `tools/bazel clean` and try the build again. You may or may not
+  see the error again afterwards.
+- You may rebuild with `--debug_cache_dir_conflict=resolve`.
+
 ## fatal: not a git repository: '[...]/.git' {#not-git}
 
 This is a harmless warning message.
@@ -302,26 +368,3 @@ This is a harmless warning message.
 
 [comment]: <> (Bug 194427140)
 
-## ERROR: Skipping '//common:kernel_aarch64_abi_update': no such target
-
-When updating ABI definition file for the first time or a branch has no
-existing symbol list file, this error will be generated when running the ABI
-symbol list update target. This happens because Bazel can not find a file to
-update. In that case the target is not generated.
-
-To work around this, first create an empty ABI definition file using:
-
-```shell
-touch common/android/abi_gki_aarch64.xml
-```
-
-Second, run ABI definition update with no diff as reference file will be an empty file using:
-
-```shell
-bazel run //common:kernel_aarch64_abi_nodiff_update
-```
-
-This will geneate the base line ABI definition file and ABI definition update target
-`//common:kernel_aarch64_abi_update` will be available now onwards.
-
-For details, see [abi.md#update-abi](abi.md#update-abi)

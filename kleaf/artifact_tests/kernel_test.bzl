@@ -11,8 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+Tests for artifacts produced by kernel_module.
+"""
 
-load("//build/kernel/kleaf/impl:utils.bzl", "utils")
+visibility("//build/kernel/kleaf/...")
 
 def kernel_module_test(
         name,
@@ -24,7 +27,7 @@ def kernel_module_test(
         name: name of test
         modules: The list of `*.ko` kernel modules, or targets that produces
             `*.ko` kernel modules (e.g. [kernel_module](#kernel_module)).
-        kwargs: Additional attributes to the internal rule, e.g.
+        **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
           [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
@@ -61,13 +64,13 @@ def kernel_build_test(
     Args:
         name: name of test
         target: The [`kernel_build()`](#kernel_build).
-        kwargs: Additional attributes to the internal rule, e.g.
+        **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
           [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
     """
     script = "//build/kernel/kleaf/artifact_tests:kernel_build_test.py"
-    strings = "//build/kernel:hermetic-tools/strings"
+    strings = "//build/kernel:hermetic-tools/llvm-strings"
     args = ["--strings", "$(location {})".format(strings)]
     if target:
         args += ["--artifacts", "$(locations {})".format(target)]
@@ -82,6 +85,7 @@ def kernel_build_test(
         timeout = "short",
         deps = [
             "@io_abseil_py//absl/testing:absltest",
+            "@io_abseil_py//absl/testing:parameterized",
         ],
         **kwargs
     )
@@ -91,6 +95,17 @@ def initramfs_modules_options_test(
         kernel_images,
         expected_modules_options,
         **kwargs):
+    """Tests that initramfs has modules.options with the given content.
+
+    Args:
+        name: name of the test
+        kernel_images: name of the `kernel_images` target. It must build initramfs.
+        expected_modules_options: file with expected content for `modules.options`
+        **kwargs: Additional attributes to the internal rule, e.g.
+          [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
+          See complete list
+          [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
+    """
     script = "//build/kernel/kleaf/artifact_tests:initramfs_modules_options_test.py"
     cpio = "//build/kernel:hermetic-tools/cpio"
     diff = "//build/kernel:hermetic-tools/diff"

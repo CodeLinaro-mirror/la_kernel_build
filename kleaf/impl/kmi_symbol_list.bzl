@@ -12,16 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Processes KMI symbols."""
+
 load(":common_providers.bzl", "KernelEnvInfo")
 load(":debug.bzl", "debug")
 
+visibility("//build/kernel/kleaf/...")
+
 def _kmi_symbol_list_impl(ctx):
     if not ctx.files.srcs:
-        return
+        return []
 
     inputs = [] + ctx.files.srcs
-    inputs += ctx.attr.env[KernelEnvInfo].dependencies
-    inputs += ctx.files._kernel_abi_scripts
+    transitive_inputs = [ctx.attr.env[KernelEnvInfo].inputs]
+
+    tools = [ctx.executable._process_symbols]
+    transitive_tools = [ctx.attr.env[KernelEnvInfo].tools]
 
     outputs = []
     out_file = ctx.actions.declare_file("{}/abi_symbollist".format(ctx.attr.name))
@@ -34,7 +40,7 @@ def _kmi_symbol_list_impl(ctx):
             --report-file={report_file_base} --in-dir="${{ROOT_DIR}}" \
             {srcs}
     """.format(
-        process_symbols = ctx.file._process_symbols.path,
+        process_symbols = ctx.executable._process_symbols.path,
         out_dir = out_file.dirname,
         out_file_base = out_file.basename,
         report_file_base = report_file.basename,
@@ -44,8 +50,9 @@ def _kmi_symbol_list_impl(ctx):
     debug.print_scripts(ctx, command)
     ctx.actions.run_shell(
         mnemonic = "KmiSymbolList",
-        inputs = inputs,
+        inputs = depset(inputs, transitive = transitive_inputs),
         outputs = outputs,
+        tools = depset(tools, transitive = transitive_tools),
         progress_message = "Creating abi_symbollist and report {}".format(ctx.label),
         command = command,
     )
@@ -65,11 +72,14 @@ kmi_symbol_list = rule(
             doc = "environment target that defines the kernel build environment",
         ),
         "srcs": attr.label_list(
-            doc = "`KMI_SYMBOL_LIST` + `ADDTIONAL_KMI_SYMBOL_LISTS`",
+            doc = "`KMI_SYMBOL_LIST` + `ADDITIONAL_KMI_SYMBOL_LISTS`",
             allow_files = True,
         ),
-        "_kernel_abi_scripts": attr.label(default = "//build/kernel:kernel-abi-scripts"),
-        "_process_symbols": attr.label(default = "//build/kernel:abi/process_symbols", allow_single_file = True),
+        "_process_symbols": attr.label(
+            default = "//build/kernel:abi_process_symbols",
+            cfg = "exec",
+            executable = True,
+        ),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
     },
 )

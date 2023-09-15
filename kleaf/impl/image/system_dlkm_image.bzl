@@ -11,41 +11,50 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+Build system_dlkm image for GKI modules.
+"""
 
 load("//build/kernel/kleaf/impl:constants.bzl", "SYSTEM_DLKM_OUTS")
 load("//build/kernel/kleaf/impl:utils.bzl", "utils")
-load(":debug.bzl", "debug")
-load(":image/image_utils.bzl", "image_utils")
 load(
     ":common_providers.bzl",
-    "KernelImagesInfo",
+    "ImagesInfo",
     "KernelModuleInfo",
 )
+load(
+    ":image/image_utils.bzl",
+    "image_utils",
+    _MODULES_LOAD_NAME = "SYSTEM_DLKM_MODULES_LOAD_NAME",
+    _STAGING_ARCHIVE_NAME = "SYSTEM_DLKM_STAGING_ARCHIVE_NAME",
+)
 
-_STAGING_ARCHIVE_NAME = "system_dlkm_staging_archive.tar.gz"
+visibility("//build/kernel/kleaf/...")
 
 def _system_dlkm_image_impl(ctx):
     system_dlkm_img = ctx.actions.declare_file("{}/system_dlkm.img".format(ctx.label.name))
-    system_dlkm_modules_load = ctx.actions.declare_file("{}/system_dlkm.modules.load".format(ctx.label.name))
+    system_dlkm_modules_load = ctx.actions.declare_file("{}/{}".format(ctx.label.name, _MODULES_LOAD_NAME))
     system_dlkm_staging_archive = ctx.actions.declare_file("{}/{}".format(ctx.label.name, _STAGING_ARCHIVE_NAME))
+    system_dlkm_modules_blocklist = ctx.actions.declare_file("{}/system_dlkm.modules.blocklist".format(ctx.label.name))
 
     modules_staging_dir = system_dlkm_img.dirname + "/staging"
     system_dlkm_staging_dir = modules_staging_dir + "/system_dlkm_staging"
+    system_dlkm_fs_type = ctx.attr.system_dlkm_fs_type
 
     additional_inputs = []
     restore_modules_install = True
     extract_staging_archive_cmd = ""
     extra_flags_cmd = ""
 
-    kernel_build = ctx.attr.kernel_modules_install[KernelModuleInfo].kernel_build
-    if kernel_build[KernelImagesInfo].base_kernel != None:
+    kernel_build_infos = ctx.attr.kernel_modules_install[KernelModuleInfo].kernel_build_infos
+    if kernel_build_infos.images_info.base_kernel_label != None:
         if ctx.attr.base_kernel_images == None:
-            fail("""{this_label}: Building device-specific system_dlkm ({kernel_build} has base_kernel {base_kernel}), but base_kernel_images is not set. Perhaps add the following?
-    base_kernel_images = {base_kernel}_images
+            fail("""{this_label}: Building device-specific system_dlkm ({kernel_build} has base_kernel {base_kernel_label}), but base_kernel_images is not set. Perhaps add the following?
+    base_kernel_images = "{base_kernel_label}_images"
                  """.format(
                 this_label = ctx.label,
-                kernel_build = kernel_build.label,
-                base_kernel = kernel_build[KernelImagesInfo].base_kernel,
+                kernel_build = kernel_build_infos.label,
+                base_kernel_label = kernel_build_infos.images_info.base_kernel_label,
             ))
 
         # When building device-specific system_dlkm against GKI's
@@ -62,7 +71,7 @@ def _system_dlkm_image_impl(ctx):
 
         extract_staging_archive_cmd = """
                 # Extract staging archive
-                  mkdir -p {system_dlkm_staging_dir}
+                  mkdir -p {modules_staging_dir}
                   tar xf {base_kernel_system_dlkm_staging_archive} -C {modules_staging_dir}
         """.format(
             base_kernel_system_dlkm_staging_archive = base_kernel_system_dlkm_staging_archive.path,
@@ -86,6 +95,7 @@ def _system_dlkm_image_impl(ctx):
                mkdir -p {system_dlkm_staging_dir}
                (
                  MODULES_STAGING_DIR={modules_staging_dir}
+                 SYSTEM_DLKM_FS_TYPE={system_dlkm_fs_type}
                  SYSTEM_DLKM_STAGING_DIR={system_dlkm_staging_dir}
                  {extra_flags_cmd}
                  build_system_dlkm
@@ -94,6 +104,11 @@ def _system_dlkm_image_impl(ctx):
                mv "${{DIST_DIR}}/system_dlkm.img" {system_dlkm_img}
                mv "${{DIST_DIR}}/system_dlkm.modules.load" {system_dlkm_modules_load}
                mv "${{DIST_DIR}}/system_dlkm_staging_archive.tar.gz" {system_dlkm_staging_archive}
+               if [ -f "${{DIST_DIR}}/system_dlkm.modules.blocklist" ]; then
+                 mv "${{DIST_DIR}}/system_dlkm.modules.blocklist" {system_dlkm_modules_blocklist}
+               else
+                 : > {system_dlkm_modules_blocklist}
+               fi
 
              # Remove staging directories
                rm -rf {system_dlkm_staging_dir}
@@ -101,20 +116,25 @@ def _system_dlkm_image_impl(ctx):
         extract_staging_archive_cmd = extract_staging_archive_cmd,
         extra_flags_cmd = extra_flags_cmd,
         modules_staging_dir = modules_staging_dir,
+        system_dlkm_fs_type = system_dlkm_fs_type,
         system_dlkm_staging_dir = system_dlkm_staging_dir,
         system_dlkm_img = system_dlkm_img.path,
         system_dlkm_modules_load = system_dlkm_modules_load.path,
         system_dlkm_staging_archive = system_dlkm_staging_archive.path,
+        system_dlkm_modules_blocklist = system_dlkm_modules_blocklist.path,
     )
+
+    outputs = [
+        system_dlkm_img,
+        system_dlkm_modules_load,
+        system_dlkm_staging_archive,
+        system_dlkm_modules_blocklist,
+    ]
 
     default_info = image_utils.build_modules_image_impl_common(
         ctx = ctx,
         what = "system_dlkm",
-        outputs = [
-            system_dlkm_img,
-            system_dlkm_modules_load,
-            system_dlkm_staging_archive,
-        ],
+        outputs = outputs,
         additional_inputs = additional_inputs,
         restore_modules_install = restore_modules_install,
         build_command = command,
@@ -128,7 +148,16 @@ def _system_dlkm_image_impl(ctx):
         what = "{}: Internal error: not producing the expected list of outputs".format(ctx.label),
     )
 
-    return [default_info]
+    images_info = ImagesInfo(files_dict = {
+        file.basename: depset([file])
+        for file in outputs
+        if file.extension == "img"
+    })
+
+    return [
+        default_info,
+        images_info,
+    ]
 
 system_dlkm_image = rule(
     implementation = _system_dlkm_image_impl,
@@ -143,6 +172,7 @@ When included in a `copy_to_dist_dir` rule, this rule copies the following to `D
         "base_kernel_images": attr.label(allow_files = True),
         "modules_list": attr.label(allow_single_file = True),
         "modules_blocklist": attr.label(allow_single_file = True),
+        "system_dlkm_fs_type": attr.string(doc = """system_dlkm.img fs type""", values = ["ext4", "erofs"]),
         "system_dlkm_modules_list": attr.label(allow_single_file = True),
         "system_dlkm_modules_blocklist": attr.label(allow_single_file = True),
         "system_dlkm_props": attr.label(allow_single_file = True),

@@ -58,10 +58,6 @@
 #     Only one EXT_MODULES may be specified. A symlink is created from the
 #     output Kbuild will use to MODULE_OUT.
 #
-#   INPLACE_COMPILE
-#     Conditional flag to achivement in-place compilation. When this option
-#     is specified, store module output files to module source directory.
-#
 # Environment variables to influence the stages of the kernel build.
 #
 #   SKIP_MRPROPER
@@ -181,15 +177,12 @@ fi
 
 # KERNEL_KIT should be explicitly defined, but default it to something sensible
 KERNEL_KIT="${KERNEL_KIT:-${COMMON_OUT_DIR}}"
-HOST_DIR="${KERNEL_KIT}/host"
 
 if [ ! -e "${KERNEL_KIT}/.config" ]; then
   # Try a couple reasonable/reliable fallback locations
   if [ -e "${KERNEL_KIT}/dist/.config" ]; then
-    HOST_DIR="${KERNEL_KIT}/host"
     KERNEL_KIT="${KERNEL_KIT}/dist"
   elif [ -e "${KERNEL_KIT}/${KERNEL_DIR}/.config" ]; then
-    HOST_DIR="${KERNEL_KIT}/host"
     KERNEL_KIT="${KERNEL_KIT}/${KERNEL_DIR}"
   fi
 fi
@@ -197,7 +190,6 @@ if [ ! -e "${KERNEL_KIT}/.config" ]; then
   echo "ERROR! Could not find prebuilt kernel artifacts in ${KERNEL_KIT}"
   exit 1
 fi
-
 
 if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
   echo "========================================================"
@@ -207,11 +199,11 @@ if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
   mkdir -p ${OUT_DIR}/
   cp ${KERNEL_KIT}/.config ${KERNEL_KIT}/Module.symvers ${OUT_DIR}/
 
-  if [ -z "${EXT_MODULES}" -a ! ${HOST_DIR} -ef ${COMMON_OUT_DIR}/host ]; then
+  if [ -z "${EXT_MODULES}" -a ! ${KERNEL_KIT}/host -ef ${COMMON_OUT_DIR}/host ]; then
     rm -rf ${COMMON_OUT_DIR}/host
   fi
-  if [ -e ${HOST_DIR} -a ! -e ${COMMON_OUT_DIR}/host ]; then
-    cp -r ${HOST_DIR} ${COMMON_OUT_DIR}
+  if [ -e ${KERNEL_KIT}/host -a ! -e ${COMMON_OUT_DIR}/host ]; then
+    cp -r ${KERNEL_KIT}/host ${COMMON_OUT_DIR}
   fi
 
   # Install .config from kernel platform
@@ -219,10 +211,6 @@ if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
     cd "${KERNEL_DIR}"
     make O="${OUT_DIR}" "${TOOL_ARGS[@]}" ${MAKE_ARGS} olddefconfig
   )
-  set +x
-
-  GENERATED_CONFIG=$(mktemp)
-  cp ${OUT_DIR}/.config ${GENERATED_CONFIG}
 
   # To guard against .config silently diverging from the one kernel platform created,
   # set KCONFIG_NOSILENTUPDATE=1. If doing an incremental build, this also guards against
@@ -230,19 +218,11 @@ if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
   # in OUT_DIR. To get around this valid change, do "make olddefconfig", copy the .config again,
   # then do the NOSILENTUPDATE check
   cp ${KERNEL_KIT}/.config ${OUT_DIR}/
-
-  if ! KCONFIG_NOSILENTUPDATE=1 make -C "${KERNEL_DIR}" O="${OUT_DIR}" "${TOOL_ARGS[@]}" \
-      ${MAKE_ARGS} modules_prepare ; then
-    if [ -n "$(${ROOT_DIR}/${KERNEL_DIR}/scripts/diffconfig ${KERNEL_KIT}/.config ${GENERATED_CONFIG})" ]; then
-      echo "ERROR! Current kernel platform sources did not generate expected .config"
-      echo "Possibly kernel sources do not match those which generated kernel output?"
-      echo "Kernel platform sources differ from the prebuilt .config:"
-      ${ROOT_DIR}/${KERNEL_DIR}/scripts/diffconfig ${KERNEL_KIT}/.config ${GENERATED_CONFIG}
-    fi
-    rm ${GENERATED_CONFIG}
-    exit 1
-  fi
-  rm ${GENERATED_CONFIG}
+  (
+    cd "${KERNEL_DIR}"
+    KCONFIG_NOSILENTUPDATE=1 make O="${OUT_DIR}" "${TOOL_ARGS[@]}" ${MAKE_ARGS} modules_prepare
+  )
+  set +x
 fi
 # Set KBUILD_MIXED_TREE in case an out-of-tree Makefile does "make all". This causes
 # kbuild to also want to compile vmlinux
@@ -262,9 +242,7 @@ for EXT_MOD in ${EXT_MODULES}; do
   # The output directory must exist before we invoke make. Otherwise, the
   # build system behaves horribly wrong.
   set -x
-  if [ -n "${INPLACE_COMPILE}" ]; then
-    EXT_MOD_REL=${ROOT_DIR}/${EXT_MOD}
-  elif [ -n "${MODULE_OUT}" ]; then
+  if [ -n "${MODULE_OUT}" ]; then
     mkdir -p $(dirname ${OUT_DIR}/${EXT_MOD_REL})
     mkdir -p ${MODULE_OUT}
     rm -rf ${OUT_DIR}/${EXT_MOD_REL}
@@ -272,14 +250,110 @@ for EXT_MOD in ${EXT_MODULES}; do
   else
     mkdir -p ${OUT_DIR}/${EXT_MOD_REL}
   fi
-  make -C ${EXT_MOD} M=${EXT_MOD_REL} KERNEL_SRC=${ROOT_DIR}/${KERNEL_DIR}  \
-                      O=${OUT_DIR} "${TOOL_ARGS[@]}" ${MAKE_ARGS}
+
+  module_path="$(echo "$EXT_MOD" | sed -e 's/^[\.\/]*//')"
+  top_dir="$(echo "$module_path" | cut -d '/' -f 1)"
+
+  # Create a link to the module's tree within kernel_platform
+  (cd "$ROOT_DIR" && ln -fs "../${top_dir}")
+
+  # Search for the module package by looking up from the module_path
+  pkg_path="$module_path"
+  until [ -f "${pkg_path}/BUILD.bazel" ]; do
+    pkg_path="$(dirname "$pkg_path")"
+
+    # If we see a WORKSPACE file, we've gone too far
+    if [ -f "${pkg_path}/WORKSPACE" ]; then
+      echo "error - no Bazel package associated with $module_path"
+      pkg_path=""
+      break
+    fi
+  done
+
+  if [ "$TARGET_BOARD_PLATFORM" = "msmnile" ]; then
+     btgt="gen3auto"
+  elif [ "$TARGET_BOARD_PLATFORM" = "sm6150" ]; then
+     btgt="sdmsteppeauto"
+  else
+     btgt="$TARGET_BOARD_PLATFORM"
+  fi
+
+  filter_regex="${btgt/_/-}_${VARIANT/_/-}_${SUBTARGET_REGEX:-.*}_dist$"
+
+  # Query for a target that matches the pattern for module distribution
+  if [ "$ENABLE_DDK_BUILD" = "true" ] \
+     && [ -n "$pkg_path" ] \
+     && [ -n "$btgt" ] \
+     && build_target=$(./tools/bazel query --ui_event_filters=-info --noshow_progress \
+          "filter('${filter_regex}', //${pkg_path}/...)") \
+     && [ -n "$build_target" ]
+  then
+    if [ "$(printf "%s\n" "$build_target" | wc -l)" -gt 1 ]; then
+      printf "error - multiple targets found matching \"%s\":\n%s\n" \
+        "$filter_regex" "$build_target"
+      exit 1
+    fi
+
+    # Make sure Bazel extensions are linked properly
+    if [ ! -f "build/msm_kernel_extensions.bzl" ] \
+          && [ -f "msm-kernel/msm_kernel_extensions.bzl" ]; then
+      ln -fs "../msm-kernel/msm_kernel_extensions.bzl" "build/msm_kernel_extensions.bzl"
+    fi
+    if [ ! -f "build/abl_extensions.bzl" ] \
+          && [ -f "bootable/bootloader/edk2/abl_extensions.bzl" ]; then
+      ln -fs "../bootable/bootloader/edk2/abl_extensions.bzl" "build/abl_extensions.bzl"
+    fi
+
+    build_flags=($(cat "${KERNEL_KIT}/build_opts.txt" | xargs))
+
+    if [ "$ALLOW_UNSAFE_DDK_HEADERS" = "true" ]; then
+      build_flags+=("--allow_ddk_unsafe_headers")
+    fi
+
+    # Run the dist command passing in the output directory from Android build system
+    ./tools/bazel run "${build_flags[@]}" "$build_target" \
+      -- --dist_dir="${OUT_DIR}/${EXT_MOD_REL}"
+
+    # The Module.symvers file is named "<target>_<variant>_Modules.symvers, but other modules are
+    # looking for just "Module.symvers". Concatenate any of them into one Module.symvers file.
+    cat "${OUT_DIR}/${EXT_MOD_REL}/${TARGET_BOARD_PLATFORM}_${VARIANT}"_*_Module.symvers \
+      > "${OUT_DIR}/${EXT_MOD_REL}/Module.symvers"
+
+    # Intermediate directories aren't generated automatically, so we need to create them manually
+    if [ -n "$INTERMEDIATE_DIR" ]; then
+      mkdir -p "$(dirname "$INTERMEDIATE_DIR")"
+      rm -rf "${INTERMEDIATE_DIR}/${EXT_MOD_REL}"
+      cp -ar "${OUT_DIR}/${EXT_MOD_REL}" "$INTERMEDIATE_DIR"
+      for ko in "${OUT_DIR}/${EXT_MOD_REL}"/*.ko; do
+        rm -rf "$(dirname "$INTERMEDIATE_DIR")/$(basename "$ko")_intermediates"
+        cp -ar "${OUT_DIR}/${EXT_MOD_REL}" \
+          "$(dirname "$INTERMEDIATE_DIR")/$(basename "$ko")_intermediates"
+      done
+    fi
+
+    # We need to manually copy .ko's into subdirectories if they have them
+    for ko in $KO_DIRS; do
+      if echo "$ko" | grep -q '/'; then
+        ko_name="$(basename "$ko")"
+        if [ ! -f "${OUT_DIR}/${EXT_MOD_REL}/${ko_name}" ]; then
+          continue
+        fi
+        dir="$(dirname "$ko")"
+        mkdir -p "${OUT_DIR}/${EXT_MOD_REL}/${dir}"
+        cp -a "${OUT_DIR}/${EXT_MOD_REL}/${ko_name}" "${OUT_DIR}/${EXT_MOD_REL}/${dir}"
+      fi
+    done
+  else
+    # Fall back on legacy make if Bazel build is not present
+    echo "warning - building kernel modules with legacy make. Please migrate to DDK."
+    make -C ${EXT_MOD} M=${EXT_MOD_REL} KERNEL_SRC=${ROOT_DIR}/${KERNEL_DIR}  \
+                        O=${OUT_DIR} "${TOOL_ARGS[@]}" ${MAKE_ARGS}
+  fi
+
   if [ -n "${INSTALL_MODULE_HEADERS}" ]; then
     echo "========================================================"
     echo " Installing UAPI module headers:"
     mkdir -p "${KERNEL_UAPI_HEADERS_DIR}/usr"
-
-    EXT_MOD_REL=$(rel_path ${ROOT_DIR}/${EXT_MOD} ${KERNEL_DIR})
     make -C ${EXT_MOD} M=${EXT_MOD_REL} KERNEL_SRC=${ROOT_DIR}/${KERNEL_DIR}  \
                       O=${OUT_DIR} "${TOOL_ARGS[@]}"                         \
                       INSTALL_HDR_PATH="${KERNEL_UAPI_HEADERS_DIR}/usr"      \

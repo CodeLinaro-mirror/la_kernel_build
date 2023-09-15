@@ -17,6 +17,8 @@ Build initramfs.
 
 load(":image/image_utils.bzl", "image_utils")
 
+visibility("//build/kernel/kleaf/...")
+
 InitramfsInfo = provider(
     doc = "Provides information about initramfs outputs.",
     fields = {
@@ -62,18 +64,24 @@ def _initramfs_impl(ctx):
             : > ${modules_root_dir}/modules.options
     """
 
+    ramdisk_compress = image_utils.ramdisk_options(
+        ramdisk_compression = ctx.attr.ramdisk_compression,
+        ramdisk_compression_args = ctx.attr.ramdisk_compression_args,
+    ).ramdisk_compress
+
     command = """
+             # Use `strip_modules` intead of relying on this.
+               unset DO_NOT_STRIP_MODULES
                mkdir -p {initramfs_staging_dir}
              # Build initramfs
                create_modules_staging "${{MODULES_LIST}}" {modules_staging_dir} \
-                       {initramfs_staging_dir} "${{MODULES_BLOCKLIST}}" \
-                       "${{MODULES_RECOVERY_LIST:-""}}" "${{MODULES_CHARGER_LIST:-""}}" "-e"
+                 {initramfs_staging_dir} "${{MODULES_BLOCKLIST}}" "-e"
                modules_root_dir=$(readlink -e {initramfs_staging_dir}/lib/modules/*) || exit 1
                cp ${{modules_root_dir}}/modules.load {modules_load}
                {cp_vendor_boot_modules_load_cmd}
                {cp_modules_options_cmd}
                mkbootfs "{initramfs_staging_dir}" >"{modules_staging_dir}/initramfs.cpio"
-               ${{RAMDISK_COMPRESS}} "{modules_staging_dir}/initramfs.cpio" >"{initramfs_img}"
+               {ramdisk_compress} "{modules_staging_dir}/initramfs.cpio" >"{initramfs_img}"
              # Archive initramfs_staging_dir
                tar czf {initramfs_staging_archive} -C {initramfs_staging_dir} .
              # Remove staging directories
@@ -81,6 +89,7 @@ def _initramfs_impl(ctx):
     """.format(
         modules_staging_dir = modules_staging_dir,
         initramfs_staging_dir = initramfs_staging_dir,
+        ramdisk_compress = ramdisk_compress,
         modules_load = modules_load.path,
         initramfs_img = initramfs_img.path,
         initramfs_staging_archive = initramfs_staging_archive.path,
@@ -94,6 +103,7 @@ def _initramfs_impl(ctx):
         outputs = outputs,
         build_command = command,
         modules_staging_dir = modules_staging_dir,
+        set_ext_modules = True,
         implicit_outputs = [
             initramfs_staging_archive,
         ],
@@ -127,5 +137,13 @@ corresponding files.
         "modules_list": attr.label(allow_single_file = True),
         "modules_blocklist": attr.label(allow_single_file = True),
         "modules_options": attr.label(allow_single_file = True),
+        "ramdisk_compression": attr.string(
+            doc = "If provided it specfies the format used for any ramdisks generated." +
+                  "If not provided a fallback value from build.config is used.",
+            values = ["lz4", "gzip"],
+        ),
+        "ramdisk_compression_args": attr.string(
+            doc = "Command line arguments passed only to lz4 command to control compression level.",
+        ),
     }),
 )

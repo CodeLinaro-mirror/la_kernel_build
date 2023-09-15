@@ -105,16 +105,11 @@ function sec_abl_image_generate() {
   cp -rf ${ABL_OUT_DIR}/unsigned_abl.elf ${ABL_IMAGE_DIR}/${ABL_IMAGE_NAME}
 
   set -x
-  ${SECABL_CMD[@]} > ${ABL_OUT_DIR}/secimage.log 2>&1
+  "${SECABL_CMD[@]}" > ${ABL_OUT_DIR}/secimage.log 2>&1
   set +x
 }
 
 echo "========================================================"
-if [  "${SKIP_COMPILE_ABL}" == "1" ]; then
-  echo "*** WARN *** Skip bootloader compilation"
-  exit 0
-fi
-
 echo " Building abl"
 
 export ROOT_DIR=$(readlink -f $(dirname $0)/..)
@@ -162,7 +157,11 @@ mkdir -p ${ABL_IMAGE_DIR}
 . ${BUILD_CONFIG_ABL}
 
 # ABL ELF
-abl_image_generate
+if [  "${SKIP_COMPILE_ABL}" != "1" ]; then
+  abl_image_generate
+else
+  echo "*** WARN *** Skip bootloader compilation"
+fi
 
 #sec-image-generate
 if [ -e "${ABL_OUT_DIR}/unsigned_abl.elf" ]; then

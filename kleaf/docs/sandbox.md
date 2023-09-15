@@ -53,12 +53,18 @@ Bazel's official documentation on `--strategy`
 
 ## SCM version
 
-When `--config=local`, some actions run in the sandbox and some
-does not. To ensure that both kinds of actions get consistent values,
-SCM versions and `SOURCE_DATE_EPOCH` should be set to empty or
-0 values; i.e. `--config=stamp` should not be set.
-If you specify `--config=local` and `--config=stamp` simultaneously,
-you'll get a build error.
+If you do not care about stamping local builds during development, it is
+advised that you do not specify `--config=stamp`. In this case, any change to
+the SCM version alone (e.g. edit commit message, rebase commits, etc.) does not
+trigger a rebuild at all during incremental builds. Rebuilding a `kernel_build`
+or `kernel_module` target usually finishes within seconds.
+
+If you do care about stamping local builds, you may `--config=stamp`. In
+that case, a change in the SCM version (e.g. edit commit message, rebase
+commits, etc.) invalidates caches at the Bazel level, causing `kernel_build`
+or `kernel_module`s to rebuild if you execute `tools/bazel build` in
+incremental builds. You may combine the flag with `--config=local` to cache
+the `$OUT_DIR` and shorten incremental build times.
 
 See [scmversion.md](scmversion.md).
 
@@ -74,6 +80,53 @@ performs well or better for the kernel build workload. Full example:
 $ tools/bazel run --config=local --cache_dir=/some/fast/disk //common:kernel_aarch64_dist
 ```
 
+If you have built multiple `kernel_build` before and/or with different
+configurations (e.g. LTO), there may be multiple subdirectories under
+the cache directory.
+
+Usually, a symlink named `last_build` points to the `COMMON_OUT_DIR` from
+building the last `kernel_build`. The destination of the symlink may be
+unexpected if:
+
+- There are multiple `kernel_build`'s building in the same `bazel` command
+- Bazel cached the build result so the last `bazel` command doesn't actually
+  build anything.
+
+Sample directory structure:
+
+```text
+out/cache
+├── 39c6af8c
+├── 5f914ca4
+└── last_build -> 5f914ca4
+```
+
+To understand what `kernel_build` is built with a given cache directory and
+relevant configurations to build it, check the `kleaf_config_tags.json` file
+under the subdirectories:
+
+```shell
+$ tail -n +1 */kleaf_config_tags.json
+```
+
+Sample output snippet:
+
+```text
+==> last_build/kleaf_config_tags.json <==
+{
+  "@//build/kernel/kleaf/impl:force_add_vmlinux": false,
+  "@//build/kernel/kleaf/impl:force_ignore_base_kernel": false,
+  "@//build/kernel/kleaf/impl:preserve_cmd": false,
+  "@//build/kernel/kleaf/impl:force_disable_trim": false,
+  "@//build/kernel/kleaf:gcov": false,
+  "@//build/kernel/kleaf:kasan": true,
+  "@//build/kernel/kleaf:kbuild_symtypes": false,
+  "@//build/kernel/kleaf:kmi_symbol_list_strict_mode": true,
+  "@//build/kernel/kleaf:lto": "none",
+  "_kernel_build": "@//common:kernel_aarch64"
+}
+```
+
 ## Other flags
 
 The flag `--config=local` is also implied by other flags, e.g.:
@@ -87,3 +140,11 @@ It is possible to see `Read-only file system` errors if a previous
 building the defconfig file.
 
 See [errors.md#defconfig-readonly](errors.md#defconfig-readonly) for solutions.
+
+If you see
+```text
+unterminated call to function 'wildcard': missing ')'.  Stop.
+```
+
+This is a known issue. See
+[errors.md](errors.md#unterminated-call-to-function-wildcard) for explanation.

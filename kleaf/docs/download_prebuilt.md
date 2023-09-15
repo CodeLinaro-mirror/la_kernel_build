@@ -16,7 +16,7 @@ In particular, look out for these places:
 * `kernel_build()`: `base_kernel`
 * Any target: `kernel_build`
 * `copy_to_dist_dir`: `data`
-* `kernel_build_abi_dist`: `data`
+* `kernel_abi_dist`: `data`
 
 See Pixel 2021 mainline for an example (search for `//common:kernel_aarch64`):
 
@@ -27,19 +27,26 @@ See Pixel 2021 mainline for an example (search for `//common:kernel_aarch64`):
 In the build command, specify `--use_prebuilt_gki=<BUILD_ID>` to build against
 downloaded prebuilts.
 
-The build ID must have a build target named `kernel_kleaf`.
+For android13, the build ID must have a build target named `kernel_kleaf`.
+
+Starting from android14 (including android-mainline), the build ID must have a build target named
+`kernel_aarch64` with artifacts built with Kleaf. A build number >= 9359436 will
+work.
 
 It is recommended to select the latest build ID from the branch.
 
 Sample branches:
 
 - [aosp_kernel-common-android-mainline](https://ci.android.com/builds/branches/aosp_kernel-common-android-mainline/grid)
+- [aosp_kernel-common-android14-6.1](https://ci.android.com/builds/branches/aosp_kernel-common-android14-6.1/grid)
 - [aosp_kernel-common-android14-5.15](https://ci.android.com/builds/branches/aosp_kernel-common-android14-5.15/grid)
 - [aosp_kernel-common-android13-5.15](https://ci.android.com/builds/branches/aosp_kernel-common-android13-5.15/grid)
 - [aosp_kernel-common-android13-5.10](https://ci.android.com/builds/branches/aosp_kernel-common-android13-5.10/grid)
 
-Other unspecified branches with a build target named `kernel_kleaf` may also
-work.
+Other unspecified branches with a build target named `kernel_aarch64` may also
+work if it is built with Kleaf. You may check whether a build is built with
+`Kleaf` by checking the build command in `logs/build.log` or the existence of a
+file with suffix `_modules`, e.g. `kernel_aarch64_modules`.
 
 Sample command to build `raviole-android13-5.15` against prebuilts from
 `android13-5.15`:
@@ -48,6 +55,16 @@ Sample command to build `raviole-android13-5.15` against prebuilts from
 # On raviole-5.15 branch, build against prebuilts from android13-5.15.
 # Build with --use_prebuilt_gki=<build_ID>. Example:
 $ tools/bazel run --use_prebuilt_gki=8728678 //gs/google-modules/soc-modules:slider_dist
+```
+
+### Downloading the signed boot images
+
+If you want to download the signed boot images instead of the unsigned one, you may
+specify `--use_signed_prebuilts`. This requires the build number in `--use_prebuilt_gki`.
+Hypothetical example: (this does not work because 8728678 is unsigned):
+
+```shell
+$ tools/bazel run --use_prebuilt_gki=8728678 --use_signed_prebuilts //gs/google-modules/soc-modules:slider_dist
 ```
 
 ## Common errors

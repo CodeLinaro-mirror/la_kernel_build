@@ -14,66 +14,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO (b/231473697): rel_path and rel_path2 should use realpath --relative-to
+# TODO(b/266980402): remove it
 # rel_path <to> <from>
 # Generate relative directory path to reach directory <to> from <from>
 function rel_path() {
-  local to=$1
-  local from=$2
-  local path=
-  local stem=
-  local prevstem=
-  [ -n "$to" ] || return 1
-  [ -n "$from" ] || return 1
-  to=$(readlink -e "$to")
-  from=$(readlink -e "$from")
-  [ -n "$to" ] || return 1
-  [ -n "$from" ] || return 1
-  stem=${from}/
-  while [ "${to#$stem}" == "${to}" -a "${stem}" != "${prevstem}" ]; do
-    prevstem=$stem
-    stem=$(readlink -e "${stem}/..")
-    [ "${stem%/}" == "${stem}" ] && stem=${stem}/
-    path=${path}../
-  done
-  echo ${path}${to#$stem}
-}
-
-# TODO (b/231473697): rel_path and rel_path2 should use realpath --relative-to
-# rel_path2 <to> <from>
-# Generate relative directory path to reach directory <to> from <from>
-# This is slower than rel_path, but returns a simpler path when <from>
-# is directly under <to>.
-function rel_path2() {
-  local to=$1
-  local from=$2
-  python3 -c 'import os,sys;print(os.path.relpath(*(sys.argv[1:])))' "$to" "$from"
+  echo "ERROR: rel_path is deprecated. For Kleaf builds, use 'realpath $1 --relative-to $2' instead." >&2
+  exit 1
 }
 
 # $1 directory of kernel modules ($1/lib/modules/x.y)
 # $2 flags to pass to depmod
 # $3 kernel version
-# $4 Optional: File with list of modules to run depmod on.
-#              If left empty, depmod will run on all modules
-#              under $1/lib/modules/x.y
 function run_depmod() {
   (
     local ramdisk_dir=$1
     local depmod_stdout
     local depmod_stderr=$(mktemp)
-    local version=$3
-    local modules_list_file=$4
-    local modules_list=""
-
-    if [[ -n "${modules_list_file}" ]]; then
-      while read -r line; do
-        # depmod expects absolute paths for module files
-        modules_list+="${ramdisk_dir}/lib/modules/${version}/${line} "
-      done <${modules_list_file}
-    fi
 
     cd ${ramdisk_dir}
-    if ! depmod_stdout="$(depmod $2 -F ${DIST_DIR}/System.map -b . ${version} ${modules_list} \
+    if ! depmod_stdout="$(depmod $2 -F ${DIST_DIR}/System.map -b . $3 \
         2>${depmod_stderr})"; then
       echo "$depmod_stdout"
       cat ${depmod_stderr} >&2
@@ -91,60 +50,12 @@ function run_depmod() {
   )
 }
 
-# $1 MODULES_LIST <File that contains the list of modules that need to be
-#                   loaded during first-stage init.>
-# $2 ADDITIONAL_MODULES_LIST <File that contains the list of additional modules
-#                           that need to be loaded from the initramfs.>
-# $3 MODULES_ORDER <File that contains the list of all modules in the order in which
-#                   they appear in Makefiles.>
-# $4 MODULES_OUTPUT_FILENAME <The name of the output modules.order file>
-function create_additional_modules_order() {
-  local modules_list_file=$1
-  local additional_modules_file=$2
-  local modules_order_file=$3
-  local modules_out_filename=$4
-  local tmp_all_modules_list_file
-
-  if [[ -f "${ROOT_DIR}/${additional_modules_file}" ]]; then
-    additional_modules_file="${ROOT_DIR}/${additional_modules_file}"
-  elif [[ "${additional_modules_file}" != /* ]]; then
-    echo "modules recovery list must be an absolute path or relative to ${ROOT_DIR}: ${additional_modules_file}" >&2
-    exit 1
-  elif [[ ! -f "${additional_modules_file}" ]]; then
-    echo "Failed to find modules list: ${additional_modules_file}" >&2
-    exit 1
-  fi
-
-  tmp_all_modules_list_file=$(mktemp)
-
-  cp ${modules_list_file} ${tmp_all_modules_list_file}
-  # Append to the first stage init modules
-  grep -v "^\#" ${additional_modules_file} >> ${tmp_all_modules_list_file}
-  grep -w -f ${tmp_all_modules_list_file} ${modules_order_file} > ${modules_out_filename}
-
-  rm ${tmp_all_modules_list_file}
-}
-
 # $1 MODULES_LIST, <File contains the list of modules that should go in the ramdisk>
 # $2 MODULES_STAGING_DIR    <The directory to look for all the compiled modules>
 # $3 IMAGE_STAGING_DIR  <The destination directory in which MODULES_LIST is
 #                        expected, and it's corresponding modules.* files>
 # $4 MODULES_BLOCKLIST, <File contains the list of modules to prevent from loading>
-# $5 MODULES_RECOVERY_LIST <File contains the list of modules that should go in
-#                           the ramdisk but should only be loaded when booting
-#                           into recovery.
-#
-#                           This parameter is optional, and if not used, should
-#                           be passed as an empty string to ensure that the depmod
-#                           flags are assigned correctly.>
-# $6 MODULES_CHARGER_LIST <File contains the list of modules that should go in
-#                          the ramdisk but should only be loaded when booting
-#                          into charger mode.
-#
-#                          This parameter is optional, and if not used, should
-#                          be passed as an empty string to ensure that the
-#                          depmod flags are assigned correctly.>
-# $7 flags to pass to depmod
+# $5 flags to pass to depmod
 function create_modules_staging() {
   local modules_list_file=$1
   local src_dir=$(echo $2/lib/modules/*)
@@ -152,9 +63,7 @@ function create_modules_staging() {
   local dest_dir=$3/lib/modules/${version}
   local dest_stage=$3
   local modules_blocklist_file=$4
-  local modules_recoverylist_file=$5
-  local modules_chargerlist_file=$6
-  local depmod_flags=$7
+  local depmod_flags=$5
 
   rm -rf ${dest_dir}
   mkdir -p ${dest_dir}/kernel
@@ -163,6 +72,7 @@ function create_modules_staging() {
   # The other modules.* files will be generated by depmod
   cp ${src_dir}/modules.order ${dest_dir}/modules.order
   cp ${src_dir}/modules.builtin ${dest_dir}/modules.builtin
+  cp ${src_dir}/modules.builtin.modinfo ${dest_dir}/modules.builtin.modinfo
 
   if [[ -n "${EXT_MODULES}" ]] || [[ -n "${EXT_MODULES_MAKEFILE}" ]]; then
     mkdir -p ${dest_dir}/extra/
@@ -226,17 +136,13 @@ function create_modules_staging() {
     # Exclamation point makes interpreter ignore the exit code under set -e
     ! grep -v "^\#" ${modules_list_file} > ${modules_list_filter}
 
+    # Append a new line at the end of file
+    # If file doesn't end in newline the last module is skipped from filter
+    echo >> ${modules_list_filter}
+
     # grep the modules.order for any KOs in the modules list
     cp ${dest_dir}/modules.order ${old_modules_list}
     ! grep -w -f ${modules_list_filter} ${old_modules_list} > ${dest_dir}/modules.order
-    if [[ -n "${modules_recoverylist_file}" ]]; then
-      create_additional_modules_order "${modules_list_filter}" "${modules_recoverylist_file}" \
-        "${old_modules_list}" "${dest_dir}/modules.order.recovery"
-    fi
-    if [[ -n "${modules_chargerlist_file}" ]]; then
-      create_additional_modules_order "${modules_list_filter}" "${modules_chargerlist_file}" \
-        "${old_modules_list}" "${dest_dir}/modules.order.charger"
-    fi
     rm -f ${modules_list_filter} ${old_modules_list}
   fi
 
@@ -267,25 +173,9 @@ function create_modules_staging() {
     # Trim modules from tree that aren't mentioned in modules.order
     (
       cd ${dest_dir}
-      local grep_flags="-v -w -f modules.order -f ${used_blocklist_modules} "
-      [[ -f modules.order.recovery ]] && grep_flags+="-f modules.order.recovery "
-      [[ -f modules.order.charger ]] && grep_flags+="-f modules.order.charger "
-      find * -type f -name "*.ko" | (grep ${grep_flags} - || true) | xargs -r rm
+      find * -type f -name "*.ko" | (grep -v -w -f modules.order -f $used_blocklist_modules - || true) | xargs -r rm
     )
     rm $used_blocklist_modules
-  fi
-
-  # Run depmod to ensure that dependencies between all modules loaded during
-  # first stage init when booting into any other mode besides normal boot can be
-  # satisfied.
-  if [[ -f ${dest_dir}/modules.order.recovery ]]; then
-    run_depmod ${dest_stage} "${depmod_flags}" "${version}" "${dest_dir}/modules.order.recovery"
-    cp ${dest_dir}/modules.order.recovery ${dest_dir}/modules.load.recovery
-  fi
-
-  if [[ -f ${dest_dir}/modules.order.charger ]]; then
-    run_depmod ${dest_stage} "${depmod_flags}" "${version}" "${dest_dir}/modules.order.charger"
-    cp ${dest_dir}/modules.order.charger ${dest_dir}/modules.load.charger
   fi
 
   # Re-run depmod to detect any dependencies between in-kernel and external
@@ -300,19 +190,39 @@ function build_system_dlkm() {
 
   rm -rf ${SYSTEM_DLKM_STAGING_DIR}
   create_modules_staging "${SYSTEM_DLKM_MODULES_LIST:-${MODULES_LIST}}" "${MODULES_STAGING_DIR}" \
-    ${SYSTEM_DLKM_STAGING_DIR} "${SYSTEM_DLKM_MODULES_BLOCKLIST:-${MODULES_BLOCKLIST}}" \
-    "${MODULES_RECOVERY_LIST:-""}" "${MODULES_CHARGER_LIST:-""}" "-e"
+    ${SYSTEM_DLKM_STAGING_DIR} "${SYSTEM_DLKM_MODULES_BLOCKLIST:-${MODULES_BLOCKLIST}}" "-e"
 
   local system_dlkm_root_dir=$(echo ${SYSTEM_DLKM_STAGING_DIR}/lib/modules/*)
   cp ${system_dlkm_root_dir}/modules.load ${DIST_DIR}/system_dlkm.modules.load
   local system_dlkm_props_file
+  local system_dlkm_file_contexts
+
+  if [ -f "${system_dlkm_root_dir}/modules.blocklist" ]; then
+    cp "${system_dlkm_root_dir}/modules.blocklist" "${DIST_DIR}/system_dlkm.modules.blocklist"
+  fi
+
+  local system_dlkm_default_fs_type="ext4"
+  if [[ "${SYSTEM_DLKM_FS_TYPE}" != "ext4" && "${SYSTEM_DLKM_FS_TYPE}" != "erofs" ]]; then
+    echo "WARNING: Invalid SYSTEM_DLKM_FS_TYPE = ${SYSTEM_DLKM_FS_TYPE}"
+    SYSTEM_DLKM_FS_TYPE="${system_dlkm_default_fs_type}"
+    echo "INFO: Defaulting SYSTEM_DLKM_FS_TYPE to ${SYSTEM_DLKM_FS_TYPE}"
+  fi
 
   if [ -z "${SYSTEM_DLKM_PROPS}" ]; then
     system_dlkm_props_file="$(mktemp)"
-    echo -e "system_dlkm_fs_type=ext4\n" >> ${system_dlkm_props_file}
+    system_dlkm_file_contexts="$(mktemp)"
+    echo -e "fs_type=${SYSTEM_DLKM_FS_TYPE}\n" >> ${system_dlkm_props_file}
     echo -e "use_dynamic_partition_size=true\n" >> ${system_dlkm_props_file}
-    echo -e "ext_mkuserimg=mkuserimg_mke2fs\n" >> ${system_dlkm_props_file}
-    echo -e "ext4_share_dup_blocks=true\n" >> ${system_dlkm_props_file}
+    if [[ "${SYSTEM_DLKM_FS_TYPE}" == "ext4" ]]; then
+      echo -e "ext_mkuserimg=mkuserimg_mke2fs\n" >> ${system_dlkm_props_file}
+      echo -e "ext4_share_dup_blocks=true\n" >> ${system_dlkm_props_file}
+      echo -e "extfs_rsv_pct=0\n" >> ${system_dlkm_props_file}
+      echo -e "journal_size=0\n" >> ${system_dlkm_props_file}
+    fi
+    echo -e "mount_point=system_dlkm\n" >> ${system_dlkm_props_file}
+    echo -e "selinux_fc=${system_dlkm_file_contexts}\n" >> ${system_dlkm_props_file}
+
+    echo -e "/system_dlkm(/.*)? u:object_r:system_dlkm_file:s0" > ${system_dlkm_file_contexts}
   else
     system_dlkm_props_file="${SYSTEM_DLKM_PROPS}"
     if [[ -f "${ROOT_DIR}/${system_dlkm_props_file}" ]]; then
@@ -341,16 +251,25 @@ function build_system_dlkm() {
   build_image "${SYSTEM_DLKM_STAGING_DIR}" "${system_dlkm_props_file}" \
     "${DIST_DIR}/system_dlkm.img" /dev/null
 
+  if [ -z "${SYSTEM_DLKM_PROPS}" ]; then
+    rm ${system_dlkm_props_file}
+    rm ${system_dlkm_file_contexts}
+  fi
+
   # No need to sign the image as modules are signed
   avbtool add_hashtree_footer \
     --partition_name system_dlkm \
+    --hash_algorithm sha256 \
     --image "${DIST_DIR}/system_dlkm.img"
 
   # Archive system_dlkm_staging_dir
   tar -czf "${DIST_DIR}/system_dlkm_staging_archive.tar.gz" -C "${SYSTEM_DLKM_STAGING_DIR}" .
 }
 
+# $1 if set, generate the vendor_dlkm_staging_archive.tar.gz archive
 function build_vendor_dlkm() {
+  local vendor_dlkm_archive=$1
+
   echo "========================================================"
   echo " Creating vendor_dlkm image"
 
@@ -363,7 +282,8 @@ function build_vendor_dlkm() {
     cp ${vendor_dlkm_modules_root_dir}/modules.blocklist ${DIST_DIR}/vendor_dlkm.modules.blocklist
   fi
 
-  # Modules loaded in vendor_boot should not be loaded in vendor_dlkm.
+  # Modules loaded in vendor_boot (and optionally system_dlkm if dedup_dlkm_modules)
+  # should not be loaded in vendor_dlkm.
   if [ -f ${DIST_DIR}/modules.load ]; then
     local stripped_modules_load="$(mktemp)"
     ! grep -x -v -F -f ${DIST_DIR}/modules.load \
@@ -380,12 +300,21 @@ function build_vendor_dlkm() {
 
   local vendor_dlkm_props_file
 
+  local vendor_dlkm_default_fs_type="ext4"
+  if [[ "${VENDOR_DLKM_FS_TYPE}" != "ext4" && "${VENDOR_DLKM_FS_TYPE}" != "erofs" ]]; then
+    echo "WARNING: Invalid VENDOR_DLKM_FS_TYPE = ${VENDOR_DLKM_FS_TYPE}"
+    VENDOR_DLKM_FS_TYPE="${vendor_dlkm_default_fs_type}"
+    echo "INFO: Defaulting VENDOR_DLKM_FS_TYPE to ${VENDOR_DLKM_FS_TYPE}"
+  fi
+
   if [ -z "${VENDOR_DLKM_PROPS}" ]; then
     vendor_dlkm_props_file="$(mktemp)"
-    echo -e "vendor_dlkm_fs_type=ext4\n" >> ${vendor_dlkm_props_file}
+    echo -e "vendor_dlkm_fs_type=${VENDOR_DLKM_FS_TYPE}\n" >> ${vendor_dlkm_props_file}
     echo -e "use_dynamic_partition_size=true\n" >> ${vendor_dlkm_props_file}
-    echo -e "ext_mkuserimg=mkuserimg_mke2fs\n" >> ${vendor_dlkm_props_file}
-    echo -e "ext4_share_dup_blocks=true\n" >> ${vendor_dlkm_props_file}
+    if [[ "${VENDOR_DLKM_FS_TYPE}" == "ext4" ]]; then
+      echo -e "ext_mkuserimg=mkuserimg_mke2fs\n" >> ${vendor_dlkm_props_file}
+      echo -e "ext4_share_dup_blocks=true\n" >> ${vendor_dlkm_props_file}
+    fi
   else
     vendor_dlkm_props_file="${VENDOR_DLKM_PROPS}"
     if [[ -f "${ROOT_DIR}/${vendor_dlkm_props_file}" ]]; then
@@ -398,8 +327,57 @@ function build_vendor_dlkm() {
       exit 1
     fi
   fi
+
+  # Copy etc files to ${DIST_DIR} and ${VENDOR_DLKM_STAGING_DIR}/etc
+  if [[ -n "${VENDOR_DLKM_ETC_FILES}" ]]; then
+    local etc_files_dst_folder="${VENDOR_DLKM_STAGING_DIR}/etc"
+    mkdir -p "${etc_files_dst_folder}"
+    cp ${VENDOR_DLKM_ETC_FILES} "${etc_files_dst_folder}"
+    cp ${VENDOR_DLKM_ETC_FILES} "${DIST_DIR}"
+  fi
+
   build_image "${VENDOR_DLKM_STAGING_DIR}" "${vendor_dlkm_props_file}" \
     "${DIST_DIR}/vendor_dlkm.img" /dev/null
+
+  if [ -n "${vendor_dlkm_archive}" ]; then
+    # Archive vendor_dlkm_staging_dir
+    tar -czf "${DIST_DIR}/vendor_dlkm_staging_archive.tar.gz" -C "${VENDOR_DLKM_STAGING_DIR}" .
+  fi
+}
+
+function build_super() {
+  local super_props_file="${DIST_DIR}/super_image.props"
+  local dynamic_partitions=""
+
+  if [ -z "$SUPER_IMAGE_SIZE" ]; then
+    echo "ERROR: SUPER_IMAGE_SIZE must be set" >&2
+    exit 1
+  fi
+  local group_size="$((SUPER_IMAGE_SIZE - 0x400000))"
+  cat << EOF >> "$super_props_file"
+lpmake=lpmake
+super_metadata_device=super
+super_block_devices=super
+super_super_device_size=${SUPER_IMAGE_SIZE}
+super_partition_size=${SUPER_IMAGE_SIZE}
+super_partition_groups=kb_dynamic_partitions
+super_kb_dynamic_partitions_group_size=${group_size}
+EOF
+
+  if [[ -n "${SYSTEM_DLKM_IMAGE}" ]]; then
+    echo -e "system_dlkm_image=${SYSTEM_DLKM_IMAGE}" >> "$super_props_file"
+    dynamic_partitions="${dynamic_partitions} system_dlkm"
+  fi
+  if [[ -n "${VENDOR_DLKM_IMAGE}" ]]; then
+    echo -e "vendor_dlkm_image=${VENDOR_DLKM_IMAGE}" >> "$super_props_file"
+    dynamic_partitions="${dynamic_partitions} vendor_dlkm"
+  fi
+
+  echo -e "dynamic_partition_list=${dynamic_partitions}" >> "$super_props_file"
+  echo -e "super_kb_dynamic_partitions_partition_list=${dynamic_partitions}" >> "$super_props_file"
+
+  build_super_image -v "$super_props_file" "${DIST_DIR}/super.img"
+  rm -f "$super_props_file"
 }
 
 function check_mkbootimg_path() {
@@ -599,7 +577,8 @@ function build_boot_images() {
     "${MKBOOTIMG_PATH}" "${MKINITBOOTIMG_ARGS[@]}"
   fi
 
-  if [ -n "${BUILD_INIT_BOOT_IMG}" -a -f "${DIST_DIR}/${INIT_BOOT_IMAGE_FILENAME}" ]; then
+  if [ -n "${BUILD_INIT_BOOT_IMG}" ] \
+      && [ -f "${DIST_DIR}/${INIT_BOOT_IMAGE_FILENAME}" ]; then
     echo "init_boot image created at ${DIST_DIR}/${INIT_BOOT_IMAGE_FILENAME}"
   fi
 
@@ -702,6 +681,8 @@ function build_gki_artifacts_info() {
   artifacts_info="${artifacts_info} --prop KERNEL_RELEASE:${KERNEL_RELEASE}"
 
   echo "${artifacts_info}" > "$1"
+
+  echo "kernel_release=${KERNEL_RELEASE}" >> "$1"
 }
 
 # build_gki_boot_images <uncompressed kernel path>.
@@ -748,10 +729,12 @@ function build_gki_boot_images() {
     GKI_MKBOOTIMG_ARGS+=("--output" "${boot_image_path}")
     "${MKBOOTIMG_PATH}" "${GKI_MKBOOTIMG_ARGS[@]}"
 
-    gki_add_avb_footer "${boot_image_path}" \
-      "$(gki_get_boot_img_size "${compression}")"
-    gki_dry_run_certify_bootimg "${boot_image_path}" \
-      "${GKI_ARTIFACTS_INFO_FILE}"
+    if [[ -z "${BUILD_GKI_BOOT_SKIP_AVB}" ]]; then
+      gki_add_avb_footer "${boot_image_path}" \
+        "$(gki_get_boot_img_size "${compression}")"
+      gki_dry_run_certify_bootimg "${boot_image_path}" \
+        "${GKI_ARTIFACTS_INFO_FILE}"
+    fi
     images_to_pack+=("${boot_image}")
   done
 
@@ -764,12 +747,94 @@ function build_gki_boot_images() {
 function build_gki_artifacts() {
   check_mkbootimg_path
 
-  if [ "${ARCH}" = "arm64" ]; then
+  if [ "${ARCH}" = "arm64" -o "${ARCH}" = "riscv64" ]; then
     build_gki_boot_images "${DIST_DIR}/Image"
   elif [ "${ARCH}" = "x86_64" ]; then
     build_gki_boot_images "${DIST_DIR}/bzImage"
   else
     echo "ERROR: unknown ARCH to BUILD_GKI_ARTIFACTS: '${ARCH}'" >&2
     exit 1
+  fi
+}
+
+function sort_config() {
+  # Normal sort won't work because all the "# CONFIG_.. is not set" would come
+  # before all the "CONFIG_..=m". Use sed to extract the CONFIG_ option and prefix
+  # the line in front of the line to create a key (e.g. CONFIG_.. # CONFIG_.. is not set),
+  # sort, then remove the key
+  sed -E -e 's/.*(CONFIG_[^ =]+).*/\1 \0/' $1 | sort -k1 | cut -F2-
+}
+
+function menuconfig() {
+  set +x
+  local orig_config=$(mktemp)
+  local new_config="${OUT_DIR}/.config"
+  local changed_config=$(mktemp)
+  local new_fragment=$(mktemp)
+
+  trap "rm -f ${orig_config} ${changed_config} ${new_fragment}" EXIT
+
+  if [ -n "${FRAGMENT_CONFIG}" ]; then
+    if [[ -f "${ROOT_DIR}/${FRAGMENT_CONFIG}" ]]; then
+      FRAGMENT_CONFIG="${ROOT_DIR}/${FRAGMENT_CONFIG}"
+    elif [[ "${FRAGMENT_CONFIG}" != /* ]]; then
+      echo "FRAGMENT_CONFIG must be an absolute path or relative to ${ROOT_DIR}: ${FRAGMENT_CONFIG}"
+      exit 1
+    elif [[ ! -f "${FRAGMENT_CONFIG}" ]]; then
+      echo "Failed to find FRAGMENT_CONFIG: ${FRAGMENT_CONFIG}"
+      exit 1
+    fi
+  fi
+
+  cp ${OUT_DIR}/.config ${orig_config}
+  (cd ${KERNEL_DIR} && make ${TOOL_ARGS} O=${OUT_DIR} ${MAKE_ARGS} ${1:-menuconfig})
+
+  if [ -z "${FRAGMENT_CONFIG}" ]; then
+    (cd ${KERNEL_DIR} && make ${TOOL_ARGS} O=${OUT_DIR} ${MAKE_ARGS} savedefconfig)
+    [ "$ARCH" = "x86_64" -o "$ARCH" = "i386" ] && local ARCH=x86
+    echo "Updating $(realpath ${ROOT_DIR}/${KERNEL_DIR}/arch/${ARCH}/configs/${DEFCONFIG})"
+    mv ${OUT_DIR}/defconfig $(realpath ${ROOT_DIR}/${KERNEL_DIR}/arch/${ARCH}/configs/${DEFCONFIG})
+    return
+  fi
+
+  ${KERNEL_DIR}/scripts/diffconfig -m ${orig_config} ${new_config} > ${changed_config}
+  KCONFIG_CONFIG=${new_fragment} ${ROOT_DIR}/${KERNEL_DIR}/scripts/kconfig/merge_config.sh -m ${FRAGMENT_CONFIG} ${changed_config}
+  sort_config ${new_fragment} > $(realpath ${FRAGMENT_CONFIG})
+  set +x
+
+
+  echo
+  echo "Updated $(realpath ${FRAGMENT_CONFIG})"
+  echo
+}
+
+# $1: A mapping of the form path:value [path:value [...]]
+# $2: A path. This may be a subpath of an item in the mapping
+# $3: What is being determined (for error messages)
+# Returns the corresponding value of path.
+# Example:
+#   extract_git_metadata "foo:123 bar:456" foo/baz
+#   -> 123
+function extract_git_metadata() {
+  local map=$1
+  local git_project_candidate=$2
+  local what=$3
+  while [[ "${git_project_candidate}" != "." ]]; do
+    value_candidate=$(python3 -c '
+import sys, json
+js = json.load(sys.stdin)
+key = sys.argv[1]
+if key in js:
+    print(js[key])
+' "${git_project_candidate}" <<< "${map}")
+    if [[ -n "${value_candidate}" ]]; then
+        break
+    fi
+    git_project_candidate=$(dirname ${git_project_candidate})
+  done
+  if [[ -n ${value_candidate} ]]; then
+    echo "${value_candidate}"
+  else
+    echo "WARNING: Can't determine $what for $2" >&2
   fi
 }

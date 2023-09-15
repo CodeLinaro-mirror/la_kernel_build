@@ -11,47 +11,88 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+A rule that runs depmod in the module installation directory.
+"""
 
 load("//build/kernel/kleaf:directory_with_structure.bzl", dws = "directory_with_structure")
 load(
     ":common_providers.bzl",
     "KernelBuildExtModuleInfo",
-    "KernelEnvInfo",
+    "KernelBuildInfo",
+    "KernelCmdsInfo",
+    "KernelEnvAndOutputsInfo",
+    "KernelImagesInfo",
     "KernelModuleInfo",
 )
 load(":debug.bzl", "debug")
 load(
     ":utils.bzl",
     "kernel_utils",
+    "utils",
 )
 
+visibility("//build/kernel/kleaf/...")
+
 def _kernel_modules_install_impl(ctx):
-    kernel_utils.check_kernel_build(ctx.attr.kernel_modules, ctx.attr.kernel_build, ctx.label)
+    kernel_build_infos = None
+    if ctx.attr.kernel_build:
+        kernel_build_infos = kernel_utils.create_kernel_module_kernel_build_info(ctx.attr.kernel_build)
+    elif ctx.attr.kernel_modules:
+        kernel_build_infos = ctx.attr.kernel_modules[0][KernelModuleInfo].kernel_build_infos
+
+    if not kernel_build_infos:
+        fail("No `kernel_build` or `kernel_modules` provided.")
+
+    kernel_utils.check_kernel_build(
+        [target[KernelModuleInfo] for target in ctx.attr.kernel_modules],
+        kernel_build_infos.label,
+        ctx.label,
+    )
 
     # A list of declared files for outputs of kernel_module rules
     external_modules = []
 
-    inputs = []
-    inputs += ctx.attr.kernel_build[KernelEnvInfo].dependencies
-    inputs += ctx.attr.kernel_build[KernelBuildExtModuleInfo].modules_prepare_deps
-    inputs += ctx.attr.kernel_build[KernelBuildExtModuleInfo].module_srcs
-    inputs += [
-        ctx.file._search_and_cp_output,
-        ctx.file._check_duplicated_files_in_archives,
-        ctx.attr.kernel_build[KernelBuildExtModuleInfo].modules_staging_archive,
-    ]
-    for kernel_module in ctx.attr.kernel_modules:
-        inputs += dws.files(kernel_module[KernelModuleInfo].modules_staging_dws)
+    # TODO(b/256688440): Avoid depset[directory_with_structure] to_list
+    modules_staging_dws_depset = depset(transitive = [
+        kernel_module[KernelModuleInfo].modules_staging_dws_depset
+        for kernel_module in ctx.attr.kernel_modules
+    ])
+    modules_staging_dws_list = modules_staging_dws_depset.to_list()
 
-        for module_file in kernel_module[KernelModuleInfo].files:
-            declared_file = ctx.actions.declare_file("{}/{}".format(ctx.label.name, module_file.basename))
-            external_modules.append(declared_file)
+    inputs = []
+    inputs.append(
+        kernel_build_infos.ext_module_info.modules_staging_archive,
+    )
+
+    for input_modules_staging_dws in modules_staging_dws_list:
+        inputs += dws.files(input_modules_staging_dws)
+
+    module_files = depset(transitive = [
+        kernel_module[KernelModuleInfo].files
+        for kernel_module in ctx.attr.kernel_modules
+    ]).to_list()
+    for module_file in module_files:
+        declared_file = ctx.actions.declare_file("{}/{}".format(ctx.label.name, module_file.basename))
+        external_modules.append(declared_file)
+
+    transitive_inputs = [
+        kernel_build_infos.ext_module_info.module_scripts,
+        kernel_build_infos.ext_module_info.modules_install_env_and_outputs_info.inputs,
+    ]
+
+    tools = [
+        ctx.executable._check_duplicated_files_in_archives,
+        ctx.executable._search_and_cp_output,
+    ]
+    transitive_tools = [kernel_build_infos.ext_module_info.modules_install_env_and_outputs_info.tools]
 
     modules_staging_dws = dws.make(ctx, "{}/staging".format(ctx.label.name))
 
-    command = ""
-    command += ctx.attr.kernel_build[KernelEnvInfo].setup
-    command += ctx.attr.kernel_build[KernelBuildExtModuleInfo].modules_prepare_setup
+    command = kernel_build_infos.ext_module_info.modules_install_env_and_outputs_info.get_setup_script(
+        data = kernel_build_infos.ext_module_info.modules_install_env_and_outputs_info.data,
+        restore_out_dir_cmd = utils.get_check_sandbox_cmd(),
+    )
     command += """
              # create dirs for modules
                mkdir -p {modules_staging_dir}
@@ -60,14 +101,14 @@ def _kernel_modules_install_impl(ctx):
     """.format(
         modules_staging_dir = modules_staging_dws.directory.path,
         kernel_build_modules_staging_archive =
-            ctx.attr.kernel_build[KernelBuildExtModuleInfo].modules_staging_archive.path,
+            kernel_build_infos.ext_module_info.modules_staging_archive.path,
     )
-    for kernel_module in ctx.attr.kernel_modules:
+    for input_modules_staging_dws in modules_staging_dws_list:
         # Allow directories to be written because we are merging multiple directories into one.
         # However, don't allow files to be written because we don't expect modules to produce
         # conflicting files. check_duplicated_files_in_archives further enforces this.
         command += dws.restore(
-            kernel_module[KernelModuleInfo].modules_staging_dws,
+            input_modules_staging_dws,
             dst = modules_staging_dws.directory.path,
             options = "-aL --chmod=D+w",
         )
@@ -102,11 +143,11 @@ def _kernel_modules_install_impl(ctx):
                )
     """.format(
         modules_staging_archives = " ".join(
-            [ctx.attr.kernel_build[KernelBuildExtModuleInfo].modules_staging_archive.path] +
-            [kernel_module[KernelModuleInfo].modules_staging_dws.directory.path for kernel_module in ctx.attr.kernel_modules],
+            [kernel_build_infos.ext_module_info.modules_staging_archive.path] +
+            [input_modules_staging_dws.directory.path for input_modules_staging_dws in modules_staging_dws_list],
         ),
         modules_staging_dir = modules_staging_dws.directory.path,
-        check_duplicated_files_in_archives = ctx.file._check_duplicated_files_in_archives.path,
+        check_duplicated_files_in_archives = ctx.executable._check_duplicated_files_in_archives.path,
     )
 
     if external_modules:
@@ -118,7 +159,7 @@ def _kernel_modules_install_impl(ctx):
             modules_staging_dir = modules_staging_dws.directory.path,
             outdir = external_module_dir,
             filenames = " ".join([declared_file.basename for declared_file in external_modules]),
-            search_and_cp_output = ctx.file._search_and_cp_output.path,
+            search_and_cp_output = ctx.executable._search_and_cp_output.path,
         )
 
     command += dws.record(modules_staging_dws)
@@ -126,18 +167,35 @@ def _kernel_modules_install_impl(ctx):
     debug.print_scripts(ctx, command)
     ctx.actions.run_shell(
         mnemonic = "KernelModulesInstall",
-        inputs = inputs,
+        inputs = depset(inputs, transitive = transitive_inputs),
+        tools = depset(tools, transitive = transitive_tools),
         outputs = external_modules + dws.files(modules_staging_dws),
         command = command,
         progress_message = "Running depmod {}".format(ctx.label),
     )
 
+    # Only analyze headers on external modules.
+    # To analyze headers on in-tree modules, just run analyze_inputs on the kernel_build directly.
+    cmds_info_targets = ctx.attr.kernel_modules
+    cmds_info_srcs = [target[KernelCmdsInfo].srcs for target in cmds_info_targets]
+    cmds_info_directories = [target[KernelCmdsInfo].directories for target in cmds_info_targets]
+    cmds_info = KernelCmdsInfo(
+        srcs = depset(transitive = cmds_info_srcs),
+        directories = depset(transitive = cmds_info_directories),
+    )
+
     return [
         DefaultInfo(files = depset(external_modules)),
         KernelModuleInfo(
-            kernel_build = ctx.attr.kernel_build,
-            modules_staging_dws = modules_staging_dws,
+            kernel_build_infos = kernel_build_infos,
+            modules_staging_dws_depset = depset([modules_staging_dws]),
+            packages = depset(transitive = [
+                target[KernelModuleInfo].packages
+                for target in ctx.attr.kernel_modules
+            ]),
+            label = ctx.label,
         ),
+        cmds_info,
     ]
 
 kernel_modules_install = rule(
@@ -146,13 +204,12 @@ kernel_modules_install = rule(
 
 When including this rule to the `data` attribute of a `copy_to_dist_dir` rule,
 all external kernel modules specified in `kernel_modules` are included in
-distribution. This excludes `module_outs` in `kernel_build` to avoid conflicts.
+distribution.  This excludes `module_outs` in `kernel_build` to avoid conflicts.
 
 Example:
 ```
 kernel_modules_install(
     name = "foo_modules_install",
-    kernel_build = ":foo",           # A kernel_build rule
     kernel_modules = [               # kernel_module rules
         "//path/to/nfc:nfc_module",
     ],
@@ -175,22 +232,32 @@ In `foo_dist`, specifying `foo_modules_install` in `data` won't include
 """,
     attrs = {
         "kernel_modules": attr.label_list(
-            providers = [KernelEnvInfo, KernelModuleInfo],
-            doc = "A list of labels referring to `kernel_module`s to install. Must have the same `kernel_build` as this rule.",
+            providers = [KernelModuleInfo],
+            doc = "A list of labels referring to `kernel_module`s to install.",
         ),
         "kernel_build": attr.label(
-            providers = [KernelEnvInfo, KernelBuildExtModuleInfo],
-            doc = "Label referring to the `kernel_build` module.",
+            providers = [
+                KernelBuildExtModuleInfo,
+                # Needed by KernelModuleInfo.kernel_build
+                # TODO(b/247622808): Should put the info in KernelModuleInfo directly.
+                KernelEnvAndOutputsInfo,
+                KernelBuildInfo,
+                KernelImagesInfo,
+            ],
+            doc = "Label referring to the `kernel_build` module. Otherwise, it" +
+                  " is inferred from `kernel_modules`.",
         ),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
         "_check_duplicated_files_in_archives": attr.label(
-            allow_single_file = True,
-            default = Label("//build/kernel/kleaf:check_duplicated_files_in_archives.py"),
+            default = Label("//build/kernel/kleaf:check_duplicated_files_in_archives"),
             doc = "Label referring to the script to process outputs",
+            cfg = "exec",
+            executable = True,
         ),
         "_search_and_cp_output": attr.label(
-            allow_single_file = True,
-            default = Label("//build/kernel/kleaf:search_and_cp_output.py"),
+            default = Label("//build/kernel/kleaf:search_and_cp_output"),
+            cfg = "exec",
+            executable = True,
             doc = "Label referring to the script to process outputs",
         ),
     },
