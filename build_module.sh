@@ -294,6 +294,16 @@ for EXT_MOD in ${EXT_MODULES}; do
       exit 1
     fi
 
+    # Make sure Bazel extensions are linked properly
+    if [ ! -f "build/msm_kernel_extensions.bzl" ] \
+          && [ -f "msm-kernel/msm_kernel_extensions.bzl" ]; then
+      ln -fs "../msm-kernel/msm_kernel_extensions.bzl" "build/msm_kernel_extensions.bzl"
+    fi
+    if [ ! -f "build/abl_extensions.bzl" ] \
+          && [ -f "bootable/bootloader/edk2/abl_extensions.bzl" ]; then
+      ln -fs "../bootable/bootloader/edk2/abl_extensions.bzl" "build/abl_extensions.bzl"
+    fi
+
     mapfile -t build_flags < "${KERNEL_KIT}/build_opts.txt"
 
     if [ "$ALLOW_UNSAFE_DDK_HEADERS" = "true" ]; then
