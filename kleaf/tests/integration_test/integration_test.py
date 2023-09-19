@@ -135,13 +135,17 @@ class KleafIntegrationTestBase(unittest.TestCase):
         self._check_call("build", command_args, **kwargs)
 
     def _check_output(self, command: str, command_args: list[str],
+                      use_bazelrc=True,
                       **kwargs) -> str:
         """Returns output of a bazel command."""
-        return Exec.check_output([
-            str(_BAZEL),
-            f"--bazelrc={self._bazel_rc.name}",
-            command,
-        ] + command_args, **kwargs)
+
+        args = [str(_BAZEL)]
+        if use_bazelrc:
+            args.append(f"--bazelrc={self._bazel_rc.name}")
+        args.append(command)
+        args += command_args
+
+        return Exec.check_output(args, **kwargs)
 
     def _popen(self, command: str, command_args: list[str], **kwargs) \
             -> subprocess.Popen:
@@ -269,7 +273,7 @@ class KleafIntegrationTest(KleafIntegrationTestBase):
                     _FASTEST)
         first_hash = self._sha256(modules_prepare_archive)
 
-        old_modules_archive = tempfile.NamedTemporaryFile()
+        old_modules_archive = tempfile.NamedTemporaryFile(delete = False)
         shutil.copyfile(modules_prepare_archive, old_modules_archive.name)
 
         self._touch_core_kernel_file()
@@ -278,8 +282,8 @@ class KleafIntegrationTest(KleafIntegrationTestBase):
                     _FASTEST)
         second_hash = self._sha256(modules_prepare_archive)
 
-        if first_hash != second_hash:
-            old_modules_archive.delete = False
+        if first_hash == second_hash:
+            os.unlink(old_modules_archive.name)
 
         self.assertEqual(
             first_hash, second_hash,
@@ -353,9 +357,9 @@ class KleafIntegrationTest(KleafIntegrationTestBase):
         self._check_call(startup_options=[
             f"--host_jvm_args=-Djava.io.tmpdir={new_java_tmp.name}"
         ],
-                         command="build",
-                         command_args=["//build/kernel/kleaf:empty_test"] +
-                         _FASTEST)
+            command="build",
+            command_args=["//build/kernel/kleaf:empty_test"] +
+            _FASTEST)
         self.assertFalse(default_java_tmp.exists())
 
     def test_override_absolute_out_dir(self):
@@ -433,7 +437,7 @@ class KleafIntegrationTest(KleafIntegrationTestBase):
 
         output = self._check_output("run", args)
 
-        matching_line = lambda line: re.match(
+        def matching_line(line): return re.match(
             r"^Updating .*common/arch/arm64/configs/menuconfig_test_defconfig$",
             line)
         self.assertTrue(
@@ -477,13 +481,47 @@ class KleafIntegrationTest(KleafIntegrationTestBase):
         _, stderr = popen.communicate()
         self.assertNotEqual(popen.returncode, 0)
         self.assertIn(
-            "CONFIG_DELETED_SET: actual '', expected 'CONFIG_DELETED_SET=y'.",
+            "CONFIG_DELETED_SET: actual '', expected 'CONFIG_DELETED_SET=y' from build/kernel/kleaf/tests/integration_test/ddk_negative_test/defconfig.",
             stderr)
         self.assertIn(
-            "CONFIG_DELETED_UNSET: actual '', expected '# CONFIG_DELETED_UNSET is not set'.",
+            "CONFIG_DELETED_UNSET: actual '', expected '# CONFIG_DELETED_UNSET is not set' from build/kernel/kleaf/tests/integration_test/ddk_negative_test/defconfig.",
             stderr)
         self.assertNotIn("DECLARED_SET", stderr)
         self.assertNotIn("DECLARED_UNSET", stderr)
+
+    def test_user_clang_toolchain(self):
+        """Test --user_clang_toolchain option."""
+
+        clang_version = None
+        build_config_constants = f"{self._common()}/build.config.constants"
+        with open(build_config_constants) as f:
+            for line in f.read().splitlines():
+                if line.startswith("CLANG_VERSION="):
+                    clang_version = line.strip().split("=", 2)[1]
+        self.assertIsNotNone(clang_version)
+        clang_dir = f"prebuilts/clang/host/linux-x86/clang-{clang_version}"
+        clang_dir = os.path.realpath(clang_dir)
+
+        # Do not use --config=local to ensure the toolchain dependency is
+        # correct.
+        args = [
+            f"--user_clang_toolchain={clang_dir}",
+            f"//{self._common()}:kernel",
+        ] + _LTO_NONE
+        self._build(args)
+
+    @unittest.skip("b/293357796")
+    def test_dash_dash_help(self):
+        """Test that `bazel --help` works."""
+        self._check_output("--help", [], use_bazelrc=False)
+
+    def test_help(self):
+        """Test that `bazel help` works."""
+        self._check_output("help", [])
+
+    def test_help_kleaf(self):
+        """Test that `bazel help kleaf` works."""
+        self._check_output("help", ["kleaf"])
 
 
 class ScmversionIntegrationTest(KleafIntegrationTestBase):

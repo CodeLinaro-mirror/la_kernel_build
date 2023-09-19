@@ -24,6 +24,8 @@ load(
 )
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
 
+visibility("//build/kernel/kleaf/...")
+
 def _kernel_compile_commands_transition_impl(_settings, _attr):
     return {
         FORCE_IGNORE_BASE_KERNEL_SETTING: True,
@@ -56,12 +58,12 @@ def _kernel_compile_commands_impl(ctx):
     )
     ctx.actions.write(script, script_content, is_executable = True)
 
-    direct_runfiles = [compile_commands_with_vars]
-    direct_runfiles += hermetic_tools.deps
-
     return DefaultInfo(
         executable = script,
-        runfiles = ctx.runfiles(files = direct_runfiles),
+        runfiles = ctx.runfiles(
+            files = [compile_commands_with_vars],
+            transitive_files = hermetic_tools.deps,
+        ),
     )
 
 kernel_compile_commands = rule(
