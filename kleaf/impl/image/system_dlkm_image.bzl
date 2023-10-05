@@ -29,6 +29,8 @@ load(
     _STAGING_ARCHIVE_NAME = "SYSTEM_DLKM_STAGING_ARCHIVE_NAME",
 )
 
+visibility("//build/kernel/kleaf/...")
+
 def _system_dlkm_image_impl(ctx):
     system_dlkm_img = ctx.actions.declare_file("{}/system_dlkm.img".format(ctx.label.name))
     system_dlkm_modules_load = ctx.actions.declare_file("{}/{}".format(ctx.label.name, _MODULES_LOAD_NAME))
