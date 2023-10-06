@@ -351,6 +351,7 @@ config_setting(
 # Default is true.
 # Use the resolved toolchains for building kernel_* rules.
 # See https://bazel.build/extending/toolchains for how toolchains are resolved.
+# Setting this to false will break the kernel build.
 bool_flag(
     name = "incompatible_kernel_use_resolved_toolchains",
     build_setting_default = True,
@@ -785,6 +786,7 @@ test_suite(
         ":empty_test",
         "//build/bazel_common_rules/exec/tests",
         "//build/kernel/kleaf/impl:get_kmi_string_test",
+        "//build/kernel/kleaf/impl:visibility_test",
         "//build/kernel/kleaf/tests",
         "//prebuilts/build-tools/tests",
     ],

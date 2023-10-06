@@ -686,6 +686,36 @@ def kernel_build(
         **kwargs
     )
 
+# buildifier: disable=print
+def _skip_build_checks(ctx, what):
+    # Skip for --k*san targets as they are usually debug targets.
+    if ctx.attr._kasan[BuildSettingInfo].value:
+        print("\nWARNING: {this_label}: {what} was\
+              IGNORED because --kasan is set!".format(this_label = ctx.label, what = what))
+        return True
+    if ctx.attr._kasan_sw_tags[BuildSettingInfo].value:
+        print("\nWARNING: {this_label}: {what} was\
+              IGNORED because --kasan_sw_tags is set!".format(this_label = ctx.label, what = what))
+        return True
+    if ctx.attr._kcsan[BuildSettingInfo].value:
+        print("\nWARNING: {this_label}: {what} was\
+              IGNORED because --kcsan is set!".format(this_label = ctx.label, what = what))
+        return True
+
+    # Skip for --kgdb as it is usually used for debug targets.
+    if ctx.attr._kgdb[BuildSettingInfo].value:
+        print("\nWARNING: {this_label}: {what} was\
+              IGNORED because --kgdb is set!".format(this_label = ctx.label, what = what))
+        return True
+
+    # Skip when --debug is specified.
+    if ctx.attr._debug[BuildSettingInfo].value:
+        print("\nWARNING: {this_label}: {what} was\
+              IGNORED because --debug is set!".format(this_label = ctx.label, what = what))
+        return True
+
+    return False
+
 def _get_defconfig_fragments(
         kernel_build_name,
         kernel_build_defconfig_fragments,
@@ -1572,22 +1602,20 @@ def _create_env_and_outputs_info(
         pre_info,
         restore_outputs_cmd_deps,
         restore_outputs_cmd,
-        module_scripts):
+        extra_inputs):
     """Creates an KernelEnvAndOutputsInfo.
 
     Args:
         pre_info: pre setup script and dependencies
         restore_outputs_cmd_deps: list of outputs to restore
         restore_outputs_cmd: command to restore these outputs
-        module_scripts: None or a depset attached to `inputs` of returned object
+        extra_inputs: a depset attached to `inputs` of returned object
 
     Returns:
         A KernelEnvAndOutputsInfo that runs pre_info, then restore outputs given the list of
         outputs and cmd."""
 
-    inputs_transitive = [pre_info.inputs]
-    if module_scripts:
-        inputs_transitive.append(module_scripts)
+    inputs_transitive = [pre_info.inputs, extra_inputs]
 
     return KernelEnvAndOutputsInfo(
         get_setup_script = _env_and_outputs_info_get_setup_script,
@@ -1649,7 +1677,7 @@ def _create_infos(
         pre_info = ctx.attr.config[KernelEnvAndOutputsInfo],
         restore_outputs_cmd_deps = env_and_outputs_info_dependencies,
         restore_outputs_cmd = env_and_outputs_info_setup_restore_outputs,
-        module_scripts = None,
+        extra_inputs = depset(),
     )
 
     orig_env_info = ctx.attr.config[KernelBuildOriginalEnvInfo]
@@ -1694,7 +1722,7 @@ def _create_infos(
         pre_info = ctx.attr.modules_prepare[KernelEnvAndOutputsInfo],
         restore_outputs_cmd_deps = ext_mod_env_and_outputs_info_deps,
         restore_outputs_cmd = ext_mod_env_and_outputs_info_setup_restore_outputs,
-        module_scripts = module_srcs.module_scripts,
+        extra_inputs = module_srcs.module_scripts,
     )
 
     # For kernel_module() that require all kernel_build outputs
@@ -1702,7 +1730,7 @@ def _create_infos(
         pre_info = ctx.attr.modules_prepare[KernelEnvAndOutputsInfo],
         restore_outputs_cmd_deps = env_and_outputs_info_dependencies,
         restore_outputs_cmd = env_and_outputs_info_setup_restore_outputs,
-        module_scripts = module_srcs.module_scripts,
+        extra_inputs = module_srcs.module_scripts,
     )
 
     # For kernel_modules_install()
@@ -1710,7 +1738,7 @@ def _create_infos(
         pre_info = ctx.attr.modules_prepare[KernelEnvAndOutputsInfo],
         restore_outputs_cmd_deps = env_and_outputs_info_dependencies,
         restore_outputs_cmd = env_and_outputs_info_setup_restore_outputs,
-        module_scripts = module_srcs.module_scripts,
+        extra_inputs = module_srcs.module_scripts,
     )
 
     # For ddk_config()
@@ -1718,13 +1746,15 @@ def _create_infos(
         pre_info = ctx.attr.config[KernelEnvAndOutputsInfo],
         restore_outputs_cmd_deps = [],
         restore_outputs_cmd = "",
-        module_scripts = module_srcs.module_scripts,
+        extra_inputs = depset(transitive = [
+            module_srcs.module_scripts,
+            module_srcs.module_kconfig,
+        ]),
     )
 
     kernel_build_module_info = KernelBuildExtModuleInfo(
         modules_staging_archive = modules_staging_archive,
         module_hdrs = module_srcs.module_hdrs,
-        module_kconfig = module_srcs.module_kconfig,
         config_env_and_outputs_info = config_env_and_outputs_info,
         modules_env_and_minimal_outputs_info = ext_mod_env_and_outputs_info,
         modules_env_and_all_outputs_info = ext_mod_env_and_all_outputs_info,
@@ -2111,32 +2141,7 @@ def _kmi_symbol_list_strict_mode(ctx, all_output_files, all_module_names_file):
         ))
         return None
 
-    # Skip for the --kasan targets as they are not valid GKI release targets
-    if ctx.attr._kasan[BuildSettingInfo].value:
-        # buildifier: disable=print
-        print("\nWARNING: {this_label}: Attribute kmi_symbol_list_strict_mode\
-              IGNORED because --kasan is set!".format(this_label = ctx.label))
-        return None
-
-    # Skip for the --kasan_sw_tags targets as they are not valid GKI release targets
-    if ctx.attr._kasan_sw_tags[BuildSettingInfo].value:
-        # buildifier: disable=print
-        print("\nWARNING: {this_label}: Attribute kmi_symbol_list_strict_mode\
-              IGNORED because --kasan_sw_tags is set!".format(this_label = ctx.label))
-        return None
-
-    # Skip for the --kcsan targets as they are not valid GKI release targets
-    if ctx.attr._kcsan[BuildSettingInfo].value:
-        # buildifier: disable=print
-        print("\nWARNING: {this_label}: Attribute kmi_symbol_list_strict_mode\
-              IGNORED because --kcsan is set!".format(this_label = ctx.label))
-        return None
-
-    # Skip for the --kgdb targets as they are not valid GKI release targets
-    if ctx.attr._kgdb[BuildSettingInfo].value:
-        # buildifier: disable=print
-        print("\nWARNING: {this_label}: Attribute kmi_symbol_list_strict_mode\
-              IGNORED because --kgdb is set!".format(this_label = ctx.label))
+    if _skip_build_checks(ctx, what = "Attribute kmi_symbol_list_strict_mode"):
         return None
 
     if not ctx.attr.kmi_symbol_list_strict_mode:
@@ -2214,28 +2219,7 @@ def _kmi_symbol_list_violations_check(ctx, modules_staging_archive):
     if len(ctx.files.raw_kmi_symbol_list) > 1:
         fail("{}: raw_kmi_symbol_list must only provide at most one file".format(ctx.label))
 
-    # Skip for --kasan build as they are not valid GKI releasae configurations.
-    # Downstreams are expect to build kernel+modules+vendor modules locally
-    # and can disable the runtime symbol protection with CONFIG_SIG_PROTECT=n
-    # if required.
-    if ctx.attr._kasan[BuildSettingInfo].value:
-        return None
-
-    if ctx.attr._kasan_sw_tags[BuildSettingInfo].value:
-        return None
-
-    # Skip for --kcsan build as they are not valid GKI releasae configurations.
-    # Downstreams are expect to build kernel+modules+vendor modules locally
-    # and can disable the runtime symbol protection with CONFIG_SIG_PROTECT=n
-    # if required.
-    if ctx.attr._kcsan[BuildSettingInfo].value:
-        return None
-
-    # Skip for the --kgdb targets as they are not valid GKI release targets
-    if ctx.attr._kgdb[BuildSettingInfo].value:
-        # buildifier: disable=print
-        print("\nWARNING: {this_label}: Symbol list violations check \
-              IGNORED because --kgdb is set!".format(this_label = ctx.label))
+    if _skip_build_checks(ctx, what = "Symbol list violations check"):
         return None
 
     inputs = [
@@ -2311,7 +2295,7 @@ def _repack_modules_staging_archive(
         return modules_staging_archive_self
 
     modules_staging_archive = ctx.actions.declare_file(
-        "{}_module_staging_archive/{}".format(ctx.label.name, MODULES_STAGING_ARCHIVE),
+        "{}/{}".format(ctx.label.name, MODULES_STAGING_ARCHIVE),
     )
 
     # Re-package module_staging_dir to also include the one from base_kernel.
@@ -2339,7 +2323,7 @@ def _repack_modules_staging_archive(
         out_archive = modules_staging_archive.path,
         all_module_basenames_file = all_module_basenames_file.path,
     )
-    debug.print_scripts(ctx, cmd, what = "repackage_module_staging_archive")
+    debug.print_scripts(ctx, cmd, what = "repackage_modules_staging_archive")
     ctx.actions.run_shell(
         mnemonic = "KernelBuildModuleStagingArchive",
         inputs = [
@@ -2349,7 +2333,7 @@ def _repack_modules_staging_archive(
         ],
         outputs = [modules_staging_archive],
         tools = hermetic_tools.deps,
-        progress_message = "Repackaging module_staging_archive {}".format(_progress_message_suffix(ctx)),
+        progress_message = "Repackaging modules_staging_archive {}".format(_progress_message_suffix(ctx)),
         command = cmd,
     )
     return modules_staging_archive

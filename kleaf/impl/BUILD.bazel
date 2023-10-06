@@ -83,6 +83,7 @@ bzl_library(
         "kernel_platform_toolchain.bzl",
         "kernel_sbom.bzl",
         "kernel_toolchains.bzl",
+        "kernel_toolchains_utils.bzl",
         "kernel_uapi_headers.bzl",
         "kernel_uapi_headers_cc_library.bzl",
         "kernel_unstripped_modules_archive.bzl",
@@ -346,6 +347,17 @@ py_test(
     main = "get_kmi_string_test.py",
     deps = [
         ":get_kmi_string",
+        "@io_abseil_py//absl/testing:absltest",
+    ],
+)
+
+# Test that visibility() is set.
+py_test(
+    name = "visibility_test",
+    timeout = "short",
+    srcs = ["visibility_test.py"],
+    data = glob(["**/*.bzl"]),
+    deps = [
         "@io_abseil_py//absl/testing:absltest",
     ],
 )

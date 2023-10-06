@@ -21,6 +21,7 @@ load(":cache_dir.bzl", "cache_dir")
 load(
     ":common_providers.bzl",
     "KernelBuildOriginalEnvInfo",
+    "KernelConfigArchiveInfo",
     "KernelEnvAndOutputsInfo",
     "KernelEnvAttrInfo",
     "KernelEnvInfo",
@@ -197,6 +198,12 @@ def _config_trim(ctx):
         # buildifier: disable=print
         print("\nWARNING: {this_label}: Symbol trimming \
               IGNORED because --kgdb is set!".format(this_label = ctx.label))
+        return struct(configs = [], deps = [])
+
+    if ctx.attr.debug[BuildSettingInfo].value:
+        # buildifier: disable=print
+        print("\nWARNING: {this_label}: Symbol trimming \
+              IGNORED because --debug is set!".format(this_label = ctx.label))
         return struct(configs = [], deps = [])
 
     raw_symbol_list_path_file = _determine_raw_symbollist_path(ctx)
@@ -482,6 +489,7 @@ def _kernel_config_impl(ctx):
     )
 
     config_script_ret = _get_config_script(ctx, inputs)
+    outdir_tar_gz = _package_config_outdir(ctx, out_dir)
 
     return [
         env_and_outputs_info,
@@ -495,6 +503,9 @@ def _kernel_config_impl(ctx):
             files = depset([out_dir]),
             executable = config_script_ret.executable,
             runfiles = config_script_ret.runfiles,
+        ),
+        KernelConfigArchiveInfo(
+            outdir_tar_gz = outdir_tar_gz,
         ),
     ]
 
@@ -571,6 +582,47 @@ def _get_config_script(ctx, inputs):
         executable = executable,
         runfiles = runfiles,
     )
+
+def _package_config_outdir(ctx, out_dir):
+    """Package OUT_DIR.
+
+    Args:
+        ctx: ctx
+        out_dir: declared directory `out_dir`
+    Returns:
+        tarball
+    """
+
+    hermetic_tools = hermetic_toolchain.get(ctx)
+
+    # <kernel_build>_config_outdir.tar.gz
+    outdir_tar_gz = ctx.actions.declare_file("{name}/{name}_outdir.tar.gz".format(name = ctx.attr.name))
+
+    # To workaround https://github.com/landley/toybox/issues/456, directly
+    # provide the list of files by using find.
+    cmd = hermetic_tools.setup + """
+        find {out_dir} ! -type d -print0 | \\
+            LC_ALL=C sort -z | \\
+            tar czf {outdir_tar_gz} \\
+                --dereference \\
+                --transform 's:^{out_dir}/::g' \\
+                --null -T -
+    """.format(
+        outdir_tar_gz = outdir_tar_gz.path,
+        out_dir = out_dir.path,
+    )
+    ctx.actions.run_shell(
+        inputs = [out_dir],
+        outputs = [outdir_tar_gz],
+        tools = hermetic_tools.deps,
+        command = cmd,
+        progress_message = "Packaging OUT_DIR {}".format(
+            ctx.attr.env[KernelEnvAttrInfo].progress_message_note,
+            ctx.label,
+        ),
+        mnemonic = "KernelConfigPackageOutDir",
+    )
+    return outdir_tar_gz
 
 def _kernel_config_additional_attrs():
     return dicts.add(
