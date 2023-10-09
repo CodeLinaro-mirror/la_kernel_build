@@ -24,6 +24,8 @@ load(
 load(":srcs_aspect.bzl", "SrcsInfo", "srcs_aspect")
 load(":utils.bzl", "utils")
 
+visibility("//build/kernel/kleaf/...")
+
 def _kernel_kythe_transition_impl(_settings, _attr):
     return {
         # Until we resolve OUT_DIR properly like in kernel_build, this needs to be executed in a
@@ -57,6 +59,10 @@ def _create_vnames_mappings(ctx):
     return output
 
 def _kernel_kythe_impl(ctx):
+    if not ctx.attr.corpus[BuildSettingInfo].value:
+        # buildifier: disable=print
+        print("WARNING: {}: --{} is not defined!".format(ctx.label, ctx.attr.corpus.label))
+
     compile_commands_with_vars = ctx.attr.kernel_build[KernelBuildInfo].compile_commands_with_vars
     compile_commands_out_dir = ctx.attr.kernel_build[KernelBuildInfo].compile_commands_out_dir
     all_kzip = ctx.actions.declare_file(ctx.attr.name + "/all.kzip")
@@ -95,6 +101,7 @@ def _kernel_kythe_impl(ctx):
                export KYTHE_CORPUS={quoted_corpus}
                export KYTHE_VNAMES=$(realpath {vnames_mappings_json_file})
                export KYTHE_KZIP_ENCODING=PROTO
+               export KYTHE_BUILD_CONFIG={kernel_build_name}
              # Generate kzips
                runextractor compdb -extractor $(which cxx_extractor)
 
@@ -115,6 +122,7 @@ def _kernel_kythe_impl(ctx):
         extracted_kzip_dir = extracted_kzip_dir,
         quoted_corpus = shell.quote(ctx.attr.corpus[BuildSettingInfo].value),
         all_kzip = all_kzip.path,
+        kernel_build_name = ctx.attr.kernel_build.label.name,
     )
     ctx.actions.run_shell(
         mnemonic = "KernelKythe",

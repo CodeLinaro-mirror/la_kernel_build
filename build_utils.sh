@@ -14,17 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# TODO(b/266980402): remove it
 # rel_path <to> <from>
 # Generate relative directory path to reach directory <to> from <from>
 function rel_path() {
-  ${ROOT_DIR}/build/kernel/build-tools/path/linux-x86/realpath "$1" --relative-to="$2"
-}
-
-# TODO(b/266980402): remove it
-# rel_path2 <to> <from>
-# Generate relative directory path to reach directory <to> from <from>
-function rel_path2() {
-  rel_path "$@"
+  echo "ERROR: rel_path is deprecated. For Kleaf builds, use 'realpath $1 --relative-to $2' instead." >&2
+  exit 1
 }
 
 # $1 directory of kernel modules ($1/lib/modules/x.y)
@@ -264,13 +259,17 @@ function build_system_dlkm() {
   # No need to sign the image as modules are signed
   avbtool add_hashtree_footer \
     --partition_name system_dlkm \
+    --hash_algorithm sha256 \
     --image "${DIST_DIR}/system_dlkm.img"
 
   # Archive system_dlkm_staging_dir
   tar -czf "${DIST_DIR}/system_dlkm_staging_archive.tar.gz" -C "${SYSTEM_DLKM_STAGING_DIR}" .
 }
 
+# $1 if set, generate the vendor_dlkm_staging_archive.tar.gz archive
 function build_vendor_dlkm() {
+  local vendor_dlkm_archive=$1
+
   echo "========================================================"
   echo " Creating vendor_dlkm image"
 
@@ -339,41 +338,46 @@ function build_vendor_dlkm() {
 
   build_image "${VENDOR_DLKM_STAGING_DIR}" "${vendor_dlkm_props_file}" \
     "${DIST_DIR}/vendor_dlkm.img" /dev/null
+
+  if [ -n "${vendor_dlkm_archive}" ]; then
+    # Archive vendor_dlkm_staging_dir
+    tar -czf "${DIST_DIR}/vendor_dlkm_staging_archive.tar.gz" -C "${VENDOR_DLKM_STAGING_DIR}" .
+  fi
 }
 
 function build_super() {
-  echo "========================================================"
-  echo " Creating super.img"
-
-  local super_props_file=$(mktemp)
+  local super_props_file="${DIST_DIR}/super_image.props"
   local dynamic_partitions=""
-  # Default to 256 MB
-  local super_image_size="$((${SUPER_IMAGE_SIZE:-268435456}))"
-  local group_size="$((${super_image_size} - 0x400000))"
-  echo -e "lpmake=lpmake" >> ${super_props_file}
-  echo -e "super_metadata_device=super" >> ${super_props_file}
-  echo -e "super_block_devices=super" >> ${super_props_file}
-  echo -e "super_super_device_size=${super_image_size}" >> ${super_props_file}
-  echo -e "super_partition_size=${super_image_size}" >> ${super_props_file}
-  echo -e "super_partition_groups=kb_dynamic_partitions" >> ${super_props_file}
-  echo -e "super_kb_dynamic_partitions_group_size=${group_size}" >> ${super_props_file}
 
-  for image in "${SUPER_IMAGE_CONTENTS[@]}"; do
-    echo "  Adding ${image}"
-    partition_name=$(basename -s .img "${image}")
-    dynamic_partitions="${dynamic_partitions} ${partition_name}"
-    echo -e "${partition_name}_image=${image}" >> ${super_props_file}
-  done
+  if [ -z "$SUPER_IMAGE_SIZE" ]; then
+    echo "ERROR: SUPER_IMAGE_SIZE must be set" >&2
+    exit 1
+  fi
+  local group_size="$((SUPER_IMAGE_SIZE - 0x400000))"
+  cat << EOF >> "$super_props_file"
+lpmake=lpmake
+super_metadata_device=super
+super_block_devices=super
+super_super_device_size=${SUPER_IMAGE_SIZE}
+super_partition_size=${SUPER_IMAGE_SIZE}
+super_partition_groups=kb_dynamic_partitions
+super_kb_dynamic_partitions_group_size=${group_size}
+EOF
 
-  echo -e "dynamic_partition_list=${dynamic_partitions}" >> ${super_props_file}
-  echo -e "super_kb_dynamic_partitions_partition_list=${dynamic_partitions}" >> ${super_props_file}
-  build_super_image -v ${super_props_file} ${DIST_DIR}/super.img
-  rm ${super_props_file}
+  if [[ -n "${SYSTEM_DLKM_IMAGE}" ]]; then
+    echo -e "system_dlkm_image=${SYSTEM_DLKM_IMAGE}" >> "$super_props_file"
+    dynamic_partitions="${dynamic_partitions} system_dlkm"
+  fi
+  if [[ -n "${VENDOR_DLKM_IMAGE}" ]]; then
+    echo -e "vendor_dlkm_image=${VENDOR_DLKM_IMAGE}" >> "$super_props_file"
+    dynamic_partitions="${dynamic_partitions} vendor_dlkm"
+  fi
 
-  echo "super image created at ${DIST_DIR}/super.img"
+  echo -e "dynamic_partition_list=${dynamic_partitions}" >> "$super_props_file"
+  echo -e "super_kb_dynamic_partitions_partition_list=${dynamic_partitions}" >> "$super_props_file"
 
-  simg2img ${DIST_DIR}/super.img ${DIST_DIR}/super_unsparsed.img
-  echo "Unsparsed super image created at ${DIST_DIR}/super_unsparsed.img"
+  build_super_image -v "$super_props_file" "${DIST_DIR}/super.img"
+  rm -f "$super_props_file"
 }
 
 function check_mkbootimg_path() {
@@ -677,6 +681,8 @@ function build_gki_artifacts_info() {
   artifacts_info="${artifacts_info} --prop KERNEL_RELEASE:${KERNEL_RELEASE}"
 
   echo "${artifacts_info}" > "$1"
+
+  echo "kernel_release=${KERNEL_RELEASE}" >> "$1"
 }
 
 # build_gki_boot_images <uncompressed kernel path>.
@@ -723,10 +729,12 @@ function build_gki_boot_images() {
     GKI_MKBOOTIMG_ARGS+=("--output" "${boot_image_path}")
     "${MKBOOTIMG_PATH}" "${GKI_MKBOOTIMG_ARGS[@]}"
 
-    gki_add_avb_footer "${boot_image_path}" \
-      "$(gki_get_boot_img_size "${compression}")"
-    gki_dry_run_certify_bootimg "${boot_image_path}" \
-      "${GKI_ARTIFACTS_INFO_FILE}"
+    if [[ -z "${BUILD_GKI_BOOT_SKIP_AVB}" ]]; then
+      gki_add_avb_footer "${boot_image_path}" \
+        "$(gki_get_boot_img_size "${compression}")"
+      gki_dry_run_certify_bootimg "${boot_image_path}" \
+        "${GKI_ARTIFACTS_INFO_FILE}"
+    fi
     images_to_pack+=("${boot_image}")
   done
 
@@ -812,7 +820,13 @@ function extract_git_metadata() {
   local git_project_candidate=$2
   local what=$3
   while [[ "${git_project_candidate}" != "." ]]; do
-    value_candidate=$(echo "${map}" | sed -E -n 's;(^|.*\s)'"${git_project_candidate}"':(\S+).*;\2;p' || true)
+    value_candidate=$(python3 -c '
+import sys, json
+js = json.load(sys.stdin)
+key = sys.argv[1]
+if key in js:
+    print(js[key])
+' "${git_project_candidate}" <<< "${map}")
     if [[ -n "${value_candidate}" ]]; then
         break
     fi

@@ -26,6 +26,7 @@ bzl_library(
         "abi/abi_dump.bzl",
         "abi/abi_stgdiff.bzl",
         "abi/abi_transitions.bzl",
+        "abi/abi_update.bzl",
         "abi/base_kernel_utils.bzl",
         "abi/extracted_symbols.bzl",
         "abi/force_add_vmlinux_utils.bzl",
@@ -38,8 +39,10 @@ bzl_library(
         "android_filegroup.bzl",
         "btf.bzl",
         "cache_dir.bzl",
+        "checkpatch.bzl",
         "common_providers.bzl",
         "compile_commands_utils.bzl",
+        "config_utils.bzl",
         "constants.bzl",
         "ddk/ddk_conditional_filegroup.bzl",
         "ddk/ddk_config.bzl",
@@ -49,12 +52,14 @@ bzl_library(
         "ddk/makefiles.bzl",
         "debug.bzl",
         "file.bzl",
+        "file_selector.bzl",
         "gki_artifacts.bzl",
         "image/boot_images.bzl",
         "image/dtbo.bzl",
         "image/image_utils.bzl",
         "image/initramfs.bzl",
         "image/kernel_images.bzl",
+        "image/super_image.bzl",
         "image/system_dlkm_image.bzl",
         "image/vendor_dlkm_image.bzl",
         "kernel_build.bzl",
@@ -71,12 +76,14 @@ bzl_library(
         "kernel_module_group.bzl",
         "kernel_modules_install.bzl",
         "kernel_platform_toolchain.bzl",
+        "kernel_sbom.bzl",
         "kernel_toolchains.bzl",
         "kernel_uapi_headers.bzl",
         "kernel_uapi_headers_cc_library.bzl",
         "kernel_unstripped_modules_archive.bzl",
         "kgdb.bzl",
         "kmi_symbol_list.bzl",
+        "merge_kzip.bzl",
         "merged_kernel_uapi_headers.bzl",
         "modules_prepare.bzl",
         "out_headers_allowlist_archive.bzl",
@@ -89,8 +96,8 @@ bzl_library(
     ],
     visibility = ["//build/kernel/kleaf:__subpackages__"],
     deps = [
+        ":hermetic_tools_deps",
         "//build/kernel/kleaf:directory_with_structure_def",
-        "//build/kernel/kleaf:hermetic_tools_def",
         "//build/kernel/kleaf:update_source_file_def",
         "@bazel_skylib//lib:collections",
         "@bazel_skylib//lib:paths",
@@ -98,6 +105,26 @@ bzl_library(
         "@bazel_skylib//lib:shell",
         "@bazel_skylib//rules:common_settings",
     ],
+)
+
+bzl_library(
+    name = "hermetic_tools_deps",
+    srcs = [
+        "hermetic_exec.bzl",
+        "hermetic_genrule.bzl",
+        "hermetic_toolchain.bzl",
+    ],
+    visibility = ["//build/kernel/kleaf:__subpackages__"],
+    deps = [
+        "//build/bazel_common_rules/exec",
+    ],
+)
+
+# Helper filegroup with no sources.
+filegroup(
+    name = "empty_filegroup",
+    srcs = [],
+    visibility = ["//visibility:public"],
 )
 
 # If true, also pack .cmd files as output.
@@ -117,7 +144,7 @@ bool_setting(
     visibility = ["//visibility:public"],
 )
 
-# Helper setting to forcefully disable trimming.
+# If set, disables trimming.
 bool_flag(
     name = "force_disable_trim",
     build_setting_default = False,
@@ -150,6 +177,8 @@ bool_setting(
     visibility = ["//visibility:public"],
 )
 
+# The --lto flag is set to none.
+# Note: This does not imply that the final LTO setting is "none".
 config_setting(
     name = "lto_is_set_to_none",
     flag_values = {"//build/kernel/kleaf:lto": "none"},
@@ -157,21 +186,41 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
+# The --lto flag is set to default.
+# Note: This does not imply that the final LTO setting is "default".
+config_setting(
+    name = "lto_is_set_to_default",
+    flag_values = {"//build/kernel/kleaf:lto": "default"},
+    # All kernel_* from different packages can see this
+    visibility = ["//visibility:public"],
+)
+
 selects.config_setting_group(
-    name = "lto_is_default_and_kasan_is_true",
+    name = "lto_is_set_to_default_and_kasan_is_true",
     match_all = [
-        "//build/kernel/kleaf:lto_is_default",
+        ":lto_is_set_to_default",
         "//build/kernel/kleaf:kasan_is_true",
     ],
     # All kernel_* from different packages can see this
     visibility = ["//visibility:public"],
 )
 
-# Helper filegroup with no sources.
-filegroup(
-    name = "empty_filegroup",
-    srcs = [],
+selects.config_setting_group(
+    name = "lto_is_set_to_default_and_kcsan_is_true",
+    match_all = [
+        ":lto_is_set_to_default",
+        "//build/kernel/kleaf:kcsan_is_true",
+    ],
+    # All kernel_* from different packages can see this
     visibility = ["//visibility:public"],
+)
+
+# If true, //build/kernel:hermetic-tools and other hermetic_tools
+# targets no longer emits HermeticToolsInfo.
+bool_flag(
+    name = "incompatible_disable_hermetic_tools_info",
+    build_setting_default = False,
+    visibility = ["//build/kernel:__pkg__"],
 )
 
 py_binary(
@@ -181,6 +230,13 @@ py_binary(
     deps = [
         "@io_abseil_py//absl/flags:argparse_flags",
     ],
+)
+
+py_binary(
+    name = "get_kmi_string",
+    srcs = ["get_kmi_string.py"],
+    # All kernel_* / ddk_* from different packages can see this
+    visibility = ["//visibility:public"],
 )
 
 py_binary(
@@ -203,6 +259,13 @@ sh_binary(
 )
 
 py_binary(
+    name = "cache_dir_config_tags",
+    srcs = ["cache_dir_config_tags.py"],
+    # All kernel_* / ddk_* from different packages can see this
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
     name = "ddk/analyze_inputs",
     srcs = ["ddk/analyze_inputs.py"],
     visibility = ["//visibility:public"],
@@ -215,6 +278,29 @@ py_binary(
     deps = [
         "//build/kernel/kleaf:buildozer_command_builder",
     ],
+)
+
+py_test(
+    name = "get_kmi_string_test",
+    timeout = "short",
+    srcs = ["get_kmi_string_test.py"],
+    main = "get_kmi_string_test.py",
+    deps = [
+        ":get_kmi_string",
+        "@io_abseil_py//absl/testing:absltest",
+    ],
+)
+
+sh_binary(
+    name = "checkpatch",
+    srcs = [
+        "checkpatch.sh",
+    ],
+    data = [
+        "//build/kernel/static_analysis:checkpatch_ignorelist",
+    ],
+    # All checkpatch rules from any package can see this
+    visibility = ["//visibility:public"],
 )
 
 kernel_platform_toolchain(
@@ -245,6 +331,15 @@ platform(
     ],
 )
 
+# 32-bit
+platform(
+    name = "android_arm",
+    constraint_values = [
+        "@platforms//os:android",
+        "@platforms//cpu:arm",
+    ],
+)
+
 platform(
     name = "android_arm64",
     constraint_values = [
@@ -254,10 +349,10 @@ platform(
 )
 
 platform(
-    name = "android_x86_64",
+    name = "android_i386",
     constraint_values = [
         "@platforms//os:android",
-        "@platforms//cpu:x86_64",
+        "@platforms//cpu:i386",
     ],
 )
 
@@ -266,5 +361,13 @@ platform(
     constraint_values = [
         "@platforms//os:android",
         "@platforms//cpu:riscv64",
+    ],
+)
+
+platform(
+    name = "android_x86_64",
+    constraint_values = [
+        "@platforms//os:android",
+        "@platforms//cpu:x86_64",
     ],
 )
