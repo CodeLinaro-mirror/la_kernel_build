@@ -113,7 +113,11 @@ def _kernel_filegroup_impl(ctx):
 
     ext_mod_env_and_outputs_info = KernelEnvAndOutputsInfo(
         get_setup_script = _ext_mod_env_and_outputs_info_get_setup_script,
-        inputs = depset([modules_prepare_out_dir_tar_gz]),
+        inputs = depset([
+            modules_prepare_out_dir_tar_gz,
+        ], transitive = [
+            module_srcs.module_scripts,
+        ]),
         tools = depset(),
         data = struct(modules_prepare_out_dir_tar_gz = modules_prepare_out_dir_tar_gz),
     )
@@ -125,7 +129,6 @@ def _kernel_filegroup_impl(ctx):
         modules_install_env_and_outputs_info = ext_mod_env_and_outputs_info,
         # TODO(b/211515836): module_hdrs / module_scripts might also be downloaded
         module_hdrs = module_srcs.module_hdrs,
-        module_scripts = module_srcs.module_scripts,
         collect_unstripped_modules = ctx.attr.collect_unstripped_modules,
     )
 
@@ -315,6 +318,7 @@ default, which in turn sets `collect_unstripped_modules` to `True` by default.
         "module_outs_file": attr.label(
             allow_single_file = True,
             doc = """A file containing `module_outs` of the original [`kernel_build`](#kernel_build) target.""",
+            mandatory = True,
         ),
         "images": attr.label(
             allow_files = True,
@@ -323,7 +327,9 @@ default, which in turn sets `collect_unstripped_modules` to `True` by default.
         "protected_modules_list": attr.label(allow_files = True),
         "gki_artifacts": attr.label(
             allow_files = True,
-            doc = """A list of files that were built from the [`gki_artifacts`](#gki_artifacts) target.""",
+            doc = """A list of files that were built from the [`gki_artifacts`](#gki_artifacts) target.
+            The `gki-info.txt` file should be part of that list.""",
+            mandatory = True,
         ),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
         "_cache_dir_config_tags": attr.label(

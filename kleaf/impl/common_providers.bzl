@@ -162,8 +162,6 @@ KernelBuildExtModuleInfo = provider(
         "modules_staging_archive": "Archive containing staging kernel modules. " +
                                    "Does not contain the lib/modules/* suffix.",
         "module_hdrs": "A [depset](https://bazel.build/extending/depsets) containing headers for this `kernel_build` for building external modules",
-        "module_scripts": "A [depset](https://bazel.build/extending/depsets) containing scripts for this `kernel_build` for building external modules",
-        "module_kconfig": "A [depset](https://bazel.build/extending/depsets) containing `Kconfig` for this `kernel_build` for configuring external modules",
         "config_env_and_outputs_info": "`KernelEnvAndOutputsInfo` for configuring external modules.",
         "modules_env_and_minimal_outputs_info": "`KernelEnvAndOutputsInfo` for building external modules, including minimal needed `kernel_build` outputs.",
         "modules_env_and_all_outputs_info": "`KernelEnvAndOutputsInfo` for building external modules, including all `kernel_build` outputs.",
@@ -366,5 +364,12 @@ ImagesInfo = provider(
             for `kernel_images`,
             and values are [depsets](https://bazel.build/extending/depsets).
         """,
+    },
+)
+
+KernelConfigArchiveInfo = provider(
+    doc = "For `kernel_config` to provide `$OUT_DIR` archive",
+    fields = {
+        "outdir_tar_gz": "`$OUT_DIR` archive",
     },
 )

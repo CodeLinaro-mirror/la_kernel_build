@@ -15,14 +15,14 @@
 """Tests for `ddk_module`."""
 
 load("@bazel_skylib//lib:sets.bzl", "sets")
-load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("//build/kernel/kleaf/impl:common_providers.bzl", "ModuleSymversInfo")
 load("//build/kernel/kleaf/impl:ddk/ddk_headers.bzl", "ddk_headers")
 load("//build/kernel/kleaf/impl:ddk/ddk_module.bzl", "ddk_module")
-load("//build/kernel/kleaf/impl:kernel_module.bzl", "kernel_module")
 load("//build/kernel/kleaf/impl:kernel_build.bzl", "kernel_build")
+load("//build/kernel/kleaf/impl:kernel_module.bzl", "kernel_module")
 load("//build/kernel/kleaf/tests:failure_test.bzl", "failure_test")
 load("//build/kernel/kleaf/tests/utils:contain_lines_test.bzl", "contain_lines_test")
 load(":ddk_headers_test.bzl", "check_ddk_headers_info")
@@ -141,6 +141,7 @@ def _conditional_srcs_test(
         name = name + "_kbuild",
         filename = "Kbuild",
         target = name + "_module_makefiles",
+        tags = ["manual"],
     )
 
     write_file(
@@ -166,6 +167,7 @@ def ddk_module_test_suite(name):
 
     Args:
         name: name of the test suite."""
+
     kernel_build(
         name = name + "_kernel_build",
         build_config = "build.config.fake",

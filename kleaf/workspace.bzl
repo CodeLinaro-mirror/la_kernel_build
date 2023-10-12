@@ -24,10 +24,11 @@ load(
 )
 load("//build/kernel/kleaf:download_repo.bzl", "download_artifacts_repo")
 load("//build/kernel/kleaf:key_value_repo.bzl", "key_value_repo")
+load("//build/kernel/kleaf/impl:kleaf_host_tools_repo.bzl", "kleaf_host_tools_repo")
 load("//prebuilts/clang/host/linux-x86/kleaf:register.bzl", "register_clang_toolchains")
 
 # buildifier: disable=unnamed-macro
-def define_kleaf_workspace(common_kernel_package = None, include_remote_java_tools_repo = False):
+def define_kleaf_workspace(common_kernel_package = None, include_remote_java_tools_repo = False, artifact_url_fmt = None):
     """Common macro for defining repositories in a Kleaf workspace.
 
     **This macro must only be called from `WORKSPACE` or `WORKSPACE.bazel`
@@ -48,6 +49,11 @@ def define_kleaf_workspace(common_kernel_package = None, include_remote_java_too
         repositories: remote_java_tools and remote_java_tools_linux.
 
         These respositories should exist under `//prebuilts/bazel/`
+      artifact_url_fmt: API endpoint for Android CI artifacts.
+        The format may include anchors for the following properties:
+          * {build_number}
+          * {target}
+          * {filename}
     """
     if common_kernel_package == None:
         common_kernel_package = "@//common"
@@ -68,6 +74,21 @@ WARNING: define_kleaf_workspace() should be called with common_kernel_package={}
         io_bazel_stardoc = True,
     )
 
+    # Superset of all tools we need from host.
+    # For the subset of host tools we typically use for a kernel build,
+    # see //build/kernel:hermetic-tools.
+    kleaf_host_tools_repo(
+        name = "kleaf_host_tools",
+        host_tools = [
+            "bash",
+            "perl",
+            "rsync",
+            "sh",
+            # For BTRFS (b/292212788)
+            "find",
+        ],
+    )
+
     # The prebuilt NDK does not support Bazel.
     # https://docs.bazel.build/versions/main/external.html#non-bazel-projects
     native.new_local_repository(
@@ -84,27 +105,28 @@ WARNING: define_kleaf_workspace() should be called with common_kernel_package={}
         },
     )
 
-    # TODO: Make this architecture agnostic.
-    gki_prebuilts_files = {out: None for out in CI_TARGET_MAPPING["kernel_aarch64"]["outs"]}
-    gki_prebuilts_optional_files = {CI_TARGET_MAPPING["kernel_aarch64"]["protected_modules"]: None}
-    for config in GKI_DOWNLOAD_CONFIGS:
-        if config.get("mandatory", True):
-            files_dict = gki_prebuilts_files
-        else:
-            files_dict = gki_prebuilts_optional_files
+    for target, mapping in CI_TARGET_MAPPING.items():
+        gki_prebuilts_files = {out: None for out in mapping["outs"]}
+        gki_prebuilts_optional_files = {mapping["protected_modules"]: None}
+        for config in GKI_DOWNLOAD_CONFIGS:
+            if config.get("mandatory", True):
+                files_dict = gki_prebuilts_files
+            else:
+                files_dict = gki_prebuilts_optional_files
 
-        files_dict.update({out: None for out in config.get("outs", [])})
+            files_dict.update({out: None for out in config.get("outs", [])})
 
-        for out, remote_filename_fmt in config.get("outs_mapping", {}).items():
-            file_metadata = {"remote_filename_fmt": remote_filename_fmt}
-            files_dict.update({out: file_metadata})
+            for out, remote_filename_fmt in config.get("outs_mapping", {}).items():
+                file_metadata = {"remote_filename_fmt": remote_filename_fmt}
+                files_dict.update({out: file_metadata})
 
-    download_artifacts_repo(
-        name = "gki_prebuilts",
-        files = gki_prebuilts_files,
-        optional_files = gki_prebuilts_optional_files,
-        target = "kernel_aarch64",
-    )
+        download_artifacts_repo(
+            name = mapping["repo_name"],
+            files = gki_prebuilts_files,
+            optional_files = gki_prebuilts_optional_files,
+            target = target,
+            artifact_url_fmt = artifact_url_fmt,
+        )
 
     # TODO(b/200202912): Re-route this when rules_python is pulled into AOSP.
     native.local_repository(
@@ -146,12 +168,6 @@ WARNING: define_kleaf_workspace() should be called with common_kernel_package={}
     native.local_repository(
         name = "remote_coverage_tools",
         path = "build/bazel_common_rules/rules/coverage/remote_coverage_tools",
-    )
-
-    # Stub out @rules_java required for stardoc.
-    native.local_repository(
-        name = "rules_java",
-        path = "build/bazel_common_rules/rules/java/rules_java",
     )
 
     # Use checked-in JDK from prebuilts as local_jdk

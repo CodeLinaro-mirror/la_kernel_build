@@ -19,6 +19,11 @@ load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "bool_setting")
 load(":kernel_platform_toolchain.bzl", "kernel_platform_toolchain")
 load(":kernel_toolchains.bzl", "kernel_toolchains")
+load(
+    ":python.bzl",
+    "python_interpreter_file",
+    "python_runtime_files",
+)
 
 bzl_library(
     name = "impl",
@@ -39,6 +44,7 @@ bzl_library(
         "android_filegroup.bzl",
         "btf.bzl",
         "cache_dir.bzl",
+        "checkpatch.bzl",
         "common_providers.bzl",
         "compile_commands_utils.bzl",
         "config_utils.bzl",
@@ -77,15 +83,18 @@ bzl_library(
         "kernel_platform_toolchain.bzl",
         "kernel_sbom.bzl",
         "kernel_toolchains.bzl",
+        "kernel_toolchains_utils.bzl",
         "kernel_uapi_headers.bzl",
         "kernel_uapi_headers_cc_library.bzl",
         "kernel_unstripped_modules_archive.bzl",
         "kgdb.bzl",
+        "kleaf_host_tools_repo.bzl",
         "kmi_symbol_list.bzl",
         "merge_kzip.bzl",
         "merged_kernel_uapi_headers.bzl",
         "modules_prepare.bzl",
         "out_headers_allowlist_archive.bzl",
+        "python.bzl",
         "raw_kmi_symbol_list.bzl",
         "scripts_config_arg_builder.bzl",
         "srcs_aspect.bzl",
@@ -194,31 +203,82 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
+# The --lto flag is set to either default or none.
 selects.config_setting_group(
-    name = "lto_is_set_to_default_and_kasan_is_true",
-    match_all = [
+    name = "lto_is_set_to_default_or_none",
+    match_any = [
         ":lto_is_set_to_default",
-        "//build/kernel/kleaf:kasan_is_true",
+        ":lto_is_set_to_none",
     ],
     # All kernel_* from different packages can see this
     visibility = ["//visibility:public"],
 )
 
+# LTO should be none due to other flags. One of the following:
+# * --debug
+# * --kasan
+# * --kasan_sw_tags
+# * --kcsan
 selects.config_setting_group(
-    name = "lto_is_set_to_default_and_kcsan_is_true",
+    name = "lto_should_be_none",
+    match_any = [
+        ":debug_is_set_to_true",
+        ":kasan_generic_is_set_to_true",
+        ":kasan_sw_tags_is_set_to_true",
+        ":kcsan_is_set_to_true",
+    ],
+)
+
+# --lto=default, but it should be none due to other flags. One of the following:
+# * --lto=default --debug
+# * --lto=default --kasan
+# * --lto=default --kasan_sw_tags
+# * --lto=default --kcsan
+selects.config_setting_group(
+    name = "lto_is_set_to_default_but_lto_should_be_none",
     match_all = [
         ":lto_is_set_to_default",
-        "//build/kernel/kleaf:kcsan_is_true",
+        ":lto_should_be_none",
     ],
     # All kernel_* from different packages can see this
     visibility = ["//visibility:public"],
 )
 
+# --kasan
+config_setting(
+    name = "kasan_generic_is_set_to_true",
+    flag_values = {"//build/kernel/kleaf:kasan": "1"},
+    visibility = ["//visibility:public"],
+)
+
+# --kasan_sw_tags
+config_setting(
+    name = "kasan_sw_tags_is_set_to_true",
+    flag_values = {"//build/kernel/kleaf:kasan_sw_tags": "1"},
+    visibility = ["//visibility:public"],
+)
+
+# --kcsan
+config_setting(
+    name = "kcsan_is_set_to_true",
+    flag_values = {"//build/kernel/kleaf:kcsan": "1"},
+    visibility = ["//visibility:public"],
+)
+
+# --debug
+config_setting(
+    name = "debug_is_set_to_true",
+    flag_values = {"//build/kernel/kleaf:debug": "1"},
+    # All kernel_* from different packages can see this
+    visibility = ["//visibility:public"],
+)
+
+# Default is true.
 # If true, //build/kernel:hermetic-tools and other hermetic_tools
 # targets no longer emits HermeticToolsInfo.
 bool_flag(
     name = "incompatible_disable_hermetic_tools_info",
-    build_setting_default = False,
+    build_setting_default = True,
     visibility = ["//build/kernel:__pkg__"],
 )
 
@@ -283,11 +343,35 @@ py_test(
     name = "get_kmi_string_test",
     timeout = "short",
     srcs = ["get_kmi_string_test.py"],
+    imports = ["."],
     main = "get_kmi_string_test.py",
     deps = [
         ":get_kmi_string",
         "@io_abseil_py//absl/testing:absltest",
     ],
+)
+
+# Test that visibility() is set.
+py_test(
+    name = "visibility_test",
+    timeout = "short",
+    srcs = ["visibility_test.py"],
+    data = glob(["**/*.bzl"]),
+    deps = [
+        "@io_abseil_py//absl/testing:absltest",
+    ],
+)
+
+sh_binary(
+    name = "checkpatch",
+    srcs = [
+        "checkpatch.sh",
+    ],
+    data = [
+        "//build/kernel/static_analysis:checkpatch_ignorelist",
+    ],
+    # All checkpatch rules from any package can see this
+    visibility = ["//visibility:public"],
 )
 
 kernel_platform_toolchain(
@@ -357,4 +441,14 @@ platform(
         "@platforms//os:android",
         "@platforms//cpu:x86_64",
     ],
+)
+
+python_interpreter_file(
+    name = "python_interpreter_file",
+    visibility = ["//build/kernel:__pkg__"],
+)
+
+python_runtime_files(
+    name = "python_runtime_files",
+    visibility = ["//build/kernel:__pkg__"],
 )

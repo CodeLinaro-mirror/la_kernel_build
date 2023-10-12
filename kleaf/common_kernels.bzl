@@ -18,6 +18,26 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
+load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
+load("//build/kernel/kleaf/artifact_tests:device_modules_test.bzl", "device_modules_test")
+load("//build/kernel/kleaf/artifact_tests:kernel_test.bzl", "initramfs_modules_options_test")
+load(
+    "//build/kernel/kleaf/impl:constants.bzl",
+    "MODULE_OUTS_FILE_OUTPUT_GROUP",
+    "MODULE_OUTS_FILE_SUFFIX",
+    "TOOLCHAIN_VERSION_FILENAME",
+)
+load("//build/kernel/kleaf/impl:gki_artifacts.bzl", "gki_artifacts", "gki_artifacts_prebuilts")
+load("//build/kernel/kleaf/impl:kernel_sbom.bzl", "kernel_sbom")
+load("//build/kernel/kleaf/impl:merge_kzip.bzl", "merge_kzip")
+load("//build/kernel/kleaf/impl:out_headers_allowlist_archive.bzl", "out_headers_allowlist_archive")
+load(
+    ":constants.bzl",
+    "CI_TARGET_MAPPING",
+    "DEFAULT_GKI_OUTS",
+    "GKI_DOWNLOAD_CONFIGS",
+    "X86_64_OUTS",
+)
 load(
     ":kernel.bzl",
     "kernel_abi",
@@ -31,26 +51,6 @@ load(
     "kernel_modules_install",
     "kernel_unstripped_modules_archive",
     "merged_kernel_uapi_headers",
-)
-load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
-load("//build/kernel/kleaf/artifact_tests:kernel_test.bzl", "initramfs_modules_options_test")
-load("//build/kernel/kleaf/artifact_tests:device_modules_test.bzl", "device_modules_test")
-load("//build/kernel/kleaf/impl:gki_artifacts.bzl", "gki_artifacts", "gki_artifacts_prebuilts")
-load("//build/kernel/kleaf/impl:kernel_sbom.bzl", "kernel_sbom")
-load("//build/kernel/kleaf/impl:merge_kzip.bzl", "merge_kzip")
-load("//build/kernel/kleaf/impl:out_headers_allowlist_archive.bzl", "out_headers_allowlist_archive")
-load(
-    "//build/kernel/kleaf/impl:constants.bzl",
-    "MODULE_OUTS_FILE_OUTPUT_GROUP",
-    "MODULE_OUTS_FILE_SUFFIX",
-    "TOOLCHAIN_VERSION_FILENAME",
-)
-load(
-    ":constants.bzl",
-    "CI_TARGET_MAPPING",
-    "DEFAULT_GKI_OUTS",
-    "GKI_DOWNLOAD_CONFIGS",
-    "X86_64_OUTS",
 )
 load(":print_debug.bzl", "print_debug")
 
@@ -97,6 +97,7 @@ def _default_target_configs():
         "arch": "arm64",
         "build_config": "build.config.gki.aarch64",
         "outs": DEFAULT_GKI_OUTS,
+        "gki_system_dlkm_modules": "android/gki_system_dlkm_modules_arm64",
     }
 
     gki_boot_img_sizes = {
@@ -127,6 +128,7 @@ def _default_target_configs():
         # Assume BUILD_GKI_ARTIFACTS=1
         "build_gki_artifacts": True,
         "gki_boot_img_sizes": gki_boot_img_sizes,
+        "gki_system_dlkm_modules": "android/gki_system_dlkm_modules_riscv64",
     }
 
     # Common configs for x86_64 and x86_64_debug
@@ -140,6 +142,7 @@ def _default_target_configs():
             # Assume BUILD_GKI_BOOT_IMG_SIZE is the following
             "": "67108864",
         },
+        "gki_system_dlkm_modules": "android/gki_system_dlkm_modules_x86_64",
     }
 
     return {
@@ -167,6 +170,12 @@ def _default_target_configs():
             # Assume BUILD_GKI_ARTIFACTS=1
             "build_gki_artifacts": True,
             "gki_boot_img_sizes": gki_boot_img_sizes,
+            "deprecation": """
+    Consider building {main_target} with:
+        * --notrim to disable trimming, or
+        * --debug to enable additional debug options.""".format(
+                main_target = native.package_relative_label("kernel_aarch64"),
+            ),
         }),
         "kernel_riscv64": dicts.add(riscv64_common, {
             # Assume TRIM_NONLISTED_KMI="" in build.config.gki.riscv64
@@ -176,6 +185,12 @@ def _default_target_configs():
         "kernel_x86_64_debug": dicts.add(x86_64_common, {
             "trim_nonlisted_kmi": False,
             "kmi_symbol_list_strict_mode": False,
+            "deprecation": """
+    Consider building {main_target} with:
+        * --notrim to disable trimming, or
+        * --debug to enable additional debug options.""".format(
+                main_target = native.package_relative_label("kernel_x86_64"),
+            ),
         }),
     }
 
@@ -255,7 +270,7 @@ def define_common_kernels(
     **Prebuilts**
 
     You may set the argument `--use_prebuilt_gki` to a GKI prebuilt build number
-    on [ci.android.com](http://ci.android.com). The format is:
+    on [ci.android.com](http://ci.android.com) or your custom CI host. The format is:
 
     ```
     bazel <command> --use_prebuilt_gki=<build_number> <targets>
@@ -273,7 +288,7 @@ def define_common_kernels(
 
     `<name>_download_or_build` targets builds `<name>` from source if the `use_prebuilt_gki`
     is not set, and downloads artifacts of the build number from
-    [ci.android.com](http://ci.android.com) if it is set. The build number is spe
+    [ci.android.com](http://ci.android.com) (or your custom CI host) if it is set.
 
     - `kernel_aarch64_download_or_build`
       - `kernel_aarch64_additional_artifacts_download_or_build`
@@ -604,12 +619,14 @@ def _define_common_kernel(
         module_implicit_outs = None,
         protected_exports_list = None,
         protected_modules_list = None,
+        gki_system_dlkm_modules = None,
         make_goals = None,
         abi_definition_stg = None,
         kmi_enforced = None,
         build_gki_artifacts = None,
         gki_boot_img_sizes = None,
-        page_size = None):
+        page_size = None,
+        deprecation = None):
     json_target_config = dict(
         name = name,
         outs = outs,
@@ -625,12 +642,14 @@ def _define_common_kernel(
         module_implicit_outs = module_implicit_outs,
         protected_exports_list = protected_exports_list,
         protected_modules_list = protected_modules_list,
+        gki_system_dlkm_modules = gki_system_dlkm_modules,
         make_goals = make_goals,
         abi_definition_stg = abi_definition_stg,
         kmi_enforced = kmi_enforced,
         build_gki_artifacts = build_gki_artifacts,
         gki_boot_img_sizes = gki_boot_img_sizes,
         page_size = page_size,
+        deprecation = deprecation,
     )
     json_target_config = json.encode_indent(json_target_config, indent = "    ")
     json_target_config = json_target_config.replace("null", "None")
@@ -701,6 +720,8 @@ def _define_common_kernel(
         protected_modules_list = protected_modules_list,
         make_goals = make_goals,
         page_size = page_size,
+        deprecation = deprecation,
+        pack_module_scripts = True,
     )
 
     kernel_abi(
@@ -713,6 +734,7 @@ def _define_common_kernel(
         abi_definition_stg = abi_definition_stg,
         kmi_enforced = kmi_enforced,
         kmi_symbol_list_add_only = kmi_symbol_list_add_only,
+        deprecation = deprecation,
     )
 
     if enable_interceptor:
@@ -757,8 +779,9 @@ def _define_common_kernel(
         kernel_modules_install = name + "_modules_install",
         # Sync with GKI_DOWNLOAD_CONFIGS, "images"
         build_system_dlkm = True,
+        system_dlkm_fs_types = ["erofs", "ext4"],
         # Keep in sync with build.config.gki* MODULES_LIST
-        modules_list = "android/gki_system_dlkm_modules",
+        modules_list = gki_system_dlkm_modules,
     )
 
     if build_gki_artifacts:
@@ -781,7 +804,7 @@ def _define_common_kernel(
         output_group = TOOLCHAIN_VERSION_FILENAME,
     )
 
-    # module_staging_archive from <name>
+    # modules_staging_archive from <name>
     native.filegroup(
         name = name + "_modules_staging_archive",
         srcs = [name],

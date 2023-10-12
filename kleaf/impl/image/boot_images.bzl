@@ -155,6 +155,17 @@ def _boot_images_impl(ctx):
                BUILD_INITRAMFS=
                INITRAMFS_STAGING_DIR=
         """
+    if ctx.attr.unpack_ramdisk:
+        boot_flag_cmd += """
+            if [[ -n ${SKIP_UNPACKING_RAMDISK} ]]; then
+                echo "WARNING: Using SKIP_UNPACKING_RAMDISK in build config is deprecated." >&2
+                echo "  Use unpack_ramdisk in kernel_image instead." >&2
+            fi
+        """
+    else:
+        boot_flag_cmd += """
+            SKIP_UNPACKING_RAMDISK=1
+        """
     if ctx.attr.avb_sign_boot_img:
         if not ctx.attr.avb_boot_partition_size or \
            not ctx.attr.avb_boot_key or not ctx.attr.avb_boot_algorithm or \
@@ -237,6 +248,15 @@ Execute `build_boot_images` in `build_utils.sh`.""",
 """, values = ["vendor_boot", "vendor_kernel_boot"]),
         "vendor_ramdisk_binaries": attr.label_list(allow_files = True),
         "gki_ramdisk_prebuilt_binary": attr.label(allow_single_file = True),
+        "unpack_ramdisk": attr.bool(
+            doc = """ When false it skips unpacking the vendor ramdisk and copy it as
+            is, without modifications, into the boot image. Also skip the mkbootfs step.
+
+            It defaults to True. (Allowing falling back to the value in build config.
+            This will change in the future, after giving notice about its deprecation.)
+            """,
+            default = True,
+        ),
         "avb_sign_boot_img": attr.bool(
             doc = """ If set to `True` signs the boot image using the avb_boot_key.
             The kernel prebuilt tool `avbtool` is used for signing.""",

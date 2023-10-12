@@ -25,7 +25,6 @@ load(
     "KernelEnvAttrInfo",
     "KernelEnvInfo",
     "KernelEnvMakeGoalsInfo",
-    "KernelEnvToolchainsInfo",
     "KernelToolchainInfo",
 )
 load(":compile_commands_utils.bzl", "compile_commands_utils")
@@ -33,27 +32,13 @@ load(":debug.bzl", "debug")
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
 load(":kernel_config_settings.bzl", "kernel_config_settings")
 load(":kernel_dtstree.bzl", "DtstreeInfo")
+load(":kernel_toolchains_utils.bzl", "kernel_toolchains_utils")
 load(":kgdb.bzl", "kgdb")
 load(":stamp.bzl", "stamp")
 load(":status.bzl", "status")
 load(":utils.bzl", "utils")
 
 visibility("//build/kernel/kleaf/...")
-
-def _toolchains_transition_impl(_settings, attr):
-    return {
-        "//command_line_option:platforms": str(attr.target_platform),
-        "//command_line_option:host_platform": str(attr.exec_platform),
-    }
-
-_toolchains_transition = transition(
-    implementation = _toolchains_transition_impl,
-    inputs = [],
-    outputs = [
-        "//command_line_option:platforms",
-        "//command_line_option:host_platform",
-    ],
-)
 
 def _get_kbuild_symtypes(ctx):
     if ctx.attr.kbuild_symtypes == "auto":
@@ -66,14 +51,9 @@ def _get_kbuild_symtypes(ctx):
     # Should not reach
     fail("{}: kernel_env has unknown value for kbuild_symtypes: {}".format(ctx.attr.label, ctx.attr.kbuild_symtypes))
 
-def _get_toolchains(ctx):
-    return ctx.attr._toolchains[0][KernelEnvToolchainsInfo]
-
 def _get_check_arch_cmd(ctx):
-    toolchains = _get_toolchains(ctx)
-    expected_arch = toolchains.target_arch
-    if expected_arch == "riscv64":
-        expected_arch = "riscv"
+    toolchains = kernel_toolchains_utils.get(ctx)
+    declared_arch = toolchains.target_arch
 
     level = "WARNING"
     exit_cmd = ""
@@ -82,14 +62,14 @@ def _get_check_arch_cmd(ctx):
         exit_cmd = "exit 1"
 
     return """
-        if [[ "$ARCH" != "{expected_arch}" ]]; then
-            echo '{level}: {label} must specify arch = '"${{ARCH/riscv/riscv64}}"'.' >&2
+        if [[ "${{ARCH/riscv/riscv64}}" != "{declared_arch}" ]]; then
+            echo '{level}: {label} must specify arch = '"${{ARCH/riscv/riscv64}}"', but is {declared_arch}.' >&2
             {exit_cmd}
         fi
     """.format(
         level = level,
         label = ctx.label,
-        expected_arch = expected_arch,
+        declared_arch = declared_arch,
         exit_cmd = exit_cmd,
     )
 
@@ -169,7 +149,7 @@ def _kernel_env_impl(ctx):
     ]
     transitive_tools = [hermetic_tools.deps]
 
-    toolchains = _get_toolchains(ctx)
+    toolchains = kernel_toolchains_utils.get(ctx)
 
     command = hermetic_tools.setup
     if ctx.attr._debug_annotate_scripts[BuildSettingInfo].value:
@@ -339,7 +319,7 @@ def _kernel_env_impl(ctx):
         setup_inputs.append(kconfig_ext)
     setup_inputs += dtstree_srcs
 
-    run_env = _get_run_env(ctx, srcs)
+    run_env = _get_run_env(ctx, srcs, toolchains)
 
     env_info = KernelEnvInfo(
         inputs = depset(setup_inputs),
@@ -395,7 +375,7 @@ def _get_make_verbosity_command(ctx):
 
     return command
 
-def _get_run_env(ctx, srcs):
+def _get_run_env(ctx, srcs, toolchains):
     """Returns setup script for execution phase.
 
     Unlike the setup script for regular builds, this doesn't modify variables from build.config for
@@ -406,7 +386,7 @@ def _get_run_env(ctx, srcs):
     - It doesn't set `SOURCE_DATE_EPOCH` or scmversion properly
     """
 
-    toolchains = _get_toolchains(ctx)
+    toolchains = kernel_toolchains_utils.get(ctx)
     hermetic_tools = hermetic_toolchain.get(ctx)
 
     setup = hermetic_tools.run_setup
@@ -422,10 +402,16 @@ def _get_run_env(ctx, srcs):
           export SOURCE_DATE_EPOCH=0
 
           source {setup_env}
+        # Variables from resolved toolchain
+          {toolchains_setup_env_var_cmd}
+        # setup LD_LIBRARY_PATH for prebuilts
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${{ROOT_DIR}}/{linux_x86_libs_path}
     """.format(
         build_utils_sh = ctx.file._build_utils_sh.short_path,
         build_config = ctx.file.build_config.short_path,
         setup_env = ctx.file.setup_env.short_path,
+        toolchains_setup_env_var_cmd = toolchains.setup_env_var_cmd,
+        linux_x86_libs_path = ctx.files._linux_x86_libs[0].dirname,
     )
     setup += hermetic_tools.run_additional_setup
     tools = [
@@ -460,6 +446,7 @@ def _get_rust_tools(rust_toolchain_version):
 def _kernel_env_additional_attrs():
     return dicts.add(
         kernel_config_settings.of_kernel_env(),
+        kernel_toolchains_utils.attrs(),
     )
 
 kernel_env = rule(
@@ -524,31 +511,11 @@ kernel_env = rule(
             values = ["true", "false", "auto"],
         ),
         "make_goals": attr.string_list(doc = "`MAKE_GOALS`"),
-        "target_platform": attr.label(
-            mandatory = True,
-            doc = """Target platform that describes characteristics of the target device.
-
-                See https://bazel.build/extending/platforms.
-            """,
-        ),
-        "exec_platform": attr.label(
-            mandatory = True,
-            doc = """Execution platform, where the build is executed.
-
-                See https://bazel.build/extending/platforms.
-            """,
-        ),
         "_rust_tools": attr.label_list(default = _get_rust_tools, allow_files = True),
         "_build_utils_sh": attr.label(
             allow_single_file = True,
             default = Label("//build/kernel:build_utils"),
             cfg = "exec",
-        ),
-        "_toolchains": attr.label(
-            doc = "Provides all toolchains that the kernel build needs.",
-            default = "//build/kernel/kleaf/impl:kernel_toolchains",
-            providers = [KernelEnvToolchainsInfo],
-            cfg = _toolchains_transition,
         ),
         "_debug_annotate_scripts": attr.label(
             default = "//build/kernel/kleaf:debug_annotate_scripts",
@@ -570,9 +537,6 @@ kernel_env = rule(
             default = "//build/kernel/kleaf/impl:write_depset",
             executable = True,
             cfg = "exec",
-        ),
-        "_allowlist_function_transition": attr.label(
-            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
         ),
     } | _kernel_env_additional_attrs(),
     toolchains = [hermetic_toolchain.type],

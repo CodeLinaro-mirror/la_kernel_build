@@ -54,11 +54,12 @@ load(
     "MODULES_STAGING_ARCHIVE",
     "MODULE_OUTS_FILE_OUTPUT_GROUP",
     "MODULE_OUTS_FILE_SUFFIX",
+    "MODULE_SCRIPTS_ARCHIVE_SUFFIX",
     "TOOLCHAIN_VERSION_FILENAME",
 )
 load(":debug.bzl", "debug")
-load(":file_selector.bzl", "file_selector")
 load(":file.bzl", "file")
+load(":file_selector.bzl", "file_selector")
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
 load(":kernel_config.bzl", "kernel_config")
 load(":kernel_config_settings.bzl", "kernel_config_settings")
@@ -114,6 +115,7 @@ def kernel_build(
         modules_prepare_force_generate_headers = None,
         defconfig_fragments = None,
         page_size = None,
+        pack_module_scripts = None,
         **kwargs):
     """Defines a kernel build target with all dependent targets.
 
@@ -407,6 +409,13 @@ def kernel_build(
           `"default"`, the defconfig is left as-is.
 
           16k / 64k page size is only supported on `arch = "arm64"`.
+        pack_module_scripts: If `True`, create `{name}_module_scripts.tar.gz` as
+          part of the default output of this target.
+
+          The archive contains necessary scripts to build external modules.
+
+          **IMPLEMENTATION DETAIL**: The list of scripts is defined by
+          `kernel_utils.filter_module_srcs().module_scripts`.
         **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
@@ -453,7 +462,7 @@ def kernel_build(
         Label("//build/kernel/kleaf:lto_is_full"): "full",
         Label("//build/kernel/kleaf:lto_is_fast"): "fast",
         # TODO(b/229662633): Allow kernel_build() macro to set this value.
-        "//conditions:default": "default",
+        Label("//build/kernel/kleaf:lto_is_default"): "default",
     })
 
     defconfig_fragments = _get_defconfig_fragments(
@@ -587,6 +596,7 @@ def kernel_build(
         src_protected_modules_list = protected_modules_list,
         src_kmi_symbol_list = kmi_symbol_list,
         trim_nonlisted_kmi = trim_nonlisted_kmi,
+        pack_module_scripts = pack_module_scripts,
         **kwargs
     )
 
@@ -676,6 +686,36 @@ def kernel_build(
         **kwargs
     )
 
+# buildifier: disable=print
+def _skip_build_checks(ctx, what):
+    # Skip for --k*san targets as they are usually debug targets.
+    if ctx.attr._kasan[BuildSettingInfo].value:
+        print("\nWARNING: {this_label}: {what} was\
+              IGNORED because --kasan is set!".format(this_label = ctx.label, what = what))
+        return True
+    if ctx.attr._kasan_sw_tags[BuildSettingInfo].value:
+        print("\nWARNING: {this_label}: {what} was\
+              IGNORED because --kasan_sw_tags is set!".format(this_label = ctx.label, what = what))
+        return True
+    if ctx.attr._kcsan[BuildSettingInfo].value:
+        print("\nWARNING: {this_label}: {what} was\
+              IGNORED because --kcsan is set!".format(this_label = ctx.label, what = what))
+        return True
+
+    # Skip for --kgdb as it is usually used for debug targets.
+    if ctx.attr._kgdb[BuildSettingInfo].value:
+        print("\nWARNING: {this_label}: {what} was\
+              IGNORED because --kgdb is set!".format(this_label = ctx.label, what = what))
+        return True
+
+    # Skip when --debug is specified.
+    if ctx.attr._debug[BuildSettingInfo].value:
+        print("\nWARNING: {this_label}: {what} was\
+              IGNORED because --debug is set!".format(this_label = ctx.label, what = what))
+        return True
+
+    return False
+
 def _get_defconfig_fragments(
         kernel_build_name,
         kernel_build_defconfig_fragments,
@@ -686,6 +726,10 @@ def _get_defconfig_fragments(
     # kernel_build_defconfig_fragments could be a list or a select() expression.
     additional_fragments = [
         Label("//build/kernel/kleaf:defconfig_fragment"),
+        Label("//build/kernel/kleaf/impl/defconfig:debug"),
+        Label("//build/kernel/kleaf/impl/defconfig:kasan_any_mode"),
+        Label("//build/kernel/kleaf/impl/defconfig:{}_kasan_sw_tags".format(kernel_build_arch)),
+        Label("//build/kernel/kleaf/impl/defconfig:kcsan"),
     ]
 
     btf_debug_info_target = kernel_build_name + "_defconfig_fragment_btf_debug_info"
@@ -1554,22 +1598,30 @@ def _env_and_outputs_info_get_setup_script(data, restore_out_dir_cmd):
 
     return script
 
-def _create_env_and_outputs_info(pre_info, restore_outputs_cmd_deps, restore_outputs_cmd):
+def _create_env_and_outputs_info(
+        pre_info,
+        restore_outputs_cmd_deps,
+        restore_outputs_cmd,
+        extra_inputs):
     """Creates an KernelEnvAndOutputsInfo.
 
     Args:
         pre_info: pre setup script and dependencies
         restore_outputs_cmd_deps: list of outputs to restore
         restore_outputs_cmd: command to restore these outputs
+        extra_inputs: a depset attached to `inputs` of returned object
 
     Returns:
         A KernelEnvAndOutputsInfo that runs pre_info, then restore outputs given the list of
         outputs and cmd."""
+
+    inputs_transitive = [pre_info.inputs, extra_inputs]
+
     return KernelEnvAndOutputsInfo(
         get_setup_script = _env_and_outputs_info_get_setup_script,
         inputs = depset(
             restore_outputs_cmd_deps,
-            transitive = [pre_info.inputs],
+            transitive = inputs_transitive,
         ),
         tools = pre_info.tools,
         data = struct(
@@ -1586,7 +1638,9 @@ def _create_infos(
         modules_staging_archive,
         toolchain_version_out,
         kmi_strict_mode_out,
-        kmi_symbol_list_violations_check_out):
+        kmi_symbol_list_violations_check_out,
+        module_scripts_archive,
+        module_srcs):
     """Creates and returns a list of provided infos that the `kernel_build` target should return.
 
     Args:
@@ -1598,6 +1652,8 @@ def _create_infos(
         toolchain_version_out: from `_kernel_build_dump_toolchain_version`
         kmi_strict_mode_out: from `_kmi_symbol_list_strict_mode`
         kmi_symbol_list_violations_check_out: from `_kmi_symbol_list_violations_check`
+        module_srcs: from `kernel_utils.filter_module_srcs`
+        module_scripts_archive: from `_create_module_scripts_archive`
     """
 
     base_kernel = base_kernel_utils.get_base_kernel(ctx)
@@ -1621,6 +1677,7 @@ def _create_infos(
         pre_info = ctx.attr.config[KernelEnvAndOutputsInfo],
         restore_outputs_cmd_deps = env_and_outputs_info_dependencies,
         restore_outputs_cmd = env_and_outputs_info_setup_restore_outputs,
+        extra_inputs = depset(),
     )
 
     orig_env_info = ctx.attr.config[KernelBuildOriginalEnvInfo]
@@ -1637,8 +1694,6 @@ def _create_infos(
     kernel_build_uname_info = KernelBuildUnameInfo(
         kernel_release = all_output_files["internal_outs"]["include/config/kernel.release"],
     )
-
-    module_srcs = kernel_utils.filter_module_srcs(ctx.files.srcs)
 
     ext_mod_env_and_outputs_info_deps = all_output_files["internal_outs"].values()
 
@@ -1667,6 +1722,7 @@ def _create_infos(
         pre_info = ctx.attr.modules_prepare[KernelEnvAndOutputsInfo],
         restore_outputs_cmd_deps = ext_mod_env_and_outputs_info_deps,
         restore_outputs_cmd = ext_mod_env_and_outputs_info_setup_restore_outputs,
+        extra_inputs = module_srcs.module_scripts,
     )
 
     # For kernel_module() that require all kernel_build outputs
@@ -1674,6 +1730,7 @@ def _create_infos(
         pre_info = ctx.attr.modules_prepare[KernelEnvAndOutputsInfo],
         restore_outputs_cmd_deps = env_and_outputs_info_dependencies,
         restore_outputs_cmd = env_and_outputs_info_setup_restore_outputs,
+        extra_inputs = module_srcs.module_scripts,
     )
 
     # For kernel_modules_install()
@@ -1681,14 +1738,24 @@ def _create_infos(
         pre_info = ctx.attr.modules_prepare[KernelEnvAndOutputsInfo],
         restore_outputs_cmd_deps = env_and_outputs_info_dependencies,
         restore_outputs_cmd = env_and_outputs_info_setup_restore_outputs,
+        extra_inputs = module_srcs.module_scripts,
+    )
+
+    # For ddk_config()
+    config_env_and_outputs_info = _create_env_and_outputs_info(
+        pre_info = ctx.attr.config[KernelEnvAndOutputsInfo],
+        restore_outputs_cmd_deps = [],
+        restore_outputs_cmd = "",
+        extra_inputs = depset(transitive = [
+            module_srcs.module_scripts,
+            module_srcs.module_kconfig,
+        ]),
     )
 
     kernel_build_module_info = KernelBuildExtModuleInfo(
         modules_staging_archive = modules_staging_archive,
         module_hdrs = module_srcs.module_hdrs,
-        module_scripts = module_srcs.module_scripts,
-        module_kconfig = module_srcs.module_kconfig,
-        config_env_and_outputs_info = ctx.attr.config[KernelEnvAndOutputsInfo],
+        config_env_and_outputs_info = config_env_and_outputs_info,
         modules_env_and_minimal_outputs_info = ext_mod_env_and_outputs_info,
         modules_env_and_all_outputs_info = ext_mod_env_and_all_outputs_info,
         modules_install_env_and_outputs_info = ext_modinst_env_and_outputs_info,
@@ -1764,6 +1831,8 @@ def _create_infos(
 
     default_info_files = all_output_files["outs"].values() + all_output_files["module_outs"].values()
     default_info_files.append(all_module_names_file)
+    if module_scripts_archive:
+        default_info_files.append(module_scripts_archive)
     if kmi_strict_mode_out:
         default_info_files.append(kmi_strict_mode_out)
     default_info_files.extend(main_action_ret.module_symvers_outputs)
@@ -1843,6 +1912,13 @@ def _kernel_build_impl(ctx):
 
     kmi_symbol_list_violations_check_out = _kmi_symbol_list_violations_check(ctx, modules_staging_archive)
 
+    module_srcs = kernel_utils.filter_module_srcs(ctx.files.srcs)
+
+    module_scripts_archive = _create_module_scripts_archive(
+        ctx = ctx,
+        module_srcs = module_srcs,
+    )
+
     infos = _create_infos(
         ctx = ctx,
         kbuild_mixed_tree_ret = kbuild_mixed_tree_ret,
@@ -1852,6 +1928,8 @@ def _kernel_build_impl(ctx):
         toolchain_version_out = toolchain_version_out,
         kmi_strict_mode_out = kmi_strict_mode_out,
         kmi_symbol_list_violations_check_out = kmi_symbol_list_violations_check_out,
+        module_scripts_archive = module_scripts_archive,
+        module_srcs = module_srcs,
     )
 
     return infos
@@ -1863,6 +1941,7 @@ def _kernel_build_additional_attrs():
         cache_dir.attrs(),
     )
 
+# Sync with kleaf/bazel.py
 _kernel_build = rule(
     implementation = _kernel_build_impl,
     doc = "Defines a kernel build target.",
@@ -1947,6 +2026,7 @@ _kernel_build = rule(
         "src_protected_exports_list": attr.label(allow_single_file = True),
         "src_protected_modules_list": attr.label(allow_single_file = True),
         "src_kmi_symbol_list": attr.label(allow_single_file = True),
+        "pack_module_scripts": attr.bool(default = False, doc = "Create `<name>_module_scripts.tar.gz`."),
     } | _kernel_build_additional_attrs(),
     toolchains = [hermetic_toolchain.type],
 )
@@ -2061,32 +2141,7 @@ def _kmi_symbol_list_strict_mode(ctx, all_output_files, all_module_names_file):
         ))
         return None
 
-    # Skip for the --kasan targets as they are not valid GKI release targets
-    if ctx.attr._kasan[BuildSettingInfo].value:
-        # buildifier: disable=print
-        print("\nWARNING: {this_label}: Attribute kmi_symbol_list_strict_mode\
-              IGNORED because --kasan is set!".format(this_label = ctx.label))
-        return None
-
-    # Skip for the --kasan_sw_tags targets as they are not valid GKI release targets
-    if ctx.attr._kasan_sw_tags[BuildSettingInfo].value:
-        # buildifier: disable=print
-        print("\nWARNING: {this_label}: Attribute kmi_symbol_list_strict_mode\
-              IGNORED because --kasan_sw_tags is set!".format(this_label = ctx.label))
-        return None
-
-    # Skip for the --kcsan targets as they are not valid GKI release targets
-    if ctx.attr._kcsan[BuildSettingInfo].value:
-        # buildifier: disable=print
-        print("\nWARNING: {this_label}: Attribute kmi_symbol_list_strict_mode\
-              IGNORED because --kcsan is set!".format(this_label = ctx.label))
-        return None
-
-    # Skip for the --kgdb targets as they are not valid GKI release targets
-    if ctx.attr._kgdb[BuildSettingInfo].value:
-        # buildifier: disable=print
-        print("\nWARNING: {this_label}: Attribute kmi_symbol_list_strict_mode\
-              IGNORED because --kgdb is set!".format(this_label = ctx.label))
+    if _skip_build_checks(ctx, what = "Attribute kmi_symbol_list_strict_mode"):
         return None
 
     if not ctx.attr.kmi_symbol_list_strict_mode:
@@ -2164,28 +2219,7 @@ def _kmi_symbol_list_violations_check(ctx, modules_staging_archive):
     if len(ctx.files.raw_kmi_symbol_list) > 1:
         fail("{}: raw_kmi_symbol_list must only provide at most one file".format(ctx.label))
 
-    # Skip for --kasan build as they are not valid GKI releasae configurations.
-    # Downstreams are expect to build kernel+modules+vendor modules locally
-    # and can disable the runtime symbol protection with CONFIG_SIG_PROTECT=n
-    # if required.
-    if ctx.attr._kasan[BuildSettingInfo].value:
-        return None
-
-    if ctx.attr._kasan_sw_tags[BuildSettingInfo].value:
-        return None
-
-    # Skip for --kcsan build as they are not valid GKI releasae configurations.
-    # Downstreams are expect to build kernel+modules+vendor modules locally
-    # and can disable the runtime symbol protection with CONFIG_SIG_PROTECT=n
-    # if required.
-    if ctx.attr._kcsan[BuildSettingInfo].value:
-        return None
-
-    # Skip for the --kgdb targets as they are not valid GKI release targets
-    if ctx.attr._kgdb[BuildSettingInfo].value:
-        # buildifier: disable=print
-        print("\nWARNING: {this_label}: Symbol list violations check \
-              IGNORED because --kgdb is set!".format(this_label = ctx.label))
+    if _skip_build_checks(ctx, what = "Symbol list violations check"):
         return None
 
     inputs = [
@@ -2261,7 +2295,7 @@ def _repack_modules_staging_archive(
         return modules_staging_archive_self
 
     modules_staging_archive = ctx.actions.declare_file(
-        "{}_module_staging_archive/{}".format(ctx.label.name, MODULES_STAGING_ARCHIVE),
+        "{}/{}".format(ctx.label.name, MODULES_STAGING_ARCHIVE),
     )
 
     # Re-package module_staging_dir to also include the one from base_kernel.
@@ -2289,7 +2323,7 @@ def _repack_modules_staging_archive(
         out_archive = modules_staging_archive.path,
         all_module_basenames_file = all_module_basenames_file.path,
     )
-    debug.print_scripts(ctx, cmd, what = "repackage_module_staging_archive")
+    debug.print_scripts(ctx, cmd, what = "repackage_modules_staging_archive")
     ctx.actions.run_shell(
         mnemonic = "KernelBuildModuleStagingArchive",
         inputs = [
@@ -2299,7 +2333,56 @@ def _repack_modules_staging_archive(
         ],
         outputs = [modules_staging_archive],
         tools = hermetic_tools.deps,
-        progress_message = "Repackaging module_staging_archive {}".format(_progress_message_suffix(ctx)),
+        progress_message = "Repackaging modules_staging_archive {}".format(_progress_message_suffix(ctx)),
         command = cmd,
     )
     return modules_staging_archive
+
+def _create_module_scripts_archive(
+        ctx,
+        module_srcs):
+    """Create `{name}_module_scripts.tar.gz`
+
+    Args:
+        ctx: ctx
+        module_srcs: from `kernel_utils.filter_module_srcs`
+    """
+    if not ctx.attr.pack_module_scripts:
+        return None
+
+    intermediates_dir = utils.intermediates_dir(ctx)
+    env_info = ctx.attr.config[KernelBuildOriginalEnvInfo].env_info
+    out = ctx.actions.declare_file("{name}/{name}{suffix}".format(
+        name = ctx.label.name,
+        suffix = MODULE_SCRIPTS_ARCHIVE_SUFFIX,
+    ))
+    cmd = env_info.setup + """
+        # Create archive of module_scripts below ${{KERNEL_DIR}}
+        mkdir -p {intermediates_dir}
+        for file in "$@"; do
+            if [[ "${{file}}" =~ ^"${{KERNEL_DIR}}"/ ]]; then
+                echo "${{file#"${{KERNEL_DIR}}"/}}"
+            fi
+        done > {intermediates_dir}/module_scripts_file_list.txt
+        tar cf {out} --dereference -T {intermediates_dir}/module_scripts_file_list.txt -C ${{KERNEL_DIR}}
+    """.format(
+        out = out.path,
+        intermediates_dir = intermediates_dir,
+    )
+
+    args = ctx.actions.args()
+    args.add_all(module_srcs.module_scripts)
+
+    ctx.actions.run_shell(
+        mnemonic = "KernelBulidModuleScriptsArchive",
+        inputs = depset(transitive = [
+            env_info.inputs,
+            module_srcs.module_scripts,
+        ]),
+        outputs = [out],
+        tools = env_info.tools,
+        command = cmd,
+        arguments = [args],
+        progress_message = "Archiving scripts for ext module {}".format(_progress_message_suffix(ctx)),
+    )
+    return out
