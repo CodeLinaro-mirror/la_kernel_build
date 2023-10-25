@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Instantiates a repository that downloads artifacts from a given download location."""
+"""Repository for kernel prebuilts."""
+
+load(
+    ":kernel_prebuilt_utils.bzl",
+    "CI_TARGET_MAPPING",
+    "GKI_DOWNLOAD_CONFIGS",
+)
 
 visibility("//build/kernel/kleaf/...")
 
@@ -145,7 +151,6 @@ def _download_from_build_number(repository_ctx, build_number):
     download_info = repository_ctx.download(
         url = urls,
         output = download_path,
-        sha256 = repository_ctx.attr.sha256,
         allow_fail = repository_ctx.attr.allow_fail,
     )
 
@@ -187,10 +192,6 @@ _download_artifact_repo = repository_rule(
             """,
         ),
         "target": attr.string(doc = "Name of target on the download location, e.g. `kernel_aarch64`"),
-        "sha256": attr.string(
-            default = "",
-            doc = "checksum of the downloaded file",
-        ),
         "allow_fail": attr.bool(),
         "artifact_url_fmt": attr.string(
             doc = """API endpoint for Android CI artifacts.
@@ -242,118 +243,33 @@ _alias_repo = repository_rule(
     ],
 )
 
-def _transform_files_arg(repo_name, files):
-    """Standardizes files / optional_files for download_artifacts_repo.
-
-    Returns dict[str, dict[str, str]]"""
-
-    if files == None:
-        files = {}
-
-    if type(files) == type([]):
-        files = {filename: None for filename in files}
-
-    if type(files) == type({}):
-        new_files = {}
-        for key, value in files.items():
-            if value == None:
-                value = {}
-            if type(value) == str:
-                value = {"sha256": value}
-            if type(value) != type({}):
-                fail("@{}: Invalid value {}".format(repo_name, value))
-            new_files[key] = value
-        files = new_files
-
-    return files
-
-def download_artifacts_repo(
+def kernel_prebuilt_repo(
         name,
-        target,
-        files = None,
-        optional_files = None,
-        build_number = None,
-        artifact_url_fmt = None):
-    """Create a [repository](https://docs.bazel.build/versions/main/build-ref.html#repositories) that contains artifacts downloaded from [ci.android.com](http://ci.android.com).
-
-    For each item `file` in `files`, the label `@{name}//{file}` can refer to the downloaded file.
-
-    For example:
-    ```
-    download_artifacts_repo(
-        name = "gki_prebuilts",
-        target = "kernel_aarch64",
-        build_number = "9359437"
-        files = ["vmlinux"],
-        optional_files = ["abi_symbollist"],
-    )
-    ```
-
-    You may refer to the file with the label `@gki_prebuilts//vmlinux`, etc.
-
-    To refer to all downloaded files, you may use `@gki_prebuilts//...`
-
-    You may leave the build_number empty. If so, you must override the build number at build time.
-    See below.
-
-    For the repo `gki_prebuilts`, you may override the build number with `--use_prebuilt_gki`,
-    e.g.
-
-    ```
-    bazel build --use_prebuilt_gki=8078291 @gki_prebuilts//vmlinux
-    ```
+        artifact_url_fmt,
+        build_number = None):
+    """Define a repository that downloads kernel prebuilts.
 
     Args:
-        name: name of the repository.
-        target: build target on [ci.android.com](http://ci.android.com)
+        name: name of repository
+        artifact_url_fmt: see [`define_kleaf_workspace.artifact_url_fmt`](#define_kleaf_workspace-artifact_url_fmt)
         build_number: build number on [ci.android.com](http://ci.android.com)
-        files: One of the following:
-
-            - If a list, this is equivalent to `{file: {} for file in files}`.
-            - If a dict:
-                - Keys are the local file names. Unlike `remote_filename_fmt`, the name
-                  is used as-is.
-                - Values are one of the following:
-                - If a string, this is equivalent to `{"sha256": value}`
-                - If a dict, the dictionary may contain these keys:
-                    - "sha256": the corresponding SHA256 hash
-                    - "remote_filename_fmt": the file name on [ci.android.com](http://ci.android.com).
-                        If unspecified, use the local file name.
-                        The remote filename may be a format string that accepts the following keys:
-                        - `build_number`
-
-            Examples:
-            ```
-            files = ["vmlinux"]
-            ```
-
-            ```
-            files = {
-                "vmlinux": "34c4db6e8f4f5f7a3ce18380fb0dd26cff9b66e9ec9a4046db1499b577e4709a"
-            }
-            ```
-
-            ```
-            files = {
-                "manifest.xml": {
-                    "sha256sum": "b45303a82e281977c684838fd6f4100a73bddffacae978593a6ef16e0bcc68ac",
-                    "remote_filename_fmt": "manifest_{build_number}.xml"
-                }
-            }
-            ```
-
-        optional_files: Same as `files`, but it is optional. If the file is not in the given
-          build, it will not be downloaded, and the label (e.g. `@gki_prebuilts//abi_symbollist`)
-          points to an empty filegroup.
-        artifact_url_fmt: API endpoint for Android CI artifacts.
-          The format may include anchors for the following properties:
-            * {build_number}
-            * {target}
-            * {filename}
     """
+    mapping = CI_TARGET_MAPPING[name]
+    target = mapping["target"]
 
-    files = _transform_files_arg(name, files)
-    optional_files = _transform_files_arg(name, optional_files)
+    files = {out: {} for out in mapping["outs"]}
+    optional_files = {mapping["protected_modules"]: {}}
+    for config in GKI_DOWNLOAD_CONFIGS:
+        if config.get("mandatory", True):
+            files_dict = files
+        else:
+            files_dict = optional_files
+
+        files_dict.update({out: {} for out in config.get("outs", [])})
+
+        for out, remote_filename_fmt in config.get("outs_mapping", {}).items():
+            file_metadata = {"remote_filename_fmt": remote_filename_fmt}
+            files_dict.update({out: file_metadata})
 
     for files_dict, allow_fail in ((files, False), (optional_files, True)):
         for local_filename, file_metadata in files_dict.items():
@@ -366,7 +282,6 @@ def download_artifacts_repo(
                 local_filename = local_filename,
                 build_number = build_number,
                 target = target,
-                sha256 = file_metadata.get("sha256"),
                 remote_filename_fmt = file_metadata.get("remote_filename_fmt", local_filename),
                 allow_fail = allow_fail,
                 artifact_url_fmt = artifact_url_fmt,
