@@ -19,11 +19,11 @@ load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
-load("//build/kernel/kleaf/impl:ddk/makefiles.bzl", "makefiles")
+load("//build/kernel/kleaf/impl:common_providers.bzl", "ModuleSymversInfo")
 load("//build/kernel/kleaf/impl:ddk/ddk_conditional_filegroup.bzl", "ddk_conditional_filegroup")
 load("//build/kernel/kleaf/impl:ddk/ddk_headers.bzl", "ddk_headers")
 load("//build/kernel/kleaf/impl:ddk/ddk_module.bzl", "ddk_module")
-load("//build/kernel/kleaf/impl:common_providers.bzl", "ModuleSymversInfo")
+load("//build/kernel/kleaf/impl:ddk/makefiles.bzl", "makefiles")
 load("//build/kernel/kleaf/impl:hermetic_toolchain.bzl", "hermetic_toolchain")
 load("//build/kernel/kleaf/impl:kernel_build.bzl", "kernel_build")
 load("//build/kernel/kleaf/tests:failure_test.bzl", "failure_test")
@@ -223,6 +223,7 @@ def _create_makefiles_artifact_test(
         name = name + "_kbuild",
         filename = "Kbuild",
         target = name + "_module_makefiles",
+        tags = ["manual"],
     )
 
     contain_lines_test(
@@ -243,6 +244,7 @@ def _create_makefiles_artifact_test(
         name = name + "_makefile",
         filename = "Makefile",
         target = name + "_module_makefiles",
+        tags = ["manual"],
     )
 
     contain_lines_test(
@@ -252,6 +254,31 @@ def _create_makefiles_artifact_test(
         order = True,
     )
     tests.append(name + "_makefile_test")
+
+    # License header tests.
+    write_file(
+        name = name + "_kbuild_license_header",
+        out = name + "_expected_license/Kbuild",
+        content = ["# SPDX-License-Identifier: GPL-2.0"],
+    )
+    contain_lines_test(
+        name = name + "_kbuild_license_test",
+        expected = name + "_kbuild_license_header",
+        actual = name + "_kbuild",
+    )
+    tests.append(name + "_kbuild_license_test")
+    if top_level_makefile:
+        write_file(
+            name = name + "_makefile_license_header",
+            out = name + "_expected_license/Makefile",
+            content = ["# SPDX-License-Identifier: GPL-2.0"],
+        )
+        contain_lines_test(
+            name = name + "_makefile_license_test",
+            expected = name + "_makefile_license_header",
+            actual = name + "_makefile",
+        )
+        tests.append(name + "_makefile_license_test")
 
     if expected_cflags_lines:
         # Assume no submodules. For submodules, out == None
@@ -701,24 +728,28 @@ def makefiles_test_suite(name):
         name = name + "_self_headers",
         hdrs = ["self.h"],
         includes = ["."],
+        tags = ["manual"],
     )
 
     ddk_headers(
         name = name + "_include_headers",
         hdrs = ["include/subdir.h"],
         includes = ["include"],
+        tags = ["manual"],
     )
 
     ddk_headers(
         name = name + "_base_headers",
         hdrs = ["include/base/base.h"],
         includes = ["include/base"],
+        tags = ["manual"],
     )
 
     ddk_headers(
         name = name + "_foo_headers",
         hdrs = ["foo.h"],
         includes = ["include/foo"],
+        tags = ["manual"],
     )
 
     _makefiles_test_make(

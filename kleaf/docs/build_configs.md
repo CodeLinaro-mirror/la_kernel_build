@@ -460,7 +460,11 @@ inputs, then add the target to your `copy_to_dist_dir` macro.
 
 ## SKIP\_UNPACKING\_RAMDISK
 
-Specify in the build config.
+```python
+kernel_images(unpack_ramdisk=...)
+```
+
+See [documentation for all rules].
 
 ## AVB\_SIGN\_BOOT\_IMG
 
@@ -588,7 +592,7 @@ See [documentation for all rules].
 ## SYSTEM\_DLKM\_FS\_TYPE
 
 ```python
-kernel_images(system_dlkm_fs_type=[ext4, erofs])
+kernel_images(system_dlkm_fs_types=["ext4", "erofs"])
 ```
 
 See [documentation for all rules].

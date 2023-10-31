@@ -50,6 +50,7 @@ def kernel_images(
         modules_options = None,
         vendor_ramdisk_binaries = None,
         system_dlkm_fs_type = None,
+        system_dlkm_fs_types = None,
         system_dlkm_modules_list = None,
         system_dlkm_modules_blocklist = None,
         system_dlkm_props = None,
@@ -61,6 +62,7 @@ def kernel_images(
         vendor_dlkm_props = None,
         ramdisk_compression = None,
         ramdisk_compression_args = None,
+        unpack_ramdisk = None,
         avb_sign_boot_img = None,
         avb_boot_partition_size = None,
         avb_boot_key = None,
@@ -225,7 +227,15 @@ def kernel_images(
           ```
 
           This corresponds to `MODULES_OPTIONS` in `build.config` for `build.sh`.
-        system_dlkm_fs_type: Supported filesystems for `system_dlkm.img` are `ext4` and `erofs`. Defaults to `ext4` if not specified.
+        system_dlkm_fs_type: Deprecated. Use `system_dlkm_fs_types` instead.
+
+            Supported filesystems for `system_dlkm` image are `ext4` and `erofs`.
+            Defaults to `ext4` if not specified.
+        system_dlkm_fs_types: List of file systems type for `system_dlkm` images.
+
+            Supported filesystems for `system_dlkm` image are `ext4` and `erofs`.
+            If not specified, builds `system_dlkm.img` with ext4 else builds
+            `system_dlkm.<fs>.img` for each file system type in the list.
         system_dlkm_modules_list: location of an optional file
           containing the list of kernel modules which shall be copied into a
           system_dlkm partition image.
@@ -290,6 +300,9 @@ def kernel_images(
         ramdisk_compression_args: Command line arguments passed only to lz4 command
           to control compression level. It only has effect when used with
           `ramdisk_compression` equal to "lz4".
+        unpack_ramdisk: When set to `False`, skips unpacking the vendor ramdisk and
+          copy it as is, without modifications, into the boot image.
+          Also skips the mkbootfs step.
         avb_sign_boot_img: If set to `True` signs the boot image using the avb_boot_key.
           The kernel prebuilt tool `avbtool` is used for signing.
         avb_boot_partition_size: Size of the boot partition in bytes.
@@ -391,9 +404,6 @@ def kernel_images(
         all_rules.append(":{}_initramfs".format(name))
 
     if build_system_dlkm:
-        if system_dlkm_fs_type == None:
-            system_dlkm_fs_type = "ext4"
-
         system_dlkm_image(
             name = "{}_system_dlkm_image".format(name),
             # For GKI system_dlkm
@@ -404,6 +414,7 @@ def kernel_images(
             modules_list = modules_list,
             modules_blocklist = modules_blocklist,
             system_dlkm_fs_type = system_dlkm_fs_type,
+            system_dlkm_fs_types = system_dlkm_fs_types,
             system_dlkm_modules_list = system_dlkm_modules_list,
             system_dlkm_modules_blocklist = system_dlkm_modules_blocklist,
             system_dlkm_props = system_dlkm_props,
@@ -451,6 +462,7 @@ def kernel_images(
             gki_ramdisk_prebuilt_binary = gki_ramdisk_prebuilt_binary,
             build_boot = build_boot,
             vendor_boot_name = vendor_boot_name,
+            unpack_ramdisk = unpack_ramdisk,
             avb_sign_boot_img = avb_sign_boot_img,
             avb_boot_partition_size = avb_boot_partition_size,
             avb_boot_key = avb_boot_key,
