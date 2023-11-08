@@ -87,7 +87,9 @@ KernelEnvToolchainsInfo = provider(
 )
 
 KernelEnvAndOutputsInfo = provider(
-    doc = """Like `KernelEnvInfo` but also restores artifacts.
+    doc = """**DEPRECATED.** Use `KernelSerializedEnvInfo` instead.
+
+Like `KernelEnvInfo` but also restores artifacts.
 
 It is expected to use these infos in the following way:
 
@@ -120,6 +122,58 @@ The function should return a string that contains the setup script.
                    included. `inputs` are compiled against the target platform.""",
         "tools": """A [depset](https://bazel.build/extending/depsets) containing tools used
                    by `get_setup_script`. Note that dependencies of `restore_out_dir_cmd` is not
+                   included. `tools` are compiled against the execution platform.""",
+    },
+)
+
+KernelSerializedEnvInfo = provider(
+    doc = """Like `KernelEnvInfo` but also restores artifacts.
+
+It is expected to be created like the following:
+
+```
+setup_script = ctx.actions.declare_file("{}/setup.sh".format(ctx.attr.name))
+ctx.actions.write(
+    output = setup_script,
+    content = \"""
+        {pre_setup}
+        {eval_restore_out_dir_cmd}
+    \""".format(
+        pre_setup = pre_setup, # sets up hermetic toolchain and environment variables
+        eval_restore_out_dir_cmd = kernel_utils.eval_restore_out_dir_cmd(),
+    )
+)
+
+serialized_env_info = KernelSerializedEnvInfo(
+    setup_script = setup_script,
+    tools = ...,
+    inputs = depset([setup_script], ...),
+)
+```
+
+It is expected to use these infos in the following way:
+
+```
+command = \"""
+    KLEAF_RESTORE_OUT_DIR_CMD="{restore_out_dir_cmd}"
+    . {setup_script}
+\""".format(
+    restore_out_dir_cmd = cache_dir_step.cmd, # or utils.get_check_sandbox_cmd(),
+    setup_script = ctx.attr.dep[KernelSerializedEnvInfo].setup_script
+)
+```
+""",
+    fields = {
+        "setup_script": "A file containing the setup script.",
+        "inputs": """A [depset](https://bazel.build/extending/depsets) containing inputs used
+                   by `setup_script`. Note that dependencies of `restore_out_dir_cmd` is not
+                   included. `inputs` are compiled against the target platform.
+
+                   For convenience for the caller / user of the info, `inputs` should include
+                   `setup_script`.
+                   """,
+        "tools": """A [depset](https://bazel.build/extending/depsets) containing tools used
+                   by `setup_script`. Note that dependencies of `restore_out_dir_cmd` is not
                    included. `tools` are compiled against the execution platform.""",
     },
 )
@@ -162,10 +216,10 @@ KernelBuildExtModuleInfo = provider(
         "modules_staging_archive": "Archive containing staging kernel modules. " +
                                    "Does not contain the lib/modules/* suffix.",
         "module_hdrs": "A [depset](https://bazel.build/extending/depsets) containing headers for this `kernel_build` for building external modules",
-        "config_env_and_outputs_info": "`KernelEnvAndOutputsInfo` for configuring external modules.",
-        "modules_env_and_minimal_outputs_info": "`KernelEnvAndOutputsInfo` for building external modules, including minimal needed `kernel_build` outputs.",
-        "modules_env_and_all_outputs_info": "`KernelEnvAndOutputsInfo` for building external modules, including all `kernel_build` outputs.",
-        "modules_install_env_and_outputs_info": "`KernelEnvAndOutputsInfo` for running modules_install.",
+        "ddk_config_env": "`KernelSerializedEnvInfo` for configuring DDK modules (excl. legacy `kernel_module`).",
+        "mod_min_env": "`KernelSerializedEnvInfo` for building external modules, including minimal needed `kernel_build` outputs.",
+        "mod_full_env": "`KernelSerializedEnvInfo` for building external modules, including all `kernel_build` outputs.",
+        "modinst_env": "`KernelSerializedEnvInfo` for running `modules_install`.",
         "collect_unstripped_modules": "Whether an external [`kernel_module`](#kernel_module) building against this [`kernel_build`](#kernel_build) should provide unstripped ones for debugging.",
         "strip_modules": "Whether debug information for distributed modules is stripped",
     },
@@ -316,8 +370,7 @@ ModuleSymversInfo = provider(
     doc = "A provider that provides `Module.symvers` for `modpost`.",
     fields = {
         "restore_paths": """A [depset](https://bazel.build/extending/depsets) of
-            paths relative to <the root of the output directory> (e.g.
-            `<sandbox_root>/out/<branch>`) where the `Module.symvers` files will be
+            paths relative to `COMMON_OUT_DIR` where the `Module.symvers` files will be
             restored to by `KernelModuleSetupInfo`.""",
     },
 )

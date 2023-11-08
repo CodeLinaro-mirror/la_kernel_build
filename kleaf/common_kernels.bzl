@@ -28,14 +28,17 @@ load(
     "TOOLCHAIN_VERSION_FILENAME",
 )
 load("//build/kernel/kleaf/impl:gki_artifacts.bzl", "gki_artifacts", "gki_artifacts_prebuilts")
+load(
+    "//build/kernel/kleaf/impl:kernel_prebuilt_utils.bzl",
+    "CI_TARGET_MAPPING",
+    "GKI_DOWNLOAD_CONFIGS",
+)
 load("//build/kernel/kleaf/impl:kernel_sbom.bzl", "kernel_sbom")
 load("//build/kernel/kleaf/impl:merge_kzip.bzl", "merge_kzip")
 load("//build/kernel/kleaf/impl:out_headers_allowlist_archive.bzl", "out_headers_allowlist_archive")
 load(
     ":constants.bzl",
-    "CI_TARGET_MAPPING",
     "DEFAULT_GKI_OUTS",
-    "GKI_DOWNLOAD_CONFIGS",
     "X86_64_OUTS",
 )
 load(
@@ -626,7 +629,8 @@ def _define_common_kernel(
         build_gki_artifacts = None,
         gki_boot_img_sizes = None,
         page_size = None,
-        deprecation = None):
+        deprecation = None,
+        ddk_headers_archive = None):
     json_target_config = dict(
         name = name,
         outs = outs,
@@ -650,6 +654,7 @@ def _define_common_kernel(
         gki_boot_img_sizes = gki_boot_img_sizes,
         page_size = page_size,
         deprecation = deprecation,
+        ddk_headers_archive = ddk_headers_archive,
     )
     json_target_config = json.encode_indent(json_target_config, indent = "    ")
     json_target_config = json_target_config.replace("null", "None")
@@ -779,6 +784,7 @@ def _define_common_kernel(
         kernel_modules_install = name + "_modules_install",
         # Sync with GKI_DOWNLOAD_CONFIGS, "images"
         build_system_dlkm = True,
+        build_system_dlkm_flatten = True,
         system_dlkm_fs_types = ["erofs", "ext4"],
         # Keep in sync with build.config.gki* MODULES_LIST
         modules_list = gki_system_dlkm_modules,
@@ -842,12 +848,15 @@ def _define_common_kernel(
     # These aren't in DIST_DIR for build.sh-style builds, but necessary for driver
     # development. Hence they are also added to kernel_*_dist so they can be downloaded.
     # Note: This poke into details of kernel_build!
+    ddk_artifacts = [
+        name + "_modules_prepare",
+        name + "_modules_staging_archive",
+    ]
+    if ddk_headers_archive:
+        ddk_artifacts.append(ddk_headers_archive)
     native.filegroup(
         name = name + "_ddk_artifacts",
-        srcs = [
-            name + "_modules_prepare",
-            name + "_modules_staging_archive",
-        ],
+        srcs = ddk_artifacts,
     )
 
     dist_targets = [
@@ -861,6 +870,7 @@ def _define_common_kernel(
         name + "_" + TOOLCHAIN_VERSION_FILENAME,
         # BUILD_GKI_CERTIFICATION_TOOLS=1 for all kernel_build defined here.
         Label("//build/kernel:gki_certification_tools"),
+        "build.config.constants",
     ]
 
     kernel_sbom(
@@ -955,8 +965,8 @@ def _define_prebuilts(target_configs, **kwargs):
         ],
     )
 
-    for name, value in CI_TARGET_MAPPING.items():
-        repo_name = value["repo_name"]
+    for repo_name, value in CI_TARGET_MAPPING.items():
+        name = value["target"]
         main_target_outs = value["outs"]  # outs of target named {name}
         gki_prebuilts_outs = value["gki_prebuilts_outs"]  # outputs of _gki_prebuilts
 
@@ -993,7 +1003,6 @@ def _define_prebuilts(target_configs, **kwargs):
                     # unstripped modules come from {name} in srcs, KernelUnstrippedModulesInfo
                 ],
             }),
-            kernel_srcs = [name + "_sources"],
             kernel_uapi_headers = name + "_uapi_headers_download_or_build",
             collect_unstripped_modules = _COLLECT_UNSTRIPPED_MODULES,
             images = name + "_images_download_or_build",
@@ -1111,6 +1120,7 @@ def _define_common_kernels_additional_tests(
 
     device_modules_test(
         name = name + "_device_modules_test",
+        srcs = [kernel_build_name + "_sources"],
         base_kernel_label = Label("{}//{}:{}".format(native.repository_name(), native.package_name(), kernel_build_name)),
         base_kernel_module = min(modules) if modules else None,
         arch = arch,

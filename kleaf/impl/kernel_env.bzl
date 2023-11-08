@@ -210,6 +210,13 @@ def _kernel_env_impl(ctx):
             quoted_clangtools_bin = shell.quote(bindgen.dirname),
         )
 
+    env_setup_cmds = _get_env_setup_cmds(ctx)
+    pre_env_script = ctx.actions.declare_file("{}/pre_env.sh".format(ctx.attr.name))
+    ctx.actions.write(pre_env_script, env_setup_cmds.pre_env)
+    post_env_script = ctx.actions.declare_file("{}/post_env.sh".format(ctx.attr.name))
+    ctx.actions.write(post_env_script, env_setup_cmds.post_env)
+    inputs += [pre_env_script, post_env_script]
+
     command += """
         # create a build environment
           source {build_utils_sh}
@@ -225,8 +232,15 @@ def _kernel_env_impl(ctx):
           cp -p {config_tags_comment_file} {out}
           chmod +w {out}
           echo >> {out}
+
+          cat {pre_env_script} >> {out}
+          echo >> {out}
+
         # capture it as a file to be sourced in downstream rules
           {preserve_env} >> {out}
+          echo >> {out}
+
+          cat {post_env_script} >> {out}
         """.format(
         build_utils_sh = ctx.file._build_utils_sh.path,
         build_config = build_config.path,
@@ -238,6 +252,8 @@ def _kernel_env_impl(ctx):
         preserve_env = preserve_env.path,
         out = out_file.path,
         config_tags_comment_file = config_tags_out.env.path,
+        pre_env_script = pre_env_script.path,
+        post_env_script = post_env_script.path,
     )
 
     progress_message_note = kernel_config_settings.get_progress_message_note(ctx, defconfig_fragments)
@@ -253,53 +269,13 @@ def _kernel_env_impl(ctx):
     )
 
     setup = hermetic_tools.setup
-    if ctx.attr._debug_annotate_scripts[BuildSettingInfo].value:
-        setup += debug.trap()
-
-    set_up_jobs_cmd = """
-        # Increase parallelism # TODO(b/192655643): do not use -j anymore
-          export MAKEFLAGS="${{MAKEFLAGS}} -j$(
-            make_jobs="$({get_make_jobs_cmd})"
-            if [[ -n "$make_jobs" ]]; then
-              echo "$make_jobs"
-            else
-              nproc
-            fi
-          )"
-    """.format(
-        get_make_jobs_cmd = status.get_volatile_status_cmd(ctx, "MAKE_JOBS"),
-    )
-
     setup += """
-         # error on failures
-           set -e
-           set -o pipefail
-         # utility functions
-           source {build_utils_sh}
-         # source the build environment
-           source {env}
-           {set_up_jobs_cmd}
-         # setup LD_LIBRARY_PATH for prebuilts
-           export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${{ROOT_DIR}}/{linux_x86_libs_path}
-         # Set up KCONFIG_EXT
-           if [ -n "${{KCONFIG_EXT}}" ]; then
-             export KCONFIG_EXT_PREFIX=$(realpath $(dirname ${{KCONFIG_EXT}}) --relative-to ${{ROOT_DIR}}/${{KERNEL_DIR}})/
-           fi
-           if [ -n "${{DTSTREE_MAKEFILE}}" ]; then
-             export dtstree=$(realpath -s $(dirname ${{DTSTREE_MAKEFILE}}) --relative-to ${{ROOT_DIR}}/${{KERNEL_DIR}})
-           fi
-         # Set up KCPPFLAGS
-         # For Kleaf local (non-sandbox) builds, $ROOT_DIR is under execroot but
-         # $ROOT_DIR/$KERNEL_DIR is a symlink to the real source tree under
-         # workspace root, making $abs_srctree not under $ROOT_DIR.
-           if [[ "$(realpath ${{ROOT_DIR}}/${{KERNEL_DIR}})" != "${{ROOT_DIR}}/${{KERNEL_DIR}}" ]]; then
-             export KCPPFLAGS="$KCPPFLAGS -ffile-prefix-map=$(realpath ${{ROOT_DIR}}/${{KERNEL_DIR}})/="
-           fi
-           """.format(
-        env = out_file.path,
+        source {build_utils_sh}
+        # source the build environment
+        source {env}
+    """.format(
         build_utils_sh = ctx.file._build_utils_sh.path,
-        linux_x86_libs_path = ctx.files._linux_x86_libs[0].dirname,
-        set_up_jobs_cmd = set_up_jobs_cmd,
+        env = out_file.path,
     )
 
     setup_tools = [
@@ -342,6 +318,46 @@ def _kernel_env_impl(ctx):
         ),
         DefaultInfo(files = depset([out_file])),
     ]
+
+def _get_env_setup_cmds(ctx):
+    pre_env = ""
+    if ctx.attr._debug_annotate_scripts[BuildSettingInfo].value:
+        pre_env += debug.trap()
+
+    post_env = """
+        # Increase parallelism # TODO(b/192655643): do not use -j anymore
+        export MAKEFLAGS="${{MAKEFLAGS}} -j$(
+            make_jobs="$({get_make_jobs_cmd})"
+            if [[ -n "$make_jobs" ]]; then
+                echo "$make_jobs"
+            else
+                nproc
+            fi
+        )"
+        # setup LD_LIBRARY_PATH for prebuilts
+        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${{ROOT_DIR}}/{linux_x86_libs_path}
+        # Set up KCONFIG_EXT
+        if [ -n "${{KCONFIG_EXT}}" ]; then
+            export KCONFIG_EXT_PREFIX=$(realpath $(dirname ${{KCONFIG_EXT}}) --relative-to ${{ROOT_DIR}}/${{KERNEL_DIR}})/
+        fi
+        if [ -n "${{DTSTREE_MAKEFILE}}" ]; then
+            export dtstree=$(realpath -s $(dirname ${{DTSTREE_MAKEFILE}}) --relative-to ${{ROOT_DIR}}/${{KERNEL_DIR}})
+        fi
+        # Set up KCPPFLAGS
+        # For Kleaf local (non-sandbox) builds, $ROOT_DIR is under execroot but
+        # $ROOT_DIR/$KERNEL_DIR is a symlink to the real source tree under
+        # workspace root, making $abs_srctree not under $ROOT_DIR.
+        if [[ "$(realpath ${{ROOT_DIR}}/${{KERNEL_DIR}})" != "${{ROOT_DIR}}/${{KERNEL_DIR}}" ]]; then
+            export KCPPFLAGS="$KCPPFLAGS -ffile-prefix-map=$(realpath ${{ROOT_DIR}}/${{KERNEL_DIR}})/="
+        fi
+    """.format(
+        get_make_jobs_cmd = status.get_volatile_status_cmd(ctx, "MAKE_JOBS"),
+        linux_x86_libs_path = ctx.files._linux_x86_libs[0].dirname,
+    )
+    return struct(
+        pre_env = pre_env,
+        post_env = post_env,
+    )
 
 def _get_make_verbosity_command(ctx):
     command = """

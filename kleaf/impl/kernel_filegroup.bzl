@@ -24,7 +24,6 @@ load(
     "KernelBuildMixedTreeInfo",
     "KernelBuildUapiInfo",
     "KernelBuildUnameInfo",
-    "KernelEnvAndOutputsInfo",
     "KernelEnvAttrInfo",
     "KernelImagesInfo",
     "KernelToolchainInfo",
@@ -40,24 +39,10 @@ load(":hermetic_toolchain.bzl", "hermetic_toolchain")
 load(":kernel_config_settings.bzl", "kernel_config_settings")
 load(
     ":utils.bzl",
-    "kernel_utils",
     "utils",
 )
 
 visibility("//build/kernel/kleaf/...")
-
-def _ext_mod_env_and_outputs_info_get_setup_script(data, restore_out_dir_cmd):
-    # TODO(b/219112010): need to set up env and restore outputs
-    script = """
-         # Restore modules_prepare outputs. Assumes env setup.
-           [ -z ${{OUT_DIR}} ] && echo "ERROR: modules_prepare setup run without OUT_DIR set!" >&2 && exit 1
-           tar xf {outdir_tar_gz} -C ${{OUT_DIR}}
-           {restore_out_dir_cmd}
-    """.format(
-        outdir_tar_gz = data.modules_prepare_out_dir_tar_gz,
-        restore_out_dir_cmd = restore_out_dir_cmd,
-    )
-    return script
 
 def _get_mixed_tree_files(target):
     if KernelBuildMixedTreeInfo in target:
@@ -107,28 +92,12 @@ def _kernel_filegroup_impl(ctx):
 
     all_deps = ctx.files.srcs + ctx.files.deps
 
-    modules_prepare_out_dir_tar_gz = utils.find_file("modules_prepare_outdir.tar.gz", all_deps, what = ctx.label)
-
-    module_srcs = kernel_utils.filter_module_srcs(ctx.files.kernel_srcs)
-
-    ext_mod_env_and_outputs_info = KernelEnvAndOutputsInfo(
-        get_setup_script = _ext_mod_env_and_outputs_info_get_setup_script,
-        inputs = depset([
-            modules_prepare_out_dir_tar_gz,
-        ], transitive = [
-            module_srcs.module_scripts,
-        ]),
-        tools = depset(),
-        data = struct(modules_prepare_out_dir_tar_gz = modules_prepare_out_dir_tar_gz),
-    )
-
+    # TODO(b/219112010): Implement KernelSerializedEnvInfo properly
     kernel_module_dev_info = KernelBuildExtModuleInfo(
         modules_staging_archive = utils.find_file(MODULES_STAGING_ARCHIVE, all_deps, what = ctx.label),
-        modules_env_and_minimal_outputs_info = ext_mod_env_and_outputs_info,
-        modules_env_and_all_outputs_info = ext_mod_env_and_outputs_info,
-        modules_install_env_and_outputs_info = ext_mod_env_and_outputs_info,
-        # TODO(b/211515836): module_hdrs / module_scripts might also be downloaded
-        module_hdrs = module_srcs.module_hdrs,
+        # TODO(b/211515836): module_scripts might also be downloaded
+        # Building kernel_module (excluding ddk_module) on top of kernel_filegroup is unsupported.
+        # module_hdrs = None,
         collect_unstripped_modules = ctx.attr.collect_unstripped_modules,
     )
 
@@ -260,15 +229,6 @@ Not to be confused with [`kernel_srcs`](#kernel_filegroup-kernel_srcs).""",
 This usually contains a list of prebuilts.
 
 Unlike srcs, these labels are NOT added to the [`DefaultInfo`](https://docs.bazel.build/versions/main/skylark/lib/DefaultInfo.html)""",
-        ),
-        "kernel_srcs": attr.label_list(
-            allow_files = True,
-            doc = """A list of files that would have been listed as `srcs` if this rule were a [`kernel_build`](#kernel_build).
-
-This is usually a `glob()` of source files.
-
-Not to be confused with [`srcs`](#kernel_filegroup-srcs).
-""",
         ),
         "kernel_uapi_headers": attr.label(
             allow_files = True,

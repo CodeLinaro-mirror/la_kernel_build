@@ -22,10 +22,10 @@ load(
     ":common_providers.bzl",
     "KernelBuildOriginalEnvInfo",
     "KernelConfigArchiveInfo",
-    "KernelEnvAndOutputsInfo",
     "KernelEnvAttrInfo",
     "KernelEnvInfo",
     "KernelEnvMakeGoalsInfo",
+    "KernelSerializedEnvInfo",
     "KernelToolchainInfo",
 )
 load(":config_utils.bzl", "config_utils")
@@ -139,6 +139,12 @@ def _config_lto(ctx):
     lto_config_flag = ctx.attr.lto
 
     lto_configs = []
+
+    if lto_config_flag == "fast":
+        # buildifier: disable=print
+        print("\nWARNING: --lto=fast is deprecated. Falling back to none.")
+        lto_config_flag = "none"
+
     if lto_config_flag == "none":
         lto_configs += [
             _config.disable("LTO_CLANG"),
@@ -163,15 +169,6 @@ def _config_lto(ctx):
             _config.disable("LTO_CLANG_THIN"),
             _config.enable("LTO_CLANG_FULL"),
             _config.disable("THINLTO"),
-        ]
-    elif lto_config_flag == "fast":
-        # Set lto=thin only if LTO full is enabled.
-        lto_configs += [
-            _config.enable_if(condition = "LTO_CLANG_FULL", config = "LTO_CLANG"),
-            _config.disable_if(condition = "LTO_CLANG_FULL", config = "LTO_NONE"),
-            _config.enable_if(condition = "LTO_CLANG_FULL", config = "LTO_CLANG_THIN"),
-            _config.enable_if(condition = "LTO_CLANG_FULL", config = "THINLTO"),
-            _config.disable_if(condition = "LTO_CLANG_FULL", config = "LTO_CLANG_FULL"),
         ]
 
     return struct(configs = lto_configs, deps = [])
@@ -290,6 +287,25 @@ def _config_kasan_sw_tags(ctx):
 
     return struct(configs = [], deps = [])
 
+def _config_kasan_generic(ctx):
+    """Return configs for --kasan_generic.
+
+    Args:
+        ctx: ctx
+    Returns:
+        A struct, where `configs` is a list of arguments to `scripts/config`,
+        and `deps` is a list of input files.
+    """
+    kasan_generic = ctx.attr.kasan_generic[BuildSettingInfo].value
+
+    if not kasan_generic:
+        return struct(configs = [], deps = [])
+
+    if trim_nonlisted_kmi_utils.get_value(ctx):
+        fail("{}: --kasan_generic requires trimming to be disabled".format(ctx.label))
+
+    return struct(configs = [], deps = [])
+
 def _config_kcsan(ctx):
     """Return configs for --kcsan.
 
@@ -323,6 +339,7 @@ def _reconfig(ctx):
         _config_kcsan,
         _config_kasan,
         _config_kasan_sw_tags,
+        _config_kasan_generic,
         _config_gcov,
         _config_keys,
         kgdb.get_scripts_config_args,
@@ -412,6 +429,8 @@ def _kernel_config_impl(ctx):
     outputs += cache_dir_step.outputs
     tools += cache_dir_step.tools
 
+    inputs.append(localversion_file)
+
     command = ctx.attr.env[KernelEnvInfo].setup + """
           {cache_dir_cmd}
         # Pre-defconfig commands
@@ -427,6 +446,7 @@ def _kernel_config_impl(ctx):
         # Grab outputs
           rsync -aL ${{OUT_DIR}}/.config {out_dir}/.config
           rsync -aL ${{OUT_DIR}}/include/ {out_dir}/include/
+          rsync -aL {localversion_file} {out_dir}/localversion
 
         # Ensure reproducibility. The value of the real $ROOT_DIR is replaced in the setup script.
           sed -i'' -e 's:'"${{ROOT_DIR}}"':${{ROOT_DIR}}:g' {out_dir}/include/config/auto.conf.cmd
@@ -441,6 +461,7 @@ def _kernel_config_impl(ctx):
         cache_dir_cmd = cache_dir_step.cmd,
         cache_dir_post_cmd = cache_dir_step.post_cmd,
         reconfig_cmd = reconfig.cmd,
+        localversion_file = localversion_file.path,
     )
 
     debug.print_scripts(ctx, command)
@@ -457,20 +478,19 @@ def _kernel_config_impl(ctx):
         execution_requirements = kernel_utils.local_exec_requirements(ctx),
     )
 
-    post_setup_deps = [out_dir, localversion_file]
+    post_setup_deps = [out_dir]
     post_setup = """
            [ -z ${{OUT_DIR}} ] && echo "FATAL: configs post_env_info setup run without OUT_DIR set!" >&2 && exit 1
          # Restore kernel config inputs
            mkdir -p ${{OUT_DIR}}/include/
            rsync -aL {out_dir}/.config ${{OUT_DIR}}/.config
            rsync -aL --chmod=D+w {out_dir}/include/ ${{OUT_DIR}}/include/
-           rsync -aL --chmod=F+w {localversion_file} ${{OUT_DIR}}/localversion
+           rsync -aL --chmod=F+w {out_dir}/localversion ${{OUT_DIR}}/localversion
 
          # Restore real value of $ROOT_DIR in auto.conf.cmd
            sed -i'' -e 's:${{ROOT_DIR}}:'"${{ROOT_DIR}}"':g' ${{OUT_DIR}}/include/config/auto.conf.cmd
     """.format(
         out_dir = out_dir.path,
-        localversion_file = localversion_file.path,
     )
 
     if trim_nonlisted_kmi_utils.get_value(ctx):
@@ -478,21 +498,34 @@ def _kernel_config_impl(ctx):
         # at the absolute path specified in abi_symbollist.raw.abspath
         post_setup_deps += ctx.files.raw_kmi_symbol_list  # This is 0 or 1 file
 
-    env_and_outputs_info = KernelEnvAndOutputsInfo(
-        get_setup_script = _env_and_outputs_get_setup_script,
-        tools = ctx.attr.env[KernelEnvInfo].tools,
-        inputs = depset(post_setup_deps, transitive = transitive_inputs),
-        data = struct(
+    # <kernel_build>_config_setup.sh
+    serialized_env_info_setup_script = ctx.actions.declare_file("{name}/{name}_setup.sh".format(name = ctx.attr.name))
+    ctx.actions.write(
+        output = serialized_env_info_setup_script,
+        content = """
+            {pre_setup}
+            {eval_restore_out_dir_cmd}
+            {post_setup}
+        """.format(
             pre_setup = ctx.attr.env[KernelEnvInfo].setup,
+            eval_restore_out_dir_cmd = kernel_utils.eval_restore_out_dir_cmd(),
             post_setup = post_setup,
         ),
+    )
+
+    serialized_env_info = KernelSerializedEnvInfo(
+        setup_script = serialized_env_info_setup_script,
+        tools = ctx.attr.env[KernelEnvInfo].tools,
+        inputs = depset(post_setup_deps + [
+            serialized_env_info_setup_script,
+        ], transitive = transitive_inputs),
     )
 
     config_script_ret = _get_config_script(ctx, inputs)
     outdir_tar_gz = _package_config_outdir(ctx, out_dir)
 
     return [
-        env_and_outputs_info,
+        serialized_env_info,
         ctx.attr.env[KernelEnvAttrInfo],
         ctx.attr.env[KernelEnvMakeGoalsInfo],
         ctx.attr.env[KernelToolchainInfo],
@@ -508,24 +541,6 @@ def _kernel_config_impl(ctx):
             outdir_tar_gz = outdir_tar_gz,
         ),
     ]
-
-def _env_and_outputs_get_setup_script(data, restore_out_dir_cmd):
-    """Setup script generator for `KernelEnvAndOutputsInfo`.
-
-    Args:
-        data: `data` from `KernelEnvAndOutputsInfo`
-        restore_out_dir_cmd: See `KernelEnvAndOutputsInfo`. Provided by user of the info.
-    Returns:
-        The setup script."""
-    return """
-        {pre_setup}
-        {restore_out_dir_cmd}
-        {post_setup}
-    """.format(
-        pre_setup = data.pre_setup,
-        restore_out_dir_cmd = restore_out_dir_cmd,
-        post_setup = data.post_setup,
-    )
 
 def _get_config_script(ctx, inputs):
     """Handles config.sh."""
@@ -597,16 +612,8 @@ def _package_config_outdir(ctx, out_dir):
 
     # <kernel_build>_config_outdir.tar.gz
     outdir_tar_gz = ctx.actions.declare_file("{name}/{name}_outdir.tar.gz".format(name = ctx.attr.name))
-
-    # To workaround https://github.com/landley/toybox/issues/456, directly
-    # provide the list of files by using find.
     cmd = hermetic_tools.setup + """
-        find {out_dir} ! -type d -print0 | \\
-            LC_ALL=C sort -z | \\
-            tar czf {outdir_tar_gz} \\
-                --dereference \\
-                --transform 's:^{out_dir}/::g' \\
-                --null -T -
+        tar czf {outdir_tar_gz} --dereference -C {out_dir} .
     """.format(
         outdir_tar_gz = outdir_tar_gz.path,
         out_dir = out_dir.path,
