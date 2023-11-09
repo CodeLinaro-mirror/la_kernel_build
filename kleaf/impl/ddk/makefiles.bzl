@@ -14,6 +14,7 @@
 
 """Generates Makefile and Kbuild files for a DDK module."""
 
+load("@bazel_skylib//lib:paths.bzl", "paths")
 load(
     ":common_providers.bzl",
     "DdkSubmoduleInfo",
@@ -142,7 +143,8 @@ def _check_submodule_same_package(module_label, submodule_deps):
     # TODO(b/251526635): Remove this assumption.
     bad = []
     for submodule in submodule_deps:
-        if submodule.label.package != module_label.package:
+        if submodule.label.workspace_name != module_label.workspace_name or \
+           submodule.label.package != module_label.package:
             bad.append(submodule.label)
 
     if bad:
@@ -231,7 +233,7 @@ def _makefiles_impl(ctx):
     if ctx.attr.module_out:
         args.add("--kernel-module-out", ctx.attr.module_out)
     args.add("--output-makefiles", output_makefiles.path)
-    args.add("--package", ctx.label.package)
+    args.add("--package", paths.join(ctx.label.workspace_root, ctx.label.package))
 
     if ctx.attr.top_level_makefile:
         args.add("--produce-top-level-makefile")
@@ -312,7 +314,7 @@ makefiles = rule(
     attrs = {
         # module_X is the X attribute of the ddk_module. Prefixed with `module_`
         # because they aren't real srcs / hdrs / deps to the makefiles rule.
-        "module_srcs": attr.label_list(allow_files = [".c", ".h", ".s", ".rs"]),
+        "module_srcs": attr.label_list(allow_files = [".c", ".h", ".S", ".rs"]),
         "module_hdrs": attr.label_list(allow_files = [".h"]),
         "module_includes": attr.string_list(),
         "module_linux_includes": attr.string_list(),

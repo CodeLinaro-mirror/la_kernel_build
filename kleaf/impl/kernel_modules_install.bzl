@@ -77,19 +77,19 @@ def _kernel_modules_install_impl(ctx):
         external_modules.append(declared_file)
 
     transitive_inputs = [
-        kernel_build_infos.ext_module_info.modules_install_env_and_outputs_info.inputs,
+        kernel_build_infos.ext_module_info.modinst_env.inputs,
     ]
 
     tools = [
         ctx.executable._check_duplicated_files_in_archives,
         ctx.executable._search_and_cp_output,
     ]
-    transitive_tools = [kernel_build_infos.ext_module_info.modules_install_env_and_outputs_info.tools]
+    transitive_tools = [kernel_build_infos.ext_module_info.modinst_env.tools]
 
     modules_staging_dws = dws.make(ctx, "{}/staging".format(ctx.label.name))
 
-    command = kernel_build_infos.ext_module_info.modules_install_env_and_outputs_info.get_setup_script(
-        data = kernel_build_infos.ext_module_info.modules_install_env_and_outputs_info.data,
+    command = kernel_utils.setup_serialized_env_cmd(
+        serialized_env_info = kernel_build_infos.ext_module_info.modinst_env,
         restore_out_dir_cmd = utils.get_check_sandbox_cmd(),
     )
     command += """
@@ -131,14 +131,11 @@ def _kernel_modules_install_impl(ctx):
              # Run depmod
                (
                  cd ${{OUT_DIR}} # for System.map when mixed_build_prefix is not set
-                 INSTALL_MOD_PATH=${{real_modules_staging_dir}} ${{ROOT_DIR}}/${{KERNEL_DIR}}/scripts/depmod.sh depmod ${{kernelrelease}} ${{mixed_build_prefix}}
+                 depmod -ae -F "${{mixed_build_prefix}}System.map" -b "${{real_modules_staging_dir}}" ${{kernelrelease}}
                )
              # Remove symlinks that are dead outside of the sandbox
                (
-                 symlink="$(ls {modules_staging_dir}/lib/modules/*/source)"
-                 if [[ -n "$symlink" ]] && [[ -L "$symlink" ]]; then rm "$symlink"; fi
-                 symlink="$(ls {modules_staging_dir}/lib/modules/*/build)"
-                 if [[ -n "$symlink" ]] && [[ -L "$symlink" ]]; then rm "$symlink"; fi
+                 find "{modules_staging_dir}/lib/modules/" -maxdepth 2 -mindepth 2 \\( -name source -o -name build \\) -type l -delete > /dev/null
                )
     """.format(
         modules_staging_archives = " ".join(

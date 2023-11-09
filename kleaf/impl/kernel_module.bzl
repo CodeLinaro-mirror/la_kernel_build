@@ -31,10 +31,10 @@ load(
     "DdkSubmoduleInfo",
     "KernelBuildExtModuleInfo",
     "KernelCmdsInfo",
-    "KernelEnvAndOutputsInfo",
     "KernelEnvAttrInfo",
     "KernelModuleInfo",
     "KernelModuleSetupInfo",
+    "KernelSerializedEnvInfo",
     "KernelUnstrippedModulesInfo",
     "ModuleSymversInfo",
 )
@@ -258,7 +258,11 @@ def _kernel_module_impl(ctx):
     _check_module_symvers_restore_path(kernel_module_deps, ctx.label)
 
     # Define where to build the external module (default to the package name)
-    ext_mod = ctx.attr.makefile[0].label.package if ctx.attr.makefile else ctx.label.package
+    if ctx.attr.makefile:
+        ext_mod_label = ctx.attr.makefile[0].label
+    else:
+        ext_mod_label = ctx.label
+    ext_mod = paths.join(ext_mod_label.workspace_root, ext_mod_label.package)
 
     if ctx.files.makefile and ctx.file.internal_ddk_makefiles_dir:
         fail("{}: must not define `makefile` for `ddk_module`")
@@ -345,16 +349,16 @@ def _kernel_module_impl(ctx):
 
     # Determine the proper script to set up environment
     if ctx.attr.internal_ddk_config:
-        setup_info = ctx.attr.internal_ddk_config[KernelEnvAndOutputsInfo]
+        setup_info = ctx.attr.internal_ddk_config[KernelSerializedEnvInfo]
     elif ctx.attr.generate_btf:
         # All outputs are required for BTF generation, including vmlinux image
-        setup_info = ctx.attr.kernel_build[KernelBuildExtModuleInfo].modules_env_and_all_outputs_info
+        setup_info = ctx.attr.kernel_build[KernelBuildExtModuleInfo].mod_full_env
     else:
-        setup_info = ctx.attr.kernel_build[KernelBuildExtModuleInfo].modules_env_and_minimal_outputs_info
+        setup_info = ctx.attr.kernel_build[KernelBuildExtModuleInfo].mod_min_env
     transitive_inputs.append(setup_info.inputs)
     transitive_tools.append(setup_info.tools)
-    command = setup_info.get_setup_script(
-        data = setup_info.data,
+    command = kernel_utils.setup_serialized_env_cmd(
+        serialized_env_info = setup_info,
         restore_out_dir_cmd = cache_dir_step.cmd,
     )
 
@@ -549,6 +553,7 @@ def _kernel_module_impl(ctx):
             progress_message = "Copying outputs {}".format(ctx.label),
         )
 
+    module_symvers_restore_path = paths.join(ext_mod, ctx.attr.internal_module_symvers_name)
     setup = """
              # Use a new shell to avoid polluting variables
                (
@@ -558,14 +563,15 @@ def _kernel_module_impl(ctx):
                mkdir -p ${{ROOT_DIR}}/{ext_mod}
                ext_mod_rel=$(realpath ${{ROOT_DIR}}/{ext_mod} --relative-to ${{KERNEL_DIR}})
              # Restore Modules.symvers
-               mkdir -p $(dirname ${{OUT_DIR}}/${{ext_mod_rel}}/{internal_module_symvers_name})
-               rsync -aL {module_symvers} ${{OUT_DIR}}/${{ext_mod_rel}}/{internal_module_symvers_name}
+               mkdir -p $(dirname ${{COMMON_OUT_DIR}}/{module_symvers_restore_path})
+               rsync -aL {module_symvers} ${{COMMON_OUT_DIR}}/{module_symvers_restore_path}
              # New shell ends
                )
     """.format(
         ext_mod = ext_mod,
         module_symvers = module_symvers.path,
         internal_module_symvers_name = ctx.attr.internal_module_symvers_name,
+        module_symvers_restore_path = module_symvers_restore_path,
     )
 
     if ctx.attr.internal_ddk_makefiles_dir:
@@ -614,7 +620,7 @@ def _kernel_module_impl(ctx):
             # path/to/package/target_name/target_name_Module.symvers -> path/to/package/target_name_Module.symvers;
             # This is similar to ${{OUT_DIR}}/${{ext_mod_rel}}
             # It is needed to remove the `target_name` because we declare_file({name}/{internal_module_symvers_name}) above.
-            restore_paths = depset([paths.join(ext_mod, ctx.attr.internal_module_symvers_name)]),
+            restore_paths = depset([module_symvers_restore_path]),
         ),
         ddk_headers_info,
         ddk_config_info,
@@ -647,7 +653,10 @@ _kernel_module = rule(
         "internal_module_symvers_name": attr.string(default = "Module.symvers"),
         "internal_drop_modules_order": attr.bool(),
         "internal_exclude_kernel_build_module_srcs": attr.bool(),
-        "internal_ddk_config": attr.label(providers = [KernelEnvAndOutputsInfo]),
+        "internal_ddk_config": attr.label(providers = [
+            KernelSerializedEnvInfo,
+            DdkConfigInfo,
+        ]),
         "generate_btf": attr.bool(
             default = False,
             doc = "See [kernel_module.generate_btf](#kernel_module-generate_btf)",

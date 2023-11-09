@@ -45,6 +45,7 @@ load(
     "KernelEnvAttrInfo",
     "KernelEnvMakeGoalsInfo",
     "KernelImagesInfo",
+    "KernelSerializedEnvInfo",
     "KernelToolchainInfo",
     "KernelUnstrippedModulesInfo",
 )
@@ -697,6 +698,10 @@ def _skip_build_checks(ctx, what):
         print("\nWARNING: {this_label}: {what} was\
               IGNORED because --kasan_sw_tags is set!".format(this_label = ctx.label, what = what))
         return True
+    if ctx.attr._kasan_generic[BuildSettingInfo].value:
+        print("\nWARNING: {this_label}: {what} was\
+              IGNORED because --kasan_generic is set!".format(this_label = ctx.label, what = what))
+        return True
     if ctx.attr._kcsan[BuildSettingInfo].value:
         print("\nWARNING: {this_label}: {what} was\
               IGNORED because --kcsan is set!".format(this_label = ctx.label, what = what))
@@ -729,6 +734,7 @@ def _get_defconfig_fragments(
         Label("//build/kernel/kleaf/impl/defconfig:debug"),
         Label("//build/kernel/kleaf/impl/defconfig:kasan_any_mode"),
         Label("//build/kernel/kleaf/impl/defconfig:{}_kasan_sw_tags".format(kernel_build_arch)),
+        Label("//build/kernel/kleaf/impl/defconfig:kasan_generic"),
         Label("//build/kernel/kleaf/impl/defconfig:kcsan"),
     ]
 
@@ -1369,8 +1375,7 @@ def _build_main_action(
     ## Declare implicit outputs of the command
     ## This is like ctx.actions.declare_directory(ctx.label.name) without actually declaring it.
     ruledir = paths.join(
-        ctx.bin_dir.path,
-        paths.dirname(ctx.build_file_path),
+        utils.package_bin_dir(ctx),
         ctx.label.name,
     )
 
@@ -1444,8 +1449,8 @@ def _build_main_action(
     )
 
     # Build the command for the main action.
-    command = ctx.attr.config[KernelEnvAndOutputsInfo].get_setup_script(
-        data = ctx.attr.config[KernelEnvAndOutputsInfo].data,
+    command = kernel_utils.setup_serialized_env_cmd(
+        serialized_env_info = ctx.attr.config[KernelSerializedEnvInfo],
         restore_out_dir_cmd = cache_dir_step.cmd,
     )
 
@@ -1525,7 +1530,7 @@ def _build_main_action(
     transitive_inputs = [target.files for target in ctx.attr.srcs]
     transitive_inputs += [target.files for target in ctx.attr.deps]
     transitive_inputs.append(
-        ctx.attr.config[KernelEnvAndOutputsInfo].inputs,
+        ctx.attr.config[KernelSerializedEnvInfo].inputs,
     )
     inputs = [] + check_toolchain_outs
     inputs += kbuild_mixed_tree_ret.outputs
@@ -1537,7 +1542,7 @@ def _build_main_action(
         ctx.executable._search_and_cp_output,
     ]
     transitive_tools = [
-        ctx.attr.config[KernelEnvAndOutputsInfo].tools,
+        ctx.attr.config[KernelSerializedEnvInfo].tools,
     ]
     for step in steps:
         tools += step.tools
@@ -1587,13 +1592,19 @@ def _env_and_outputs_info_get_setup_script(data, restore_out_dir_cmd):
         restore_out_dir_cmd: See `KernelEnvAndOutputsInfo`. Provided by user of the info.
     Returns:
         The setup script."""
+
+    # This may be KernelEnvAndOutputsInfo or KernelSerializedEnvInfo
     pre_info = data.pre_info
+
     restore_outputs_cmd = data.restore_outputs_cmd
 
-    script = pre_info.get_setup_script(
-        data = pre_info.data,
+    # Set up env variables, esp. OUT_DIR
+    script = kernel_utils.setup_serialized_env_cmd(
+        serialized_env_info = pre_info,
         restore_out_dir_cmd = restore_out_dir_cmd,
     )
+
+    # Restore files to $OUT_DIR
     script += restore_outputs_cmd
 
     return script
@@ -1606,7 +1617,7 @@ def _create_env_and_outputs_info(
     """Creates an KernelEnvAndOutputsInfo.
 
     Args:
-        pre_info: pre setup script and dependencies
+        pre_info: KernelSerializedEnvInfo
         restore_outputs_cmd_deps: list of outputs to restore
         restore_outputs_cmd: command to restore these outputs
         extra_inputs: a depset attached to `inputs` of returned object
@@ -1630,6 +1641,49 @@ def _create_env_and_outputs_info(
         ),
     )
 
+def _create_serialized_env_info(
+        ctx,
+        setup_script_name,
+        pre_info,
+        restore_outputs_cmd,
+        extra_inputs):
+    """Creates an KernelSerializedEnvInfo.
+
+    Args:
+        ctx: ctx,
+        setup_script_name: name of the setup script
+        pre_info: KernelSerializedEnvInfo
+        restore_outputs_cmd: command to restore these outputs
+        extra_inputs: a depset attached to `inputs` of returned object
+
+    Returns:
+        A KernelSerializedEnvInfo that runs pre_info, then restore outputs given the list of
+        outputs and cmd."""
+
+    setup_script = ctx.actions.declare_file(setup_script_name)
+    setup_script_cmd = """
+        . {pre_setup_script}
+        {restore_outputs_cmd}
+    """.format(
+        pre_setup_script = pre_info.setup_script.path,
+        restore_outputs_cmd = restore_outputs_cmd,
+    )
+    ctx.actions.write(
+        output = setup_script,
+        content = setup_script_cmd,
+    )
+    return KernelSerializedEnvInfo(
+        setup_script = setup_script,
+        inputs = depset(
+            [setup_script],
+            transitive = [
+                pre_info.inputs,
+                extra_inputs,
+            ],
+        ),
+        tools = pre_info.tools,
+    )
+
 def _create_infos(
         ctx,
         kbuild_mixed_tree_ret,
@@ -1640,7 +1694,8 @@ def _create_infos(
         kmi_strict_mode_out,
         kmi_symbol_list_violations_check_out,
         module_scripts_archive,
-        module_srcs):
+        module_srcs,
+        internal_outs_archive):
     """Creates and returns a list of provided infos that the `kernel_build` target should return.
 
     Args:
@@ -1654,6 +1709,7 @@ def _create_infos(
         kmi_symbol_list_violations_check_out: from `_kmi_symbol_list_violations_check`
         module_srcs: from `kernel_utils.filter_module_srcs`
         module_scripts_archive: from `_create_module_scripts_archive`
+        internal_outs_archive: from `_create_internal_outs_archive`
     """
 
     base_kernel = base_kernel_utils.get_base_kernel(ctx)
@@ -1674,7 +1730,7 @@ def _create_infos(
     env_and_outputs_info_setup_restore_outputs += kbuild_mixed_tree_ret.cmd
 
     env_and_outputs_info = _create_env_and_outputs_info(
-        pre_info = ctx.attr.config[KernelEnvAndOutputsInfo],
+        pre_info = ctx.attr.config[KernelSerializedEnvInfo],
         restore_outputs_cmd_deps = env_and_outputs_info_dependencies,
         restore_outputs_cmd = env_and_outputs_info_setup_restore_outputs,
         extra_inputs = depset(),
@@ -1718,33 +1774,46 @@ def _create_infos(
         )
 
     # For kernel_module()
-    ext_mod_env_and_outputs_info = _create_env_and_outputs_info(
-        pre_info = ctx.attr.modules_prepare[KernelEnvAndOutputsInfo],
-        restore_outputs_cmd_deps = ext_mod_env_and_outputs_info_deps,
+    mod_min_env = _create_serialized_env_info(
+        ctx = ctx,
+        setup_script_name = "{name}/{name}_mod_min_setup.sh".format(name = ctx.attr.name),
+        pre_info = ctx.attr.modules_prepare[KernelSerializedEnvInfo],
         restore_outputs_cmd = ext_mod_env_and_outputs_info_setup_restore_outputs,
-        extra_inputs = module_srcs.module_scripts,
+        extra_inputs = depset(
+            ext_mod_env_and_outputs_info_deps,
+            transitive = [module_srcs.module_scripts],
+        ),
     )
 
     # For kernel_module() that require all kernel_build outputs
-    ext_mod_env_and_all_outputs_info = _create_env_and_outputs_info(
-        pre_info = ctx.attr.modules_prepare[KernelEnvAndOutputsInfo],
-        restore_outputs_cmd_deps = env_and_outputs_info_dependencies,
+    mod_full_env = _create_serialized_env_info(
+        ctx = ctx,
+        setup_script_name = "{name}/{name}_mod_full_setup.sh".format(name = ctx.attr.name),
+        pre_info = ctx.attr.modules_prepare[KernelSerializedEnvInfo],
         restore_outputs_cmd = env_and_outputs_info_setup_restore_outputs,
-        extra_inputs = module_srcs.module_scripts,
+        extra_inputs = depset(
+            env_and_outputs_info_dependencies,
+            transitive = [module_srcs.module_scripts],
+        ),
     )
 
     # For kernel_modules_install()
-    ext_modinst_env_and_outputs_info = _create_env_and_outputs_info(
-        pre_info = ctx.attr.modules_prepare[KernelEnvAndOutputsInfo],
-        restore_outputs_cmd_deps = env_and_outputs_info_dependencies,
+    modinst_env = _create_serialized_env_info(
+        ctx = ctx,
+        setup_script_name = "{name}/{name}_modinst_setup.sh".format(name = ctx.attr.name),
+        pre_info = ctx.attr.modules_prepare[KernelSerializedEnvInfo],
         restore_outputs_cmd = env_and_outputs_info_setup_restore_outputs,
-        extra_inputs = module_srcs.module_scripts,
+        extra_inputs = depset(
+            env_and_outputs_info_dependencies,
+            transitive = [module_srcs.module_scripts],
+        ),
     )
 
     # For ddk_config()
-    config_env_and_outputs_info = _create_env_and_outputs_info(
-        pre_info = ctx.attr.config[KernelEnvAndOutputsInfo],
-        restore_outputs_cmd_deps = [],
+    ddk_config_env = _create_serialized_env_info(
+        ctx = ctx,
+        setup_script_name = "{name}/{name}_ddk_config_setup.sh".format(name = ctx.attr.name),
+        pre_info = ctx.attr.config[KernelSerializedEnvInfo],
         restore_outputs_cmd = "",
         extra_inputs = depset(transitive = [
             module_srcs.module_scripts,
@@ -1755,10 +1824,10 @@ def _create_infos(
     kernel_build_module_info = KernelBuildExtModuleInfo(
         modules_staging_archive = modules_staging_archive,
         module_hdrs = module_srcs.module_hdrs,
-        config_env_and_outputs_info = config_env_and_outputs_info,
-        modules_env_and_minimal_outputs_info = ext_mod_env_and_outputs_info,
-        modules_env_and_all_outputs_info = ext_mod_env_and_all_outputs_info,
-        modules_install_env_and_outputs_info = ext_modinst_env_and_outputs_info,
+        ddk_config_env = ddk_config_env,
+        mod_min_env = mod_min_env,
+        mod_full_env = mod_full_env,
+        modinst_env = modinst_env,
         collect_unstripped_modules = ctx.attr.collect_unstripped_modules,
         strip_modules = ctx.attr.strip_modules,
     )
@@ -1833,6 +1902,8 @@ def _create_infos(
     default_info_files.append(all_module_names_file)
     if module_scripts_archive:
         default_info_files.append(module_scripts_archive)
+    if internal_outs_archive:
+        default_info_files.append(internal_outs_archive)
     if kmi_strict_mode_out:
         default_info_files.append(kmi_strict_mode_out)
     default_info_files.extend(main_action_ret.module_symvers_outputs)
@@ -1918,6 +1989,10 @@ def _kernel_build_impl(ctx):
         ctx = ctx,
         module_srcs = module_srcs,
     )
+    internal_outs_archive = _create_internal_outs_archive(
+        ctx = ctx,
+        main_action_ret = main_action_ret,
+    )
 
     infos = _create_infos(
         ctx = ctx,
@@ -1930,6 +2005,7 @@ def _kernel_build_impl(ctx):
         kmi_symbol_list_violations_check_out = kmi_symbol_list_violations_check_out,
         module_scripts_archive = module_scripts_archive,
         module_srcs = module_srcs,
+        internal_outs_archive = internal_outs_archive,
     )
 
     return infos
@@ -1949,7 +2025,7 @@ _kernel_build = rule(
         "config": attr.label(
             mandatory = True,
             providers = [
-                KernelEnvAndOutputsInfo,
+                KernelSerializedEnvInfo,
                 KernelEnvAttrInfo,
                 KernelEnvMakeGoalsInfo,
                 KernelToolchainInfo,
@@ -2015,7 +2091,7 @@ _kernel_build = rule(
         # dependencies so KernelBuildExtModuleInfo and KernelBuildUapiInfo works.
         # There are no real dependencies. Bazel does not build these targets before building the
         # `_kernel_build` target.
-        "modules_prepare": attr.label(providers = [KernelEnvAndOutputsInfo]),
+        "modules_prepare": attr.label(providers = [KernelSerializedEnvInfo]),
         "kernel_uapi_headers": attr.label(),
         "combined_abi_symbollist": attr.label(
             doc = """The **combined** `abi_symbollist` file, consist of `kmi_symbol_list` and
@@ -2163,14 +2239,14 @@ def _kmi_symbol_list_strict_mode(ctx, all_output_files, all_module_names_file):
         all_module_names_file,
     ]
     inputs += ctx.files.raw_kmi_symbol_list  # This is 0 or 1 file
-    transitive_inputs = [ctx.attr.config[KernelEnvAndOutputsInfo].inputs]
+    transitive_inputs = [ctx.attr.config[KernelSerializedEnvInfo].inputs]
     tools = [ctx.executable._verify_ksymtab]
-    transitive_tools = [ctx.attr.config[KernelEnvAndOutputsInfo].tools]
+    transitive_tools = [ctx.attr.config[KernelSerializedEnvInfo].tools]
 
     out = ctx.actions.declare_file("{}_kmi_strict_out/kmi_symbol_list_strict_mode_checked".format(ctx.attr.name))
 
-    command = ctx.attr.config[KernelEnvAndOutputsInfo].get_setup_script(
-        data = ctx.attr.config[KernelEnvAndOutputsInfo].data,
+    command = kernel_utils.setup_serialized_env_cmd(
+        serialized_env_info = ctx.attr.config[KernelSerializedEnvInfo],
         restore_out_dir_cmd = utils.get_check_sandbox_cmd(),
     )
     command += """
@@ -2374,7 +2450,7 @@ def _create_module_scripts_archive(
     args.add_all(module_srcs.module_scripts)
 
     ctx.actions.run_shell(
-        mnemonic = "KernelBulidModuleScriptsArchive",
+        mnemonic = "KernelBuildModuleScriptsArchive",
         inputs = depset(transitive = [
             env_info.inputs,
             module_srcs.module_scripts,
@@ -2384,5 +2460,48 @@ def _create_module_scripts_archive(
         command = cmd,
         arguments = [args],
         progress_message = "Archiving scripts for ext module {}".format(_progress_message_suffix(ctx)),
+    )
+    return out
+
+def _create_internal_outs_archive(
+        ctx,
+        main_action_ret):
+    """Create `{name}_internal_outs.tar.gz`
+
+    Args:
+        ctx: ctx
+        main_action_ret: from `_build_main_action`
+    """
+
+    if not ctx.attr.pack_module_scripts:
+        return None
+
+    hermetic_tools = hermetic_toolchain.get(ctx)
+    internal_outs = main_action_ret.all_output_files["internal_outs"].values()
+    ruledir = main_action_ret.ruledir
+
+    out = ctx.actions.declare_file("{name}/{name}{suffix}".format(
+        name = ctx.label.name,
+        suffix = "_internal_outs.tar.gz",
+    ))
+    cmd = hermetic_tools.setup + """
+        # Create archive of internal_outs
+        tar cf {out} --dereference "$@" --transform 's:{ruledir}/::g'
+    """.format(
+        out = out.path,
+        ruledir = ruledir,
+    )
+
+    args = ctx.actions.args()
+    args.add_all(internal_outs)
+
+    ctx.actions.run_shell(
+        mnemonic = "KernelBuildInternalOutsArchive",
+        inputs = depset(internal_outs),
+        outputs = [out],
+        tools = hermetic_tools.deps,
+        command = cmd,
+        arguments = [args],
+        progress_message = "Archiving internal outs for ext module {}".format(_progress_message_suffix(ctx)),
     )
     return out
