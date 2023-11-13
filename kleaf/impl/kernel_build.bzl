@@ -53,9 +53,9 @@ load(":compile_commands_utils.bzl", "compile_commands_utils")
 load(
     ":constants.bzl",
     "MODULES_STAGING_ARCHIVE",
+    "MODULE_ENV_ARCHIVE_SUFFIX",
     "MODULE_OUTS_FILE_OUTPUT_GROUP",
     "MODULE_OUTS_FILE_SUFFIX",
-    "MODULE_SCRIPTS_ARCHIVE_SUFFIX",
     "TOOLCHAIN_VERSION_FILENAME",
 )
 load(":debug.bzl", "debug")
@@ -116,7 +116,8 @@ def kernel_build(
         modules_prepare_force_generate_headers = None,
         defconfig_fragments = None,
         page_size = None,
-        pack_module_scripts = None,
+        pack_module_env = None,
+        sanitizers = None,
         **kwargs):
     """Defines a kernel build target with all dependent targets.
 
@@ -410,13 +411,17 @@ def kernel_build(
           `"default"`, the defconfig is left as-is.
 
           16k / 64k page size is only supported on `arch = "arm64"`.
-        pack_module_scripts: If `True`, create `{name}_module_scripts.tar.gz` as
-          part of the default output of this target.
+        pack_module_env: If `True`, create `{name}_module_env.tar.gz`
+          and other archives as part of the default output of this target.
 
-          The archive contains necessary scripts to build external modules.
-
-          **IMPLEMENTATION DETAIL**: The list of scripts is defined by
-          `kernel_utils.filter_module_srcs().module_scripts`.
+          These archives contains necessary files to build external modules.
+        sanitizers: **non-configurable**. A list of sanitizer configurations.
+          By default, no sanitizers are explicity configured; values in defconfig are
+          respected. Possible values are:
+            - `["kasan_any_mode"]`
+            - `["kasan_sw_tags"]`
+            - `["kasan_generic"]`
+            - `["kcsan"]`
         **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
@@ -431,6 +436,10 @@ def kernel_build(
     kmi_symbol_list_target_name = name + "_kmi_symbol_list"
     abi_symbollist_target_name = name + "_kmi_symbol_list_abi_symbollist"
     raw_kmi_symbol_list_target_name = name + "_raw_kmi_symbol_list"
+
+    # Currently only support one sanitizer
+    if sanitizers and len(sanitizers) > 1:
+        fail("only one sanitizer may be passed to kernel_build.sanitizers")
 
     if srcs == None:
         srcs = native.glob(
@@ -471,6 +480,7 @@ def kernel_build(
         kernel_build_defconfig_fragments = defconfig_fragments,
         kernel_build_arch = arch,
         kernel_build_page_size = page_size,
+        kernel_build_sanitizers = sanitizers,
         **internal_kwargs
     )
 
@@ -597,7 +607,8 @@ def kernel_build(
         src_protected_modules_list = protected_modules_list,
         src_kmi_symbol_list = kmi_symbol_list,
         trim_nonlisted_kmi = trim_nonlisted_kmi,
-        pack_module_scripts = pack_module_scripts,
+        pack_module_env = pack_module_env,
+        sanitizers = sanitizers,
         **kwargs
     )
 
@@ -719,6 +730,11 @@ def _skip_build_checks(ctx, what):
               IGNORED because --debug is set!".format(this_label = ctx.label, what = what))
         return True
 
+    if ctx.attr.sanitizers[0] != "default":
+        print("\nWARNING: {this_label}: {what} was\
+              IGNORED because kernel_build.sanitizers is set!".format(this_label = ctx.label, what = what))
+        return True
+
     return False
 
 def _get_defconfig_fragments(
@@ -726,16 +742,13 @@ def _get_defconfig_fragments(
         kernel_build_defconfig_fragments,
         kernel_build_arch,
         kernel_build_page_size,
+        kernel_build_sanitizers,
         **internal_kwargs):
     # Use a separate list to avoid .append on the provided object directly.
     # kernel_build_defconfig_fragments could be a list or a select() expression.
     additional_fragments = [
         Label("//build/kernel/kleaf:defconfig_fragment"),
         Label("//build/kernel/kleaf/impl/defconfig:debug"),
-        Label("//build/kernel/kleaf/impl/defconfig:kasan_any_mode"),
-        Label("//build/kernel/kleaf/impl/defconfig:{}_kasan_sw_tags".format(kernel_build_arch)),
-        Label("//build/kernel/kleaf/impl/defconfig:kasan_generic"),
-        Label("//build/kernel/kleaf/impl/defconfig:kcsan"),
     ]
 
     btf_debug_info_target = kernel_build_name + "_defconfig_fragment_btf_debug_info"
@@ -781,6 +794,33 @@ def _get_defconfig_fragments(
         **internal_kwargs
     )
     additional_fragments.append(page_size_target)
+
+    kernel_build_sanitizer = "default"
+    if kernel_build_sanitizers:
+        kernel_build_sanitizer = kernel_build_sanitizers[0]
+
+    sanitizer_target = kernel_build_name + "_defconfig_fragment_sanitizer"
+    file_selector(
+        name = sanitizer_target,
+        first_selector = select({
+            Label("//build/kernel/kleaf/impl:kasan_any_mode_is_set_to_true"): "kasan_any_mode",
+            Label("//build/kernel/kleaf/impl:kasan_sw_tags_is_set_to_true"): "kasan_sw_tags",
+            Label("//build/kernel/kleaf/impl:kasan_generic_is_set_to_true"): "kasan_generic",
+            Label("//build/kernel/kleaf/impl:kcsan_is_set_to_true"): "kcsan",
+            "//conditions:default": None,
+        }),
+        second_selector = kernel_build_sanitizer,
+        third_selector = "default",
+        files = {
+            Label("//build/kernel/kleaf/impl/defconfig:kasan_any_mode"): "kasan_any_mode",
+            Label("//build/kernel/kleaf/impl/defconfig:{}_kasan_sw_tags".format(kernel_build_arch)): "kasan_sw_tags",
+            Label("//build/kernel/kleaf/impl/defconfig:kasan_generic"): "kasan_generic",
+            Label("//build/kernel/kleaf/impl/defconfig:kcsan"): "kcsan",
+            Label("//build/kernel/kleaf/impl:empty_filegroup"): "default",
+        },
+        **internal_kwargs
+    )
+    additional_fragments.append(sanitizer_target)
 
     if kernel_build_defconfig_fragments == None:
         kernel_build_defconfig_fragments = []
@@ -2102,7 +2142,11 @@ _kernel_build = rule(
         "src_protected_exports_list": attr.label(allow_single_file = True),
         "src_protected_modules_list": attr.label(allow_single_file = True),
         "src_kmi_symbol_list": attr.label(allow_single_file = True),
-        "pack_module_scripts": attr.bool(default = False, doc = "Create `<name>_module_scripts.tar.gz`."),
+        "pack_module_env": attr.bool(default = False, doc = "Create `<name>_module_scripts.tar.gz`."),
+        "sanitizers": attr.string_list(
+            allow_empty = False,
+            default = ["default"],
+        ),
     } | _kernel_build_additional_attrs(),
     toolchains = [hermetic_toolchain.type],
 )
@@ -2298,6 +2342,13 @@ def _kmi_symbol_list_violations_check(ctx, modules_staging_archive):
     if _skip_build_checks(ctx, what = "Symbol list violations check"):
         return None
 
+    # Skip for sanitizer build as they are not valid GKI releasae configurations.
+    # Downstreams are expect to build kernel+modules+vendor modules locally
+    # and can disable the runtime symbol protection with CONFIG_SIG_PROTECT=n
+    # if required.
+    if ctx.attr.sanitizers[0] != "default":
+        return None
+
     inputs = [
         modules_staging_archive,
     ]
@@ -2423,43 +2474,51 @@ def _create_module_scripts_archive(
         ctx: ctx
         module_srcs: from `kernel_utils.filter_module_srcs`
     """
-    if not ctx.attr.pack_module_scripts:
+    if not ctx.attr.pack_module_env:
         return None
 
     intermediates_dir = utils.intermediates_dir(ctx)
     env_info = ctx.attr.config[KernelBuildOriginalEnvInfo].env_info
     out = ctx.actions.declare_file("{name}/{name}{suffix}".format(
         name = ctx.label.name,
-        suffix = MODULE_SCRIPTS_ARCHIVE_SUFFIX,
+        suffix = MODULE_ENV_ARCHIVE_SUFFIX,
     ))
+
+    tar_srcs = depset(transitive = [
+        module_srcs.module_scripts,
+        module_srcs.module_kconfig,
+    ])
+
     cmd = env_info.setup + """
-        # Create archive of module_scripts below ${{KERNEL_DIR}}
+        # Create archive of module_scripts/module_kconfig below ${{KERNEL_DIR}}
         mkdir -p {intermediates_dir}
         for file in "$@"; do
             if [[ "${{file}}" =~ ^"${{KERNEL_DIR}}"/ ]]; then
                 echo "${{file#"${{KERNEL_DIR}}"/}}"
             fi
-        done > {intermediates_dir}/module_scripts_file_list.txt
-        tar cf {out} --dereference -T {intermediates_dir}/module_scripts_file_list.txt -C ${{KERNEL_DIR}}
+        done > {intermediates_dir}/file_list.txt
+        tar cf {out} --dereference -T {intermediates_dir}/file_list.txt -C ${{KERNEL_DIR}}
     """.format(
         out = out.path,
         intermediates_dir = intermediates_dir,
     )
 
     args = ctx.actions.args()
-    args.add_all(module_srcs.module_scripts)
+
+    # Uniquify for shorter script, and due to https://github.com/landley/toybox/issues/457
+    args.add_all(tar_srcs, uniquify = True)
 
     ctx.actions.run_shell(
         mnemonic = "KernelBuildModuleScriptsArchive",
         inputs = depset(transitive = [
             env_info.inputs,
-            module_srcs.module_scripts,
+            tar_srcs,
         ]),
         outputs = [out],
         tools = env_info.tools,
         command = cmd,
         arguments = [args],
-        progress_message = "Archiving scripts for ext module {}".format(_progress_message_suffix(ctx)),
+        progress_message = "Archiving scripts/kconfig for ext module {}".format(_progress_message_suffix(ctx)),
     )
     return out
 
@@ -2473,7 +2532,7 @@ def _create_internal_outs_archive(
         main_action_ret: from `_build_main_action`
     """
 
-    if not ctx.attr.pack_module_scripts:
+    if not ctx.attr.pack_module_env:
         return None
 
     hermetic_tools = hermetic_toolchain.get(ctx)

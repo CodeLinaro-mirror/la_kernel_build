@@ -150,6 +150,7 @@ class KleafIntegrationTestBase(unittest.TestCase):
                     startup_options=(),
                     **kwargs) -> None:
         """Executes a bazel command."""
+
         startup_options = list(startup_options)
         startup_options.append(f"--bazelrc={self._bazel_rc.name}")
         command_args = list(command_args)
@@ -446,23 +447,26 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
         """Tests that out/ can be overridden.
 
         See b/267580482."""
-        default_out = pathlib.Path("out")
-        new_out = tempfile.TemporaryDirectory()
-        self.addCleanup(new_out.cleanup)
-        try:
-            shutil.rmtree(default_out)
-        except FileNotFoundError:
-            pass
-        self._check_call(command="build",
-                         command_args=["//build/kernel/kleaf:empty_test"] +
-                         _FASTEST)
-        self.assertTrue(default_out.exists())
-        shutil.rmtree(default_out)
-        self._check_call(startup_options=[f"--output_root={new_out.name}"],
+        new_out1 = tempfile.TemporaryDirectory()
+        new_out2 = tempfile.TemporaryDirectory()
+        self.addCleanup(new_out1.cleanup)
+        self.addCleanup(new_out2.cleanup)
+        shutil.rmtree(new_out1.name)
+        shutil.rmtree(new_out2.name)
+
+        self._check_call(startup_options=[f"--output_root={new_out1.name}"],
                          command="build",
                          command_args=["//build/kernel/kleaf:empty_test"] +
                          _FASTEST)
-        self.assertFalse(default_out.exists())
+        self.assertTrue(pathlib.Path(new_out1.name).exists())
+        self.assertFalse(pathlib.Path(new_out2.name).exists())
+        shutil.rmtree(new_out1.name)
+        self._check_call(startup_options=[f"--output_root={new_out2.name}"],
+                         command="build",
+                         command_args=["//build/kernel/kleaf:empty_test"] +
+                         _FASTEST)
+        self.assertFalse(pathlib.Path(new_out1.name).exists())
+        self.assertTrue(pathlib.Path(new_out2.name).exists())
 
     def test_config_uapi_header_test(self):
         """Tests that CONFIG_UAPI_HEADER_TEST is not deleted.

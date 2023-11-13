@@ -23,7 +23,7 @@ load(
     "kcsan_lto_test",
 )
 
-# Analysis test
+# Quick test on artifacts.
 
 kasan_lto_test(name = "kasan_lto_test")
 
@@ -34,8 +34,6 @@ kasan_generic_lto_test(name = "kasan_generic_lto_test")
 kcsan_lto_test(name = "kcsan_lto_test")
 
 debug_lto_test(name = "debug_lto_test")
-
-# Quick test on artifacts.
 
 kernel_config_option_test_suite(name = "kernel_config_option_test_suite")
 
