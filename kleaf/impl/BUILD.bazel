@@ -93,6 +93,7 @@ bzl_library(
         "kgdb.bzl",
         "kleaf_host_tools_repo.bzl",
         "kmi_symbol_list.bzl",
+        "local_repository.bzl",
         "merge_kzip.bzl",
         "merged_kernel_uapi_headers.bzl",
         "modules_prepare.bzl",
@@ -293,6 +294,14 @@ bool_flag(
     name = "incompatible_disable_hermetic_tools_info",
     build_setting_default = True,
     visibility = ["//build/kernel:__pkg__"],
+)
+
+# If true, fail_action() does not fail to build, but write failure
+# message to its default output file.
+bool_setting(
+    name = "fail_action_write_to_file",
+    build_setting_default = False,
+    visibility = ["//build/kernel/kleaf:__pkg__"],
 )
 
 py_binary(
