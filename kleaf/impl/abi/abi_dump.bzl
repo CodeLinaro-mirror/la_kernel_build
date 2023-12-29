@@ -14,7 +14,7 @@
 
 """Rules for ABI extraction."""
 
-load(":abi/abi_transitions.bzl", "with_vmlinux_transition")
+load(":abi/abi_transitions.bzl", "abi_common_attrs", "with_vmlinux_transition")
 load(
     ":common_providers.bzl",
     "KernelBuildAbiInfo",
@@ -89,7 +89,7 @@ def _abi_dump_full_stg(ctx):
         )
 
     command = hermetic_tools.setup + """
-        {stg} --output {full_abi_out_file} --elf {vmlinux} {all_modules}
+        {stg} --files '*.h' --output {full_abi_out_file} --elf {vmlinux} {all_modules}
     """.format(
         stg = ctx.file._stg.path,
         full_abi_out_file = full_abi_out_file.path,
@@ -162,7 +162,7 @@ abi_dump = rule(
             cfg = "exec",
             executable = True,
         ),
-    },
+    } | abi_common_attrs(),
     cfg = with_vmlinux_transition,
     toolchains = [hermetic_toolchain.type],
 )

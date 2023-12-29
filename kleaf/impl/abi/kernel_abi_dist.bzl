@@ -16,7 +16,7 @@
 
 load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
 load("//build/bazel_common_rules/exec:exec.bzl", "exec_rule")
-load(":abi/abi_transitions.bzl", "with_vmlinux_transition")
+load(":abi/abi_transitions.bzl", "abi_common_attrs", "with_vmlinux_transition")
 load(":hermetic_exec.bzl", "hermetic_exec", "hermetic_exec_target")
 
 visibility("//build/kernel/kleaf/...")
@@ -27,7 +27,7 @@ _kernel_abi_dist_exec = exec_rule(
         "_allowlist_function_transition": attr.label(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
         ),
-    },
+    } | abi_common_attrs(),
 )
 
 def _hermetic_kernel_abi_dist_exec(**kwargs):
@@ -57,7 +57,7 @@ def kernel_abi_dist(
       kernel_build_add_vmlinux: If `True`, all `kernel_build` targets depended
         on by this change automatically applies a
         [transition](https://bazel.build/extending/config#user-defined-transitions)
-        that always builds `vmlinux` and sets `kbuild_symtypes="true"`. For
+        that always builds `vmlinux`. For
         up-to-date implementation details, look for `with_vmlinux_transition`
         in `build/kernel/kleaf/impl/abi`.
 
