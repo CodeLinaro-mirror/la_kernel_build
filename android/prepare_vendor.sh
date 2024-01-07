@@ -161,6 +161,9 @@ case "${KERNEL_TARGET}" in
   taro)
     KERNEL_TARGET="waipio"
     ;;
+  volcano)
+    KERNEL_TARGET="pineapple"
+    ;;
 esac
 
 ################################################################################
@@ -273,7 +276,7 @@ fi
 
 ################################################################################
 if [ "${RECOMPILE_ABL}" == "1" ] && [ -n "${TARGET_BUILD_VARIANT}" ] && \
-   [ "${KERNEL_TARGET}" != "autogvm" ]; then
+   [ "${KERNEL_TARGET}" != "autogvm" ] && [ "${KERNEL_TARGET}" != "autoghgvm" ]; then
   echo
   echo "  Recompiling edk2"
     (
