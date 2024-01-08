@@ -116,12 +116,15 @@ def _build_modules_image_impl_common(
 
     for attr_name in (
         "modules_list",
+        "modules_recovery_list",
+        "modules_charger_list",
         "modules_blocklist",
         "vendor_dlkm_fs_type",
         "vendor_dlkm_modules_list",
         "vendor_dlkm_modules_blocklist",
         "vendor_dlkm_props",
         "system_dlkm_fs_type",
+        "system_dlkm_fs_types",
         "system_dlkm_modules_list",
         "system_dlkm_modules_blocklist",
         "system_dlkm_props",
