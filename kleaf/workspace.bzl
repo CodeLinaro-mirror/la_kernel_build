@@ -96,6 +96,18 @@ WARNING: define_kleaf_workspace() should be called with common_kernel_package={}
         path = "external/stardoc",
     )
 
+    maybe(
+        repo_rule = kleaf_local_repository,
+        name = "rules_license",
+        path = "external/bazelbuild-rules_license",
+    )
+
+    maybe(
+        repo_rule = kleaf_local_repository,
+        name = "rules_pkg",
+        path = "external/bazelbuild-rules_pkg",
+    )
+
     # Superset of all tools we need from host.
     # For the subset of host tools we typically use for a kernel build,
     # see //build/kernel:hermetic-tools.
@@ -131,6 +143,18 @@ WARNING: define_kleaf_workspace() should be called with common_kernel_package={}
         name = "libcap_ng",
         path = "external/libcap-ng",
         build_file = "build/kernel/kleaf/libcap_ng.BUILD",
+    )
+
+    new_kleaf_local_repository(
+        name = "zopfli",
+        path = "external/zopfli",
+        build_file = "build/kernel/kleaf/zopfli.BUILD",
+    )
+
+    new_kleaf_local_repository(
+        name = "pigz",
+        path = "external/pigz",
+        build_file = "build/kernel/kleaf/pigz.BUILD",
     )
 
     key_value_repo(
