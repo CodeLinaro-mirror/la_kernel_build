@@ -248,8 +248,32 @@ function build_system_dlkm() {
     done
   fi
 
+  if [ -z "${SYSTEM_DLKM_IMAGE_NAME}" ]; then
+    SYSTEM_DLKM_IMAGE_NAME="system_dlkm.img"
+  fi
+
   build_image "${SYSTEM_DLKM_STAGING_DIR}" "${system_dlkm_props_file}" \
-    "${DIST_DIR}/system_dlkm.img" /dev/null
+    "${DIST_DIR}/${SYSTEM_DLKM_IMAGE_NAME}" /dev/null
+  local generated_images=(${SYSTEM_DLKM_IMAGE_NAME})
+
+  # Build flatten image as /lib/modules/*.ko; if unset or null: default false
+  if [[ ${SYSTEM_DLKM_GEN_FLATTEN_IMAGE:-0} == "1" ]]; then
+    local system_dlkm_flatten_image_name="system_dlkm.flatten.${SYSTEM_DLKM_FS_TYPE}.img"
+    mkdir -p ${SYSTEM_DLKM_STAGING_DIR}/flatten/lib/modules
+    cp $(find ${SYSTEM_DLKM_STAGING_DIR} -type f -name "*.ko") ${SYSTEM_DLKM_STAGING_DIR}/flatten/lib/modules
+    # Copy required depmod artifacts and scrub required files to correct paths
+    cp $(find ${SYSTEM_DLKM_STAGING_DIR} -name "modules.dep") ${SYSTEM_DLKM_STAGING_DIR}/flatten/lib/modules
+    # Remove existing paths leaving just basenames
+    sed -i 's/kernel[^:[:space:]]*\/\([^:[:space:]]*\.ko\)/\1/g' ${SYSTEM_DLKM_STAGING_DIR}/flatten/lib/modules/modules.dep
+    # Prefix /system/lib/modules/ for every module
+    sed -i 's#\([^:[:space:]]*\.ko\)#/system/lib/modules/\1#g' ${SYSTEM_DLKM_STAGING_DIR}/flatten/lib/modules/modules.dep
+    cp $(find ${SYSTEM_DLKM_STAGING_DIR} -name "modules.load") ${SYSTEM_DLKM_STAGING_DIR}/flatten/lib/modules
+    sed -i 's#.*/##' ${SYSTEM_DLKM_STAGING_DIR}/flatten/lib/modules/modules.load
+
+    build_image "${SYSTEM_DLKM_STAGING_DIR}/flatten" "${system_dlkm_props_file}" \
+    "${DIST_DIR}/${system_dlkm_flatten_image_name}" /dev/null
+    generated_images+=(${system_dlkm_flatten_image_name})
+   fi
 
   if [ -z "${SYSTEM_DLKM_PROPS}" ]; then
     rm ${system_dlkm_props_file}
@@ -257,10 +281,13 @@ function build_system_dlkm() {
   fi
 
   # No need to sign the image as modules are signed
-  avbtool add_hashtree_footer \
-    --partition_name system_dlkm \
-    --hash_algorithm sha256 \
-    --image "${DIST_DIR}/system_dlkm.img"
+  for image in "${generated_images[@]}"
+  do
+    avbtool add_hashtree_footer \
+      --partition_name system_dlkm \
+      --hash_algorithm sha256 \
+      --image "${DIST_DIR}/${image}"
+  done
 
   # Archive system_dlkm_staging_dir
   tar -czf "${DIST_DIR}/system_dlkm_staging_archive.tar.gz" -C "${SYSTEM_DLKM_STAGING_DIR}" .
@@ -338,6 +365,11 @@ function build_vendor_dlkm() {
 
   build_image "${VENDOR_DLKM_STAGING_DIR}" "${vendor_dlkm_props_file}" \
     "${DIST_DIR}/vendor_dlkm.img" /dev/null
+
+  avbtool add_hashtree_footer \
+    --partition_name vendor_dlkm \
+    --hash_algorithm sha256 \
+    --image "${DIST_DIR}/vendor_dlkm.img"
 
   if [ -n "${vendor_dlkm_archive}" ]; then
     # Archive vendor_dlkm_staging_dir
@@ -648,30 +680,44 @@ function gki_get_boot_img_size() {
   echo "${!boot_size_var}"
 }
 
-# gki_add_avb_footer <image> <partition_size>
+# gki_add_avb_footer <image> <partition_size> <security_patch_level>
 function gki_add_avb_footer() {
+  local spl_date="$3"
+  local additional_props=""
+  if [ -n "${spl_date}" ]; then
+    additional_props="--prop com.android.build.boot.security_patch:${spl_date}"
+  fi
+
   avbtool add_hash_footer --image "$1" \
-    --partition_name boot --partition_size "$2"
+    --partition_name boot --partition_size "$2" \
+    ${additional_props}
 }
 
-# gki_dry_run_certify_bootimg <boot_image> <gki_artifacts_info_file>
+# gki_dry_run_certify_bootimg <boot_image> <gki_artifacts_info_file> <security_patch_level>
 # The certify_bootimg script will be executed on a server over a GKI
 # boot.img during the official certification process, which embeds
 # a GKI certificate into the boot.img. The certificate is for Android
 # VTS to verify that a GKI boot.img is authentic.
 # Dry running the process here so we can catch related issues early.
 function gki_dry_run_certify_bootimg() {
+  local spl_date="$3"
+  local additional_props=()
+  if [ -n "${spl_date}" ]; then
+    additional_props+=("--extra_footer_args" \
+      "--prop com.android.build.boot.security_patch:${spl_date}")
+  fi
+
   certify_bootimg --boot_img "$1" \
     --algorithm SHA256_RSA4096 \
     --key tools/mkbootimg/gki/testdata/testkey_rsa4096.pem \
     --gki_info "$2" \
-    --output "$1"
+    --output "$1" \
+    "${additional_props[@]}"
 }
 
 # build_gki_artifacts_info <output_gki_artifacts_info_file>
 function build_gki_artifacts_info() {
-  local artifacts_info="certify_bootimg_extra_args=--prop ARCH:${ARCH} \
---prop BRANCH:${BRANCH}"
+  local artifacts_info="certify_bootimg_extra_args=--prop ARCH:${ARCH} --prop BRANCH:${BRANCH}"
 
   if [ -n "${BUILD_NUMBER}" ]; then
     artifacts_info="${artifacts_info} --prop BUILD_NUMBER:${BUILD_NUMBER}"
@@ -730,10 +776,28 @@ function build_gki_boot_images() {
     "${MKBOOTIMG_PATH}" "${GKI_MKBOOTIMG_ARGS[@]}"
 
     if [[ -z "${BUILD_GKI_BOOT_SKIP_AVB}" ]]; then
+      # Pick a SPL date far enough in the future so that you can flash
+      # development GKI kernels on an unlocked device without wiping the
+      # userdata. This is for development purposes only and should be
+      # overwritten by the Android platform build to include an accurate SPL.
+      # Note, the certified GKI release builds will not include the SPL
+      # property.
+      local spl_month=$((($(date +'%m') + 3) % 12))
+      local spl_year="$(date +'%Y')"
+      if [ $((${spl_month} % 3)) -gt 0 ]; then
+        # Round up to the next quarterly platform release (QPR) month
+        spl_month=$((${spl_month} + 3 - (${spl_month} % 3)))
+      fi
+      if [ "${spl_month}" -lt "$(date +'%m')" ]; then
+        # rollover to the next year
+        spl_year="$((${spl_year} + 1))"
+      fi
+      local spl_date=$(printf "%d-%02d-05\n" ${spl_year} ${spl_month})
+
       gki_add_avb_footer "${boot_image_path}" \
-        "$(gki_get_boot_img_size "${compression}")"
+        "$(gki_get_boot_img_size "${compression}")" "${spl_date}"
       gki_dry_run_certify_bootimg "${boot_image_path}" \
-        "${GKI_ARTIFACTS_INFO_FILE}"
+        "${GKI_ARTIFACTS_INFO_FILE}" "${spl_date}"
     fi
     images_to_pack+=("${boot_image}")
   done
