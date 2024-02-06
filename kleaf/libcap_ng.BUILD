@@ -12,22 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//build/kernel/kleaf:workspace.bzl", "define_kleaf_workspace")
-
-define_kleaf_workspace(include_remote_java_tools_repo = True)
-
-# The vendored rules_java repository.
-local_repository(
-    name = "rules_java",
-    path = "external/bazelbuild-rules_java",
+cc_library(
+    name = "libcap-ng-config",
+    hdrs = ["config.h"],
+    visibility = ["//visibility:private"],
 )
 
-local_repository(
-    name = "io_bazel_stardoc",
-    path = "external/stardoc",
+cc_library(
+    name = "libcap-ng",
+    srcs = [
+        "libcap-ng-0.7/src/cap-ng.c",
+        "libcap-ng-0.7/src/lookup_table.c",
+    ],
+    hdrs = [
+        "libcap-ng-0.7/src/cap-ng.h",
+        "libcap-ng-0.7/src/captab.h",
+    ],
+    copts = [
+        "-Wall",
+        "-Werror",
+        "-Wno-enum-conversion",
+        "-Wno-unused-parameter",
+    ],
+    strip_include_prefix = "libcap-ng-0.7/src",
+    visibility = ["//visibility:public"],
+    deps = [":libcap-ng-config"],
 )
-
-# Optional epilog for analysis testing.
-load("//build/kernel/kleaf:workspace_epilog.bzl", "define_kleaf_workspace_epilog")
-
-define_kleaf_workspace_epilog()

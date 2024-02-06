@@ -157,7 +157,7 @@ def _kernel_env_impl(ctx):
         command += """
               export KCONFIG_EXT={kconfig_ext}
             """.format(
-            kconfig_ext = kconfig_ext.short_path,
+            kconfig_ext = kconfig_ext.path,
         )
     if dtstree_makefile:
         command += """
@@ -226,6 +226,8 @@ def _kernel_env_impl(ctx):
           {toolchains_setup_env_var_cmd}
         # TODO(b/236012223) Remove the warning after deprecation.
           {make_goals_deprecation_warning}
+        # Identify the build user as 'kleaf' to recognize a kleaf-built kernel
+          export KBUILD_BUILD_USER=kleaf
         # Add a comment with config_tags for debugging
           cp -p {config_tags_comment_file} {out}
           chmod +w {out}

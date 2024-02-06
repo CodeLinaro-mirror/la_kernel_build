@@ -47,6 +47,8 @@ def kernel_images(
         boot_image_outs = None,
         gki_ramdisk_prebuilt_binary = None,
         modules_list = None,
+        modules_recovery_list = None,
+        modules_charger_list = None,
         modules_blocklist = None,
         modules_options = None,
         vendor_ramdisk_binaries = None,
@@ -121,6 +123,8 @@ def kernel_images(
           - For `initramfs`:
             - The file specified by `MODULES_LIST`
             - The file specified by `MODULES_BLOCKLIST`, if `MODULES_BLOCKLIST` is set
+            - The file containing the list of modules needed for booting into recovery.
+            - The file containing the list of modules needed for booting into charger mode.
           - For `vendor_dlkm` image:
             - The file specified by `VENDOR_DLKM_MODULES_LIST`
             - The file specified by `VENDOR_DLKM_MODULES_BLOCKLIST`, if set
@@ -150,9 +154,9 @@ def kernel_images(
         build_vendor_dlkm: Whether to build `vendor_dlkm` image. It must be set if
           `vendor_dlkm_modules_list` is set.
 
-          Note: at the time of writing (Jan 2022), unlike `build.sh`,
-          `vendor_dlkm.modules.blocklist` is **always** created
-          regardless of the value of `VENDOR_DLKM_MODULES_BLOCKLIST`.
+          Note: at the time of writing (Jan 2022),
+          `vendor_dlkm.modules.blocklist` is **always** created regardless of
+          the value of `VENDOR_DLKM_MODULES_BLOCKLIST`.
           If `build_vendor_dlkm()` in `build_utils.sh` does not generate
           `vendor_dlkm.modules.blocklist`, an empty file is created.
         build_boot: Whether to build boot image. It must be set if either `BUILD_BOOT_IMG`
@@ -213,8 +217,10 @@ def kernel_images(
 
           This is also required if `dedup_dlkm_modules and not build_system_dlkm`.
         modules_list: A file containing list of modules to use for `vendor_boot.modules.load`.
-
-          This corresponds to `MODULES_LIST` in `build.config` for `build.sh`.
+        modules_recovery_list: A file containing a list of modules to load when booting into
+          recovery.
+        modules_charger_list: A file containing a list of modules to load when booting into
+          charger mode.
         modules_blocklist: A file containing a list of modules which are
           blocked from being loaded.
 
@@ -222,16 +228,12 @@ def kernel_images(
           ```
           blocklist module_name
           ```
-
-          This corresponds to `MODULES_BLOCKLIST` in `build.config` for `build.sh`.
         modules_options: Label to a file copied to `/lib/modules/<kernel_version>/modules.options` on the ramdisk.
 
           Lines in the file should be of the form:
           ```
           options <modulename> <param1>=<val> <param2>=<val> ...
           ```
-
-          This corresponds to `MODULES_OPTIONS` in `build.config` for `build.sh`.
         system_dlkm_fs_type: Deprecated. Use `system_dlkm_fs_types` instead.
 
             Supported filesystems for `system_dlkm` image are `ext4` and `erofs`.
@@ -244,8 +246,6 @@ def kernel_images(
         system_dlkm_modules_list: location of an optional file
           containing the list of kernel modules which shall be copied into a
           system_dlkm partition image.
-
-          This corresponds to `SYSTEM_DLKM_MODULES_LIST` in `build.config` for `build.sh`.
         system_dlkm_modules_blocklist: location of an optional file containing a list of modules
           which are blocked from being loaded.
 
@@ -253,15 +253,11 @@ def kernel_images(
           ```
           blocklist module_name
           ```
-
-          This corresponds to `SYSTEM_DLKM_MODULES_BLOCKLIST` in `build.config` for `build.sh`.
         system_dlkm_props: location of a text file containing
           the properties to be used for creation of a `system_dlkm` image
           (filesystem, partition size, etc). If this is not set (and
           `build_system_dlkm` is), a default set of properties will be used
           which assumes an ext4 filesystem and a dynamic partition.
-
-          This corresponds to `SYSTEM_DLKM_PROPS` in `build.config` for `build.sh`.
         vendor_dlkm_archive: If set, enable archiving the vendor_dlkm staging directory.
         vendor_dlkm_fs_type: Supported filesystems for `vendor_dlkm.img` are `ext4` and `erofs`. Defaults to `ext4` if not specified.
         vendor_dlkm_etc_files: Files that need to be copied to `vendor_dlkm.img` etc/ directory.
@@ -270,8 +266,6 @@ def kernel_images(
           `vendor_dlkm` partition image. Any modules passed into `MODULES_LIST` which
           become part of the `vendor_boot.modules.load` will be trimmed from the
           `vendor_dlkm.modules.load`.
-
-          This corresponds to `VENDOR_DLKM_MODULES_LIST` in `build.config` for `build.sh`.
         vendor_dlkm_modules_blocklist: location of an optional file containing a list of modules
           which are blocked from being loaded.
 
@@ -279,15 +273,11 @@ def kernel_images(
           ```
           blocklist module_name
           ```
-
-          This corresponds to `VENDOR_DLKM_MODULES_BLOCKLIST` in `build.config` for `build.sh`.
         vendor_dlkm_props: location of a text file containing
           the properties to be used for creation of a `vendor_dlkm` image
           (filesystem, partition size, etc). If this is not set (and
           `build_vendor_dlkm` is), a default set of properties will be used
           which assumes an ext4 filesystem and a dynamic partition.
-
-          This corresponds to `VENDOR_DLKM_PROPS` in `build.config` for `build.sh`.
         vendor_ramdisk_binaries: List of vendor ramdisk binaries
           which includes the device-specific components of ramdisk like the fstab
           file and the device-specific rc files. If specifying multiple vendor ramdisks
@@ -297,8 +287,6 @@ def kernel_images(
           ```
           # do not sort
           ```
-
-          This corresponds to `VENDOR_RAMDISK_BINARY` in `build.config` for `build.sh`.
         ramdisk_compression: If provided it specfies the format used for any ramdisks generated.
           If not provided a fallback value from build.config is used.
           Possible values are `lz4`, `gzip`, None.
@@ -380,12 +368,23 @@ def kernel_images(
     if build_vendor_kernel_boot and "vendor_kernel_boot.img" not in boot_image_outs:
         boot_image_outs.append("vendor_kernel_boot.img")
 
+    vendor_boot_name = None
+    if build_vendor_boot:
+        vendor_boot_name = "vendor_boot"
+    elif build_vendor_kernel_boot:
+        vendor_boot_name = "vendor_kernel_boot"
+
     vendor_boot_modules_load = None
+    vendor_boot_modules_load_recovery = None
+    vendor_boot_modules_load_charger = None
     if build_initramfs:
-        if build_vendor_boot:
-            vendor_boot_modules_load = "{}_initramfs/vendor_boot.modules.load".format(name)
-        elif build_vendor_kernel_boot:
-            vendor_boot_modules_load = "{}_initramfs/vendor_kernel_boot.modules.load".format(name)
+        vendor_boot_modules_load = "{}_initramfs/{}.modules.load".format(name, vendor_boot_name)
+
+        if modules_recovery_list:
+            vendor_boot_modules_load_recovery = "{}_initramfs/{}.modules.load.recovery".format(name, vendor_boot_name)
+
+        if modules_charger_list:
+            vendor_boot_modules_load_charger = "{}_initramfs/{}.modules.load.charger".format(name, vendor_boot_name)
 
         if ramdisk_compression_args and ramdisk_compression != "lz4":
             fail(
@@ -399,7 +398,11 @@ def kernel_images(
             kernel_modules_install = kernel_modules_install,
             deps = deps,
             vendor_boot_modules_load = vendor_boot_modules_load,
+            vendor_boot_modules_load_recovery = vendor_boot_modules_load_recovery,
+            vendor_boot_modules_load_charger = vendor_boot_modules_load_charger,
             modules_list = modules_list,
+            modules_recovery_list = modules_recovery_list,
+            modules_charger_list = modules_charger_list,
             modules_blocklist = modules_blocklist,
             modules_options = modules_options,
             ramdisk_compression = ramdisk_compression,
@@ -451,12 +454,6 @@ def kernel_images(
         all_rules.append(":{}_vendor_dlkm_image".format(name))
 
     if build_any_boot_image:
-        if build_vendor_kernel_boot:
-            vendor_boot_name = "vendor_kernel_boot"
-        elif build_vendor_boot:
-            vendor_boot_name = "vendor_boot"
-        else:
-            vendor_boot_name = None
         boot_images(
             name = "{}_boot_images".format(name),
             kernel_build = kernel_build,

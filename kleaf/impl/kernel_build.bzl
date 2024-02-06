@@ -363,8 +363,6 @@ def kernel_build(
           and the KMI resulting from the build, to ensure
           they match 1-1.
         collect_unstripped_modules: If `True`, provide all unstripped in-tree.
-
-          Approximately equivalent to `UNSTRIPPED_MODULES=*` in `build.sh`.
         enable_interceptor: If set to `True`, enable interceptor so it can be
           used in [`kernel_compile_commands`](#kernel_compile_commands).
         kbuild_symtypes: The value of `KBUILD_SYMTYPES`.
@@ -869,7 +867,7 @@ def _create_kbuild_mixed_tree(ctx):
             rm -rf ${{KBUILD_MIXED_TREE}}
             mkdir -p ${{KBUILD_MIXED_TREE}}
             for base_kernel_file in {base_kernel_files}; do
-              ln -s $(readlink -m ${{base_kernel_file}}) ${{KBUILD_MIXED_TREE}}
+              cp -a -t ${{KBUILD_MIXED_TREE}} $(readlink -m ${{base_kernel_file}})
             done
         """.format(
             base_kernel_files = " ".join([file.path for file in base_kernel_files.to_list()]),
@@ -1203,7 +1201,7 @@ def _get_grab_gcno_step(ctx):
                 inputs.append(base_kernel[GcovInfo].gcno_dir)
                 base_kernel_gcno_dir_cmd = """
                     # Copy all *.gcno files and its subdirectories recursively.
-                    rsync -a --prune-empty-dirs --include '*/' --include '*.gcno' --exclude '*' {base_gcno_dir}/ {gcno_dir}/
+                    rsync -a -L --prune-empty-dirs --include '*/' --include '*.gcno' --exclude '*' {base_gcno_dir}/ {gcno_dir}/
                 """.format(
                     base_gcno_dir = base_kernel[GcovInfo].gcno_dir.path,
                     gcno_dir = gcno_dir.path,

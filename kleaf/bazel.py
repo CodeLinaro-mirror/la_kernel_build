@@ -24,7 +24,7 @@ from typing import Tuple, Optional
 
 from kleaf_help import KleafHelpPrinter
 
-_BAZEL_REL_PATH = "prebuilts/bazel/linux-x86_64/bazel"
+_BAZEL_REL_PATH = "prebuilts/kernel-build-tools/bazel/linux-x86_64/bazel"
 _BAZEL_JDK_REL_PATH = "prebuilts/jdk/jdk11/linux-x86"
 _BAZEL_RC_NAME = "build/kernel/kleaf/common.bazelrc"
 
@@ -148,7 +148,7 @@ class BazelWrapper(KleafHelpPrinter):
           existing startup_options to be fed to the Bazel binary
         """
 
-        parser = argparse.ArgumentParser(add_help=False)
+        parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
         self.add_startup_option_to_parser(parser)
 
         self.known_startup_options, user_startup_options = parser.parse_known_args(
@@ -250,7 +250,7 @@ class BazelWrapper(KleafHelpPrinter):
         - env: A dictionary containing the new environment variables for the subprocess.
         """
 
-        parser = argparse.ArgumentParser(add_help=False)
+        parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
         self.add_command_args_to_parser(parser)
 
         # known_args: List of arguments known by this bazel wrapper. These
