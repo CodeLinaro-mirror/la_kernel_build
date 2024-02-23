@@ -508,3 +508,6 @@ if [ -n "${ANDROID_PRODUCT_OUT}" ] && [ -n "${ANDROID_BUILD_TOP}" ]; then
       ${ANDROID_KERNEL_OUT}/dtbs
   )
 fi
+
+# remove bazel dir to avoid build issues
+rm -rf ${ANDROID_BUILD_TOP}/kernel_platform/out/bazel
