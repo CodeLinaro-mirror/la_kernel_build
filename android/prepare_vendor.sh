@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
-# Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -27,6 +26,10 @@
 # WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 # OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+# Changes from Qualcomm Innovation Center are provided under the following license:
+# Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
 
 ## prepare_vendor.sh prepares kernel/build's output for direct consumption in AOSP
 # - Script assumes running after lunch w/Android build environment variables available
@@ -75,6 +78,9 @@
 #                        $ANDROID_BUILD_TOP/out/$BRANCH and $KP_ROOT_DIR/out/$BRANCH
 #   DIST_DIR           - Kernel Platform dist folder for the KERNEL_TARGET and KERNEL_VARIANT
 #   RECOMPILE_KERNEL   - Recompile the kernel platform
+#   LTO                - Specify Link-Time Optimization level. See LTO_VALUES in kleaf/constants.bzl
+#                        for list of valid values.
+#   EXTRA_KBUILD_ARGS  - Arguments to pass to kernel build (build_with_bazel.py)
 #
 # To compile out-of-tree kernel objects and set up the prebuilt UAPI headers,
 # these environment variables must be set.
@@ -91,36 +97,8 @@ function rel_path() {
   python -c "import os.path; import sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))" "$1" "$2"
 }
 
-ROOT_DIR=$(realpath $(dirname $(readlink -f $0))/../../..) # build/kernel/android/prepare.sh -> .
+ROOT_DIR=$($(dirname $(readlink -f $0))/../gettop.sh)
 echo "  kernel platform root: $ROOT_DIR"
-
-################################################################################
-# Merge vendor devicetree overlays
-
-if [ $1 == "dtb-only" ]; then
-  if [ -z "$2" ]; then
-    echo "Please mention the target ..."
-    exit 1
-  fi
-
-  TARGET=$2
-
-  BASE_DT=${ROOT_DIR}/../device/qcom/${TARGET}-kernel
-  TECHPACK_DT="${ROOT_DIR}/../out/target/product/${TARGET}/obj/DLKM_OBJ"
-
-  if [ ! -e "${BASE_DT}" ] || [ ! -e "${TECHPACK_DT}" ]; then
-    echo "Either base dt or techpack dt is missing ..."
-    exit 1
-  fi
-
-  cd ${ROOT_DIR}
-  echo "  Merging vendor devicetree overlays"
-  ./build/android/merge_dtbs.sh \
-      ${BASE_DT}/kp-dtbs \
-      ${TECHPACK_DT} \
-      ${BASE_DT}/dtbs
-  exit 0
-fi
 
 ################################################################################
 # Discover where to put Android output
@@ -156,10 +134,13 @@ case "${KERNEL_TARGET}" in
   taro)
     KERNEL_TARGET="waipio"
     ;;
-  crow)
-    KERNEL_TARGET="kalama"
-    ;;
 esac
+
+################################################################################
+# Configure LTO
+if [ -n "$LTO" ]; then
+  LTO_KBUILD_ARG="--lto=$LTO"
+fi
 
 ################################################################################
 # Create a build config used for this run of prepare_vendor
@@ -172,16 +153,17 @@ trap "rm -rf ${TEMP_KP_OUT_DIR}" exit
 )
 
 ################################################################################
+# If KERNEL_VARIANT is still unset at this point, grab it from the brunch output
+if [ -z "$KERNEL_VARIANT" ]; then
+  KERNEL_VARIANT=$(cd "$ROOT_DIR" && source build/_setup_env.sh && echo "$VARIANT")
+fi
+
+################################################################################
 # Determine output folder
 # ANDROID_KP_OUT_DIR is the output directory from Android Build System perspective
 ANDROID_KP_OUT_DIR="${3:-${OUT_DIR}}"
 if [ -z "${ANDROID_KP_OUT_DIR}" ]; then
-  ANDROID_KP_OUT_DIR=out/$(
-    cd ${ROOT_DIR}
-    OUT_DIR=${TEMP_KP_OUT_DIR}
-    source build/_wrapper_common.sh
-    get_branch
-  )
+  ANDROID_KP_OUT_DIR="out/msm-kernel-${KERNEL_TARGET}-${KERNEL_VARIANT}"
 
   if [ -n "${ANDROID_BUILD_TOP}" -a -e "${ANDROID_BUILD_TOP}/${ANDROID_KP_OUT_DIR}" ] ; then
     ANDROID_KP_OUT_DIR="${ANDROID_BUILD_TOP}/${ANDROID_KP_OUT_DIR}"
@@ -214,6 +196,16 @@ set +x
 
 cp "${ROOT_DIR}/build.config" "${ANDROID_KERNEL_OUT}/build.config"
 
+# Make sure Bazel extensions are linked properly
+if [ ! -f "${ROOT_DIR}/build/msm_kernel_extensions.bzl" ] \
+      && [ -f "${ROOT_DIR}/msm-kernel/msm_kernel_extensions.bzl" ]; then
+  ln -fs "../msm-kernel/msm_kernel_extensions.bzl" "${ROOT_DIR}/build/msm_kernel_extensions.bzl"
+fi
+if [ ! -f "${ROOT_DIR}/build/abl_extensions.bzl" ] \
+      && [ -f "${ROOT_DIR}/bootable/bootloader/edk2/abl_extensions.bzl" ]; then
+  ln -fs "../bootable/bootloader/edk2/abl_extensions.bzl" "${ROOT_DIR}/build/abl_extensions.bzl"
+fi
+
 # If prepare_vendor.sh fails and nobody checked the error code, make sure the android build fails
 # by removing the kernel Image which is needed to build boot.img
 if [ "${RECOMPILE_KERNEL}" == "1" -o "${COPY_NEEDED}" == "1" ]; then
@@ -225,10 +217,10 @@ if [ "${RECOMPILE_KERNEL}" == "1" ]; then
   echo
   echo "  Recompiling kernel"
 
-  (
-    cd ${ROOT_DIR}
-    SKIP_MRPROPER=1 OUT_DIR=${ANDROID_KP_OUT_DIR} ./build/build.sh
-  )
+  # shellcheck disable=SC2086
+  "${ROOT_DIR}/build_with_bazel.py" \
+    -t "$KERNEL_TARGET" "$KERNEL_VARIANT" $LTO_KBUILD_ARG $EXTRA_KBUILD_ARGS \
+    --out_dir "${ANDROID_KP_OUT_DIR}"
 
   COPY_NEEDED=1
 fi
@@ -252,26 +244,19 @@ if [ "${RECOMPILE_ABL}" == "1" -o "${COPY_ABL_NEEDED}" == "1" ]; then
   rm -rf ${ANDROID_ABL_OUT_DIR}/abl-${TARGET_BUILD_VARIANT}
 fi
 
-KP_DELIVERS_ABL=$(
-  cd ${ROOT_DIR}
-  OUT_DIR=${TEMP_KP_OUT_DIR}
-  source build/_setup_env.sh
-  echo ${ABL_SRC:+1}
-)
-
-
 ################################################################################
-if [ "${RECOMPILE_ABL}" == "1" -a "${KP_DELIVERS_ABL}" == "1"  -a -n \
-   "${TARGET_BUILD_VARIANT}" ]; then
+if [ "${RECOMPILE_ABL}" == "1" ] && [ -n "${TARGET_BUILD_VARIANT}" ] && \
+   [ "${KERNEL_TARGET}" != "autogvm" ]; then
   echo
   echo "  Recompiling edk2"
+    (
+      cd "${ROOT_DIR}"
 
-  (
-    cd ${ROOT_DIR}
-    ABL_OUT_DIR=${ANDROID_KP_OUT_DIR} \
-    ABL_IMAGE_DIR=${ANDROID_KP_OUT_DIR}/dist \
-    ./build/build_abl.sh ${KERNEL_TARGET}
-  )
+      ./tools/bazel run \
+        --"//bootable/bootloader/edk2:target_build_variant=${TARGET_BUILD_VARIANT}" \
+        "//msm-kernel:${KERNEL_TARGET}_${KERNEL_VARIANT}_abl_dist" \
+        -- --dist_dir "${ANDROID_KP_OUT_DIR}/dist"
+    )
 
   COPY_ABL_NEEDED=1
 fi
@@ -312,19 +297,19 @@ if [ "${COPY_NEEDED}" == "1" ]; then
 
   system_dlkm_kos=$(mktemp)
   if [ -s ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.load ]; then
-    cat ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.load | \
-    xargs -L 1 basename | \
-    xargs -L 1 find ${ANDROID_KP_OUT_DIR}/dist/ -name > ${system_dlkm_kos}
+    xargs -L 1 -a "${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.load" basename | \
+    sed -e "s|^|${ANDROID_KP_OUT_DIR}/dist/|g" > "$system_dlkm_kos"
   else
     echo "  system_dlkm_kos.modules.load file is not found or is empty"
   fi
 
   rm -rf ${ANDROID_KERNEL_OUT}/system_dlkm/*
-  if [ -s "${system_dlkm_kos}" ]; then
-    mkdir -p ${ANDROID_KERNEL_OUT}/system_dlkm/
+  rm -rf ${ANDROID_PRODUCT_OUT}/system_dlkm*
+  system_dlkm_archive="${ANDROID_KP_OUT_DIR}/dist/system_dlkm_staging_archive.tar.gz"
+  if [ -e "$system_dlkm_archive" ]; then
+    mkdir -p "${ANDROID_KERNEL_OUT}/system_dlkm/"
     # Unzip the system_dlkm staging tar copied from kernel_platform to system_dlkm out directory
-    tar -xf ${ANDROID_KP_OUT_DIR}/dist/system_dlkm_staging_archive.tar.gz \
-	-C ${ANDROID_KERNEL_OUT}/system_dlkm/
+    tar -xf "$system_dlkm_archive" -C "${ANDROID_KERNEL_OUT}/system_dlkm/"
   else
     echo "  WARNING!! No system_dlkm (second stage) modules found"
   fi
@@ -344,7 +329,7 @@ if [ "${COPY_NEEDED}" == "1" ]; then
       ${ANDROID_KERNEL_OUT}/vendor_dlkm/modules.blocklist
   fi
 
-  if [ -s ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.load ]; then
+  if [ -e ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.load ]; then
     cp ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.load \
       ${ANDROID_KERNEL_OUT}/vendor_dlkm/modules.load
   fi
@@ -354,13 +339,29 @@ if [ "${COPY_NEEDED}" == "1" ]; then
       ${ANDROID_KERNEL_OUT}/vendor_dlkm/system_dlkm.modules.blocklist
   fi
 
-  if [ -e "${ANDROID_KP_OUT_DIR}/dist/extra_cmdline" ]; then
-    cp "${ANDROID_KP_OUT_DIR}/dist/extra_cmdline" "${ANDROID_KERNEL_OUT}/"
+  if [ -e "${ANDROID_KP_OUT_DIR}/dist/board_extra_cmdline_${KERNEL_TARGET}_${KERNEL_VARIANT}" ];
+  then
+    cp "${ANDROID_KP_OUT_DIR}/dist/board_extra_cmdline_${KERNEL_TARGET}_${KERNEL_VARIANT}" \
+      "${ANDROID_KERNEL_OUT}/extra_cmdline"
   fi
 
-  for file in Image vmlinux System.map .config Module.symvers kernel-uapi-headers.tar.gz ; do
-    cp ${ANDROID_KP_OUT_DIR}/dist/${file} ${ANDROID_KERNEL_OUT}/
-  done
+  if [ -e "${ANDROID_KP_OUT_DIR}/dist/board_extra_bootconfig_${KERNEL_TARGET}_${KERNEL_VARIANT}" ];
+  then
+    cp "${ANDROID_KP_OUT_DIR}/dist/board_extra_bootconfig_${KERNEL_TARGET}_${KERNEL_VARIANT}" \
+      "${ANDROID_KERNEL_OUT}/extra_bootconfig"
+  fi
+
+  files=(
+    "Image"
+    "vmlinux"
+    "System.map"
+    ".config"
+    "Module.symvers"
+    "kernel-uapi-headers.tar.gz"
+    "build_opts.txt"
+  )
+
+  cp "${files[@]/#/${ANDROID_KP_OUT_DIR}/dist/}" ${ANDROID_KERNEL_OUT}/
 
   rm -rf ${ANDROID_KERNEL_OUT}/kp-dtbs
   mkdir ${ANDROID_KERNEL_OUT}/kp-dtbs
@@ -369,9 +370,11 @@ if [ "${COPY_NEEDED}" == "1" ]; then
   rm -rf ${ANDROID_KERNEL_OUT}/host
   cp -r ${ANDROID_KP_OUT_DIR}/host ${ANDROID_KERNEL_OUT}/
 
-  rm -rf ${ANDROID_KERNEL_OUT}/debug
-  if [ -e ${ANDROID_KP_OUT_DIR}/debug ]; then
-    cp -r ${ANDROID_KP_OUT_DIR}/debug ${ANDROID_KERNEL_OUT}/
+  rm -rf "${ANDROID_KERNEL_OUT}/debug"
+  debug_tar="${ANDROID_KP_OUT_DIR}/dist/${KERNEL_TARGET}_${KERNEL_VARIANT}_debug.tar.gz"
+  if [ -f "$debug_tar" ]; then
+    mkdir -p "${ANDROID_KERNEL_OUT}/debug"
+    tar -C "${ANDROID_KERNEL_OUT}/debug" -xf "$debug_tar"
   fi
 
   if [ -z "${KERNEL_VARIANT}" ]; then

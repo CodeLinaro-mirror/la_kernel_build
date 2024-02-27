@@ -25,8 +25,12 @@
 # WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 # OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# Changes from Qualcomm Innovation Center are provided under the following license:
+# Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
 
-ROOT_DIR=$(realpath $(dirname $0)/../../..)
+ROOT_DIR=$($(dirname $(readlink -f $0))/../gettop.sh)
 
 set -e
 
@@ -36,9 +40,9 @@ rm -rf $3
 mkdir $3
 
 set -x
-$ROOT_DIR/build/android/merge_dtbs.py $1 $2 $3
+$ROOT_DIR/build/android/merge_dtbs.py --base $1 --techpack $2 --out $3
 set +x
 
 [[ -n "$(find ${3} -type f -name '*.dtb')" ]] && cat ${3}/*.dtb > ${3}/dtb.img
-[[ -n "$(find ${3} -type f -name '*.dtbo')" ]] && mkdtboimg.py create ${3}/dtbo.img --page_size=${PAGE_SIZE} ${3}/*.dtbo
+[[ -n "$(find ${3} -type f -name '*.dtbo')" ]] && mkdtboimg create ${3}/dtbo.img --page_size=${PAGE_SIZE} ${3}/*.dtbo
 exit 0

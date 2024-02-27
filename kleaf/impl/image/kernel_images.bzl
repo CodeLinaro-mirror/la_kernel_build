@@ -15,11 +15,18 @@
 Build multiple kernel images.
 """
 
+load(
+    ":common_providers.bzl",
+    "ImagesInfo",
+)
 load(":image/boot_images.bzl", "boot_images")
 load(":image/dtbo.bzl", "dtbo")
+load(":image/image_utils.bzl", "image_utils")
 load(":image/initramfs.bzl", "initramfs")
 load(":image/system_dlkm_image.bzl", "system_dlkm_image")
 load(":image/vendor_dlkm_image.bzl", "vendor_dlkm_image")
+
+visibility("//build/kernel/kleaf/...")
 
 def kernel_images(
         name,
@@ -32,22 +39,67 @@ def kernel_images(
         build_vendor_boot = None,
         build_vendor_kernel_boot = None,
         build_system_dlkm = None,
+        build_system_dlkm_flatten = None,
         build_dtbo = None,
         dtbo_srcs = None,
         mkbootimg = None,
         deps = None,
         boot_image_outs = None,
+        gki_ramdisk_prebuilt_binary = None,
         modules_list = None,
+        modules_recovery_list = None,
+        modules_charger_list = None,
         modules_blocklist = None,
         modules_options = None,
         vendor_ramdisk_binaries = None,
+        system_dlkm_fs_type = None,
+        system_dlkm_fs_types = None,
         system_dlkm_modules_list = None,
         system_dlkm_modules_blocklist = None,
         system_dlkm_props = None,
+        vendor_dlkm_archive = None,
+        vendor_dlkm_etc_files = None,
+        vendor_dlkm_fs_type = None,
         vendor_dlkm_modules_list = None,
         vendor_dlkm_modules_blocklist = None,
-        vendor_dlkm_props = None):
+        vendor_dlkm_props = None,
+        ramdisk_compression = None,
+        ramdisk_compression_args = None,
+        avb_sign_boot_img = None,
+        avb_boot_partition_size = None,
+        avb_boot_key = None,
+        avb_boot_algorithm = None,
+        avb_boot_partition_name = None,
+        dedup_dlkm_modules = None,
+        **kwargs):
     """Build multiple kernel images.
+
+    You may use `filegroup.output_group` to request certain files. Example:
+
+    ```
+    kernel_images(
+        name = "my_images",
+        build_vendor_dlkm = True,
+    )
+    filegroup(
+        name = "my_vendor_dlkm",
+        srcs = [":my_images"],
+        output_group = "vendor_dlkm.img",
+    )
+    ```
+
+    Allowed strings in `filegroup.output_group`:
+    * `vendor_dlkm.img`, if `build_vendor_dlkm` is set
+    * `system_dlkm.img`, if `build_system_dlkm` and `system_dlkm_fs_type` is set
+    * `system_dlkm.<type>.img` for each of `system_dlkm_fs_types`, if
+        `build_system_dlkm` is set and `system_dlkm_fs_types` is not empty.
+
+    If no output files are found, the filegroup resolves to an empty one.
+    You may also read `OutputGroupInfo` on the `kernel_images` rule directly
+    in your rule implementation.
+
+    For details, see
+    [Requesting output files](https://bazel.build/extending/rules#requesting_output_files).
 
     Args:
         name: name of this rule, e.g. `kernel_images`,
@@ -55,18 +107,21 @@ def kernel_images(
 
           The main kernel build is inferred from the `kernel_build` attribute of the
           specified `kernel_modules_install` rule. The main kernel build must contain
-          `System.map` in `outs` (which is included if you use `aarch64_outs` or
-          `x86_64_outs` from `common_kernels.bzl`).
+          `System.map` in `outs` (which is included if you use `DEFAULT_GKI_OUTS` or
+          `X86_64_OUTS` from `common_kernels.bzl`).
         kernel_build: A `kernel_build` rule. Must specify if `build_boot`.
         mkbootimg: Path to the mkbootimg.py script which builds boot.img.
-          Keep in sync with `MKBOOTIMG_PATH`. Only used if `build_boot`. If `None`,
+          Only used if `build_boot`. If `None`,
           default to `//tools/mkbootimg:mkbootimg.py`.
+          NOTE: This overrides `MKBOOTIMG_PATH`.
         deps: Additional dependencies to build images.
 
           This must include the following:
           - For `initramfs`:
             - The file specified by `MODULES_LIST`
             - The file specified by `MODULES_BLOCKLIST`, if `MODULES_BLOCKLIST` is set
+            - The file containing the list of modules needed for booting into recovery.
+            - The file containing the list of modules needed for booting into charger mode.
           - For `vendor_dlkm` image:
             - The file specified by `VENDOR_DLKM_MODULES_LIST`
             - The file specified by `VENDOR_DLKM_MODULES_BLOCKLIST`, if set
@@ -85,13 +140,14 @@ def kernel_images(
           - `BOOT_IMAGE_FILENAME` is not set (which takes default value `boot.img`), or is set to
             `"boot.img"`
           - `vendor_boot.img` if `build_vendor_boot`
-          - `RAMDISK_EXT=lz4`. If the build configuration has a different value, replace
-            `ramdisk.lz4` with `ramdisk.{RAMDISK_EXT}` accordingly.
+          - `RAMDISK_EXT=lz4`. Is used when `ramdisk_compression`(see below) is not specified.
           - `BOOT_IMAGE_HEADER_VERSION >= 4`, which creates `vendor-bootconfig.img` to contain
-            `VENDOR_BOOTCONFIG`
+            `VENDOR_BOOTCONFIG if `build_vendor_boot`.
           - The list contains `dtb.img`
         build_initramfs: Whether to build initramfs. Keep in sync with `BUILD_INITRAMFS`.
         build_system_dlkm: Whether to build system_dlkm.img an image with GKI modules.
+        build_system_dlkm_flatten: Whether to build system_dlkm.flatten.<fs>.img.
+          This image have directory structure as `/lib/modules/*.ko` i.e. no `uname -r` in the path.
         build_vendor_dlkm: Whether to build `vendor_dlkm` image. It must be set if
           `vendor_dlkm_modules_list` is set.
 
@@ -103,8 +159,8 @@ def kernel_images(
         build_boot: Whether to build boot image. It must be set if either `BUILD_BOOT_IMG`
           or `BUILD_VENDOR_BOOT_IMG` is set.
 
-          This depends on `initramfs` and `kernel_build`. Hence, if this is set to `True`,
-          `build_initramfs` is implicitly true, and `kernel_build` must be set.
+          This depends on `kernel_build`. Hence, if this is set to `True`,
+          `kernel_build` must be set.
 
           If `True`, adds `boot.img` to `boot_image_outs` if not already in the list.
         build_vendor_boot: Whether to build `vendor_boot.img`. It must be set if either
@@ -152,12 +208,18 @@ def kernel_images(
           )
           ```
         base_kernel_images: The `kernel_images()` corresponding to the `base_kernel` of the
-          `kernel_build`. This is necessary for building a device-specific `system_dlkm` image.
+          `kernel_build`. This is required for building a device-specific `system_dlkm` image.
           For example, if `base_kernel` of `kernel_build()` is `//common:kernel_aarch64`,
           then `base_kernel_images` is `//common:kernel_aarch64_images`.
+
+          This is also required if `dedup_dlkm_modules and not build_system_dlkm`.
         modules_list: A file containing list of modules to use for `vendor_boot.modules.load`.
 
           This corresponds to `MODULES_LIST` in `build.config` for `build.sh`.
+        modules_recovery_list: A file containing a list of modules to load when booting into
+          recovery.
+        modules_charger_list: A file containing a list of modules to load when booting into
+          charger mode.
         modules_blocklist: A file containing a list of modules which are
           blocked from being loaded.
 
@@ -175,6 +237,15 @@ def kernel_images(
           ```
 
           This corresponds to `MODULES_OPTIONS` in `build.config` for `build.sh`.
+        system_dlkm_fs_type: Deprecated. Use `system_dlkm_fs_types` instead.
+
+            Supported filesystems for `system_dlkm` image are `ext4` and `erofs`.
+            Defaults to `ext4` if not specified.
+        system_dlkm_fs_types: List of file systems type for `system_dlkm` images.
+
+            Supported filesystems for `system_dlkm` image are `ext4` and `erofs`.
+            If not specified, builds `system_dlkm.img` with ext4 else builds
+            `system_dlkm.<fs>.img` for each file system type in the list.
         system_dlkm_modules_list: location of an optional file
           containing the list of kernel modules which shall be copied into a
           system_dlkm partition image.
@@ -196,6 +267,9 @@ def kernel_images(
           which assumes an ext4 filesystem and a dynamic partition.
 
           This corresponds to `SYSTEM_DLKM_PROPS` in `build.config` for `build.sh`.
+        vendor_dlkm_archive: If set, enable archiving the vendor_dlkm staging directory.
+        vendor_dlkm_fs_type: Supported filesystems for `vendor_dlkm.img` are `ext4` and `erofs`. Defaults to `ext4` if not specified.
+        vendor_dlkm_etc_files: Files that need to be copied to `vendor_dlkm.img` etc/ directory.
         vendor_dlkm_modules_list: location of an optional file
           containing the list of kernel modules which shall be copied into a
           `vendor_dlkm` partition image. Any modules passed into `MODULES_LIST` which
@@ -230,23 +304,67 @@ def kernel_images(
           ```
 
           This corresponds to `VENDOR_RAMDISK_BINARY` in `build.config` for `build.sh`.
+        ramdisk_compression: If provided it specfies the format used for any ramdisks generated.
+          If not provided a fallback value from build.config is used.
+          Possible values are `lz4`, `gzip`, None.
+        ramdisk_compression_args: Command line arguments passed only to lz4 command
+          to control compression level. It only has effect when used with
+          `ramdisk_compression` equal to "lz4".
+        avb_sign_boot_img: If set to `True` signs the boot image using the avb_boot_key.
+          The kernel prebuilt tool `avbtool` is used for signing.
+        avb_boot_partition_size: Size of the boot partition in bytes.
+          Used when `avb_sign_boot_img` is True.
+        avb_boot_key: Path to the key used for signing.
+          Used when `avb_sign_boot_img` is True.
+        avb_boot_algorithm: `avb_boot_key` algorithm used e.g. SHA256_RSA2048.
+          Used when `avb_sign_boot_img` is True.
+        avb_boot_partition_name: = Name of the boot partition.
+          Used when `avb_sign_boot_img` is True.
+        dedup_dlkm_modules: If set, modules already in `system_dlkm` is
+          excluded in `vendor_dlkm.modules.load`. Modules in `vendor_dlkm`
+          is allowed to link to modules in `system_dlkm`.
+
+          The `system_dlkm` image is defined by the following:
+
+          - If `build_system_dlkm` is set, the `system_dlkm` image built by
+            this rule.
+          - If `build_system_dlkm` is not set, the `system_dlkm` image in
+            `base_kernel_images`. If `base_kernel_images` is not set, build
+            fails.
+
+          If set, **additional changes in the userspace is required** so that
+          `system_dlkm` modules are loaded before `vendor_dlkm` modules.
+
+        **kwargs: Additional attributes to the internal rule, e.g.
+          [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
+          See complete list
+          [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
     """
     all_rules = []
 
-    build_any_boot_image = build_boot or build_vendor_boot or build_vendor_kernel_boot
+    build_any_boot_image = build_boot or build_vendor_boot or build_vendor_kernel_boot or \
+                           avb_sign_boot_img
     if build_any_boot_image:
         if kernel_build == None:
-            fail("{}: Must set kernel_build if any of these are true: build_boot={}, build_vendor_boot={}, build_vendor_kernel_boot={}".format(name, build_boot, build_vendor_boot, build_vendor_kernel_boot))
+            fail("{}: Must set kernel_build if any of these are true: build_boot={}, build_vendor_boot={}, build_vendor_kernel_boot={}".format(
+                name,
+                build_boot,
+                build_vendor_boot,
+                build_vendor_kernel_boot,
+            ))
 
     # Set default value for boot_image_outs according to build_boot
     if boot_image_outs == None:
         if not build_any_boot_image:
             boot_image_outs = []
         else:
+            ramdisk_out = "ramdisk." + image_utils.ramdisk_options(
+                ramdisk_compression,
+                ramdisk_compression_args,
+            ).ramdisk_ext
             boot_image_outs = [
                 "dtb.img",
-                "ramdisk.lz4",
-                "vendor-bootconfig.img",
+                ramdisk_out,
             ]
 
     boot_image_outs = list(boot_image_outs)
@@ -254,27 +372,56 @@ def kernel_images(
     if build_boot and "boot.img" not in boot_image_outs:
         boot_image_outs.append("boot.img")
 
+    if gki_ramdisk_prebuilt_binary and "init_boot.img" not in boot_image_outs:
+        boot_image_outs.append("init_boot.img")
+
     if build_vendor_boot and "vendor_boot.img" not in boot_image_outs:
         boot_image_outs.append("vendor_boot.img")
+        boot_image_outs.append("vendor-bootconfig.img")
 
     if build_vendor_kernel_boot and "vendor_kernel_boot.img" not in boot_image_outs:
         boot_image_outs.append("vendor_kernel_boot.img")
 
+    vendor_boot_name = None
+    if build_vendor_boot:
+        vendor_boot_name = "vendor_boot"
+    elif build_vendor_kernel_boot:
+        vendor_boot_name = "vendor_kernel_boot"
+
     vendor_boot_modules_load = None
+    vendor_boot_modules_load_recovery = None
+    vendor_boot_modules_load_charger = None
     if build_initramfs:
-        if build_vendor_boot:
-            vendor_boot_modules_load = "{}_initramfs/vendor_boot.modules.load".format(name)
-        elif build_vendor_kernel_boot:
-            vendor_boot_modules_load = "{}_initramfs/vendor_kernel_boot.modules.load".format(name)
+        vendor_boot_modules_load = "{}_initramfs/{}.modules.load".format(name, vendor_boot_name)
+
+        if modules_recovery_list:
+            vendor_boot_modules_load_recovery = "{}_initramfs/{}.modules.load.recovery".format(name, vendor_boot_name)
+
+        if modules_charger_list:
+            vendor_boot_modules_load_charger = "{}_initramfs/{}.modules.load.charger".format(name, vendor_boot_name)
+
+        if ramdisk_compression_args and ramdisk_compression != "lz4":
+            fail(
+                "ramdisk_compress_args provided but ramdisk_compression={} is not lz4.".format(
+                    ramdisk_compression,
+                ),
+            )
 
         initramfs(
             name = "{}_initramfs".format(name),
             kernel_modules_install = kernel_modules_install,
             deps = deps,
             vendor_boot_modules_load = vendor_boot_modules_load,
+            vendor_boot_modules_load_recovery = vendor_boot_modules_load_recovery,
+            vendor_boot_modules_load_charger = vendor_boot_modules_load_charger,
             modules_list = modules_list,
+            modules_recovery_list = modules_recovery_list,
+            modules_charger_list = modules_charger_list,
             modules_blocklist = modules_blocklist,
             modules_options = modules_options,
+            ramdisk_compression = ramdisk_compression,
+            ramdisk_compression_args = ramdisk_compression_args,
+            **kwargs
         )
         all_rules.append(":{}_initramfs".format(name))
 
@@ -285,34 +432,42 @@ def kernel_images(
             kernel_modules_install = kernel_modules_install,
             # For device system_dlkm, give GKI's system_dlkm_staging_archive.tar.gz
             base_kernel_images = base_kernel_images,
+            build_system_dlkm_flatten_image = build_system_dlkm_flatten,
             deps = deps,
             modules_list = modules_list,
             modules_blocklist = modules_blocklist,
+            system_dlkm_fs_type = system_dlkm_fs_type,
+            system_dlkm_fs_types = system_dlkm_fs_types,
             system_dlkm_modules_list = system_dlkm_modules_list,
             system_dlkm_modules_blocklist = system_dlkm_modules_blocklist,
             system_dlkm_props = system_dlkm_props,
+            **kwargs
         )
         all_rules.append(":{}_system_dlkm_image".format(name))
 
     if build_vendor_dlkm:
+        if vendor_dlkm_fs_type == None:
+            vendor_dlkm_fs_type = "ext4"
+
         vendor_dlkm_image(
             name = "{}_vendor_dlkm_image".format(name),
             kernel_modules_install = kernel_modules_install,
             vendor_boot_modules_load = vendor_boot_modules_load,
             deps = deps,
+            vendor_dlkm_archive = vendor_dlkm_archive,
+            vendor_dlkm_etc_files = vendor_dlkm_etc_files,
+            vendor_dlkm_fs_type = vendor_dlkm_fs_type,
             vendor_dlkm_modules_list = vendor_dlkm_modules_list,
             vendor_dlkm_modules_blocklist = vendor_dlkm_modules_blocklist,
             vendor_dlkm_props = vendor_dlkm_props,
+            dedup_dlkm_modules = dedup_dlkm_modules,
+            system_dlkm_image = "{}_system_dlkm_image".format(name) if build_system_dlkm else None,
+            base_kernel_images = base_kernel_images,
+            **kwargs
         )
         all_rules.append(":{}_vendor_dlkm_image".format(name))
 
     if build_any_boot_image:
-        if build_vendor_kernel_boot:
-            vendor_boot_name = "vendor_kernel_boot"
-        elif build_vendor_boot:
-            vendor_boot_name = "vendor_boot"
-        else:
-            vendor_boot_name = None
         boot_images(
             name = "{}_boot_images".format(name),
             kernel_build = kernel_build,
@@ -321,8 +476,15 @@ def kernel_images(
             initramfs = ":{}_initramfs".format(name) if build_initramfs else None,
             mkbootimg = mkbootimg,
             vendor_ramdisk_binaries = vendor_ramdisk_binaries,
+            gki_ramdisk_prebuilt_binary = gki_ramdisk_prebuilt_binary,
             build_boot = build_boot,
             vendor_boot_name = vendor_boot_name,
+            avb_sign_boot_img = avb_sign_boot_img,
+            avb_boot_partition_size = avb_boot_partition_size,
+            avb_boot_key = avb_boot_key,
+            avb_boot_algorithm = avb_boot_algorithm,
+            avb_boot_partition_name = avb_boot_partition_name,
+            **kwargs
         )
         all_rules.append(":{}_boot_images".format(name))
 
@@ -338,10 +500,44 @@ def kernel_images(
             name = "{}_dtbo".format(name),
             srcs = dtbo_srcs,
             kernel_build = kernel_build,
+            **kwargs
         )
         all_rules.append(":{}_dtbo".format(name))
 
-    native.filegroup(
+    _kernel_images(
         name = name,
         srcs = all_rules,
+        **kwargs
     )
+
+def _kernel_images_impl(ctx):
+    default_info = DefaultInfo(files = depset(transitive = [
+        target.files
+        for target in ctx.attr.srcs
+    ]))
+
+    # Combine Images from dependencies into OutputGroupInfo
+    output_group_info_depsets = {}
+    for target in ctx.attr.srcs:
+        if ImagesInfo not in target:
+            continue
+        for key, the_depset in target[ImagesInfo].files_dict.items():
+            if key not in output_group_info_depsets:
+                output_group_info_depsets[key] = []
+            output_group_info_depsets[key].append(the_depset)
+    output_group_info = OutputGroupInfo(**{
+        key: depset(transitive = value_list)
+        for key, value_list in output_group_info_depsets.items()
+    })
+
+    return [
+        default_info,
+        output_group_info,
+    ]
+
+_kernel_images = rule(
+    implementation = _kernel_images_impl,
+    attrs = {
+        "srcs": attr.label_list(),
+    },
+)

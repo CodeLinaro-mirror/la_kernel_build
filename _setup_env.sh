@@ -34,6 +34,7 @@ function append_cmd() {
     eval "$1=\"\$2\""
   fi
 }
+export -f append_cmd
 
 export KERNEL_DIR
 # for case that KERNEL_DIR is not specified in environment
@@ -79,7 +80,18 @@ export MODULES_ARCHIVE=modules.tar.gz
 export TZ=UTC
 export LC_ALL=C
 if [ -z "${SOURCE_DATE_EPOCH}" ]; then
-  export SOURCE_DATE_EPOCH=$(git -C ${ROOT_DIR}/${KERNEL_DIR} log -1 --pretty=%ct)
+  if [[ -n "${KLEAF_SOURCE_DATE_EPOCHS}" ]]; then
+    export SOURCE_DATE_EPOCH=$(extract_git_metadata "${KLEAF_SOURCE_DATE_EPOCHS}" "${KERNEL_DIR}" SOURCE_DATE_EPOCH)
+    # Unset KLEAF_SOURCE_DATE_EPOCHS to avoid polluting {kernel_build}_env.sh
+    # with unnecessary information (git metadata of unrelated projects)
+    unset KLEAF_SOURCE_DATE_EPOCHS
+  else
+    export SOURCE_DATE_EPOCH=$(git -C ${ROOT_DIR}/${KERNEL_DIR} log -1 --pretty=%ct)
+  fi
+fi
+if [ -z "${SOURCE_DATE_EPOCH}" ]; then
+  echo "WARNING: Unable to determine SOURCE_DATE_EPOCH for ${ROOT_DIR}/${KERNEL_DIR}, fallback to 0" >&2
+  export SOURCE_DATE_EPOCH=0
 fi
 export KBUILD_BUILD_TIMESTAMP="$(date -d @${SOURCE_DATE_EPOCH})"
 export KBUILD_BUILD_HOST=build-host
@@ -92,10 +104,13 @@ LINUX_GCC_CROSS_COMPILE_PREBUILTS_BIN
 LINUX_GCC_CROSS_COMPILE_ARM32_PREBUILTS_BIN
 LINUX_GCC_CROSS_COMPILE_COMPAT_PREBUILTS_BIN
 CLANG_PREBUILT_BIN
+CLANGTOOLS_PREBUILT_BIN
+RUST_PREBUILT_BIN
 LZ4_PREBUILTS_BIN
 DTC_PREBUILTS_BIN
 LIBUFDT_PREBUILTS_BIN
 BUILDTOOLS_PREBUILT_BIN
+KLEAF_INTERNAL_BUILDTOOLS_PREBUILT_BIN
 )
 
 # Have host compiler use LLD and compiler-rt.
@@ -134,17 +149,17 @@ else
 fi
 export USERCFLAGS USERLDFLAGS
 
+unset LD_LIBRARY_PATH
+
 if [ "${HERMETIC_TOOLCHAIN:-0}" -eq 1 ]; then
   HOST_TOOLS=${OUT_DIR}/host_tools
   [ ! -e "${HOST_TOOLS}" ] && mkdir -p ${HOST_TOOLS}
   for tool in \
       bash \
       git \
-      install \
       perl \
       rsync \
       sh \
-      tar \
       ${ADDITIONAL_HOST_TOOLS}
   do
       ln -sf $(which $tool) ${HOST_TOOLS}
@@ -162,12 +177,13 @@ if [ "${HERMETIC_TOOLCHAIN:-0}" -eq 1 ]; then
   cflags+="-I${ROOT_DIR}/prebuilts/kernel-build-tools/linux-x86/include "
 
   # add openssl and further prebuilt libraries into the lookup path
-  ldflags+="-Wl,-rpath,${ROOT_DIR}/prebuilts/kernel-build-tools/linux-x86/lib64 "
   ldflags+="-L ${ROOT_DIR}/prebuilts/kernel-build-tools/linux-x86/lib64 "
   ldflags+=${LLD_COMPILER_RT}
+  export LD_LIBRARY_PATH="${ROOT_DIR}/prebuilts/kernel-build-tools/linux-x86/lib64"
 
   export HOSTCFLAGS="$sysroot_flags $cflags"
   export HOSTLDFLAGS="$sysroot_flags $ldflags"
+
 fi
 
 for prebuilt_bin in "${prebuilts_paths[@]}"; do
@@ -180,7 +196,7 @@ for prebuilt_bin in "${prebuilts_paths[@]}"; do
     fi
 done
 PATH=${COMMON_OUT_DIR}/host/bin:${PATH}
-LD_LIBRARY_PATH=${COMMON_OUT_DIR}/host/lib
+LD_LIBRARY_PATH=${COMMON_OUT_DIR}/host/lib:${LD_LIBRARY_PATH}
 
 export PATH
 export LD_LIBRARY_PATH

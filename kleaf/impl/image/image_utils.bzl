@@ -15,15 +15,22 @@
 Common utilities for working with kernel images.
 """
 
+load("@bazel_skylib//lib:shell.bzl", "shell")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//build/kernel/kleaf:directory_with_structure.bzl", dws = "directory_with_structure")
 load(
     ":common_providers.bzl",
-    "KernelBuildInfo",
-    "KernelEnvInfo",
     "KernelModuleInfo",
 )
 load(":debug.bzl", "debug")
 load(":utils.bzl", "utils")
+
+visibility("//build/kernel/kleaf/...")
+
+SYSTEM_DLKM_STAGING_ARCHIVE_NAME = "system_dlkm_staging_archive.tar.gz"
+SYSTEM_DLKM_MODULES_LOAD_NAME = "system_dlkm.modules.load"
+
+VENDOR_DLKM_STAGING_ARCHIVE_NAME = "vendor_dlkm_staging_archive.tar.gz"
 
 def _build_modules_image_impl_common(
         ctx,
@@ -32,6 +39,7 @@ def _build_modules_image_impl_common(
         build_command,
         modules_staging_dir,
         restore_modules_install = None,
+        set_ext_modules = None,
         implicit_outputs = None,
         additional_inputs = None,
         mnemonic = None):
@@ -45,6 +53,8 @@ def _build_modules_image_impl_common(
         modules_staging_dir: a staging directory for module installation.
         restore_modules_install: If `True`, restore `ctx.attr.kernel_modules_install`.
          Default is `True`.
+        set_ext_modules: If `True`, set variable `EXT_MODULES` before invoking script
+          in `build_utils.sh`
         implicit_outputs: like `outputs`, but not installed to `DIST_DIR` (not
          returned in `DefaultInfo`).
         additional_inputs: Additional files to be included.
@@ -54,18 +64,35 @@ def _build_modules_image_impl_common(
     if restore_modules_install == None:
         restore_modules_install = True
 
-    kernel_build = ctx.attr.kernel_modules_install[KernelModuleInfo].kernel_build
-    kernel_build_outs = kernel_build[KernelBuildInfo].outs + kernel_build[KernelBuildInfo].base_kernel_files
+    kernel_build_infos = ctx.attr.kernel_modules_install[KernelModuleInfo].kernel_build_infos
+    kernel_build_outs = depset(
+        transitive = [
+            # Prefer device kernel_build, then base kernel_build
+            kernel_build_infos.kernel_build_info.outs,
+            kernel_build_infos.kernel_build_info.base_kernel_files,
+        ],
+        order = "preorder",
+    )
+
+    # depset.to_list() required for find_file.
+    # TODO(b/256688440): providers should provide System.map directly
+    kernel_build_outs = kernel_build_outs.to_list()
     system_map = utils.find_file(
         name = "System.map",
         files = kernel_build_outs,
         required = True,
-        what = "{}: outs of dependent kernel_build {}".format(ctx.label, kernel_build),
+        what = "{}: outs of dependent kernel_build {}".format(ctx.label, kernel_build_infos.label),
     )
 
     modules_install_staging_dws = None
     if restore_modules_install:
-        modules_install_staging_dws = ctx.attr.kernel_modules_install[KernelModuleInfo].modules_staging_dws
+        modules_install_staging_dws_list = ctx.attr.kernel_modules_install[KernelModuleInfo].modules_staging_dws_depset.to_list()
+        if len(modules_install_staging_dws_list) != 1:
+            fail("{}: {} is not a `kernel_modules_install`.".format(
+                ctx.label,
+                ctx.attr.kernel_modules_install.label,
+            ))
+        modules_install_staging_dws = modules_install_staging_dws_list[0]
 
     inputs = []
     if additional_inputs != None:
@@ -74,22 +101,30 @@ def _build_modules_image_impl_common(
     if restore_modules_install:
         inputs += dws.files(modules_install_staging_dws)
     inputs += ctx.files.deps
-    inputs += kernel_build[KernelEnvInfo].dependencies
+    transitive_inputs = [kernel_build_infos.env_and_outputs_info.inputs]
+    tools = kernel_build_infos.env_and_outputs_info.tools
 
     command_outputs = []
     command_outputs += outputs
     if implicit_outputs != None:
         command_outputs += implicit_outputs
 
-    command = ""
-    command += kernel_build[KernelEnvInfo].setup
+    command = kernel_build_infos.env_and_outputs_info.get_setup_script(
+        data = kernel_build_infos.env_and_outputs_info.data,
+        restore_out_dir_cmd = utils.get_check_sandbox_cmd(),
+    )
 
     for attr_name in (
         "modules_list",
+        "modules_recovery_list",
+        "modules_charger_list",
         "modules_blocklist",
+        "vendor_dlkm_fs_type",
         "vendor_dlkm_modules_list",
         "vendor_dlkm_modules_blocklist",
         "vendor_dlkm_props",
+        "system_dlkm_fs_type",
+        "system_dlkm_fs_types",
         "system_dlkm_modules_list",
         "system_dlkm_modules_blocklist",
         "system_dlkm_props",
@@ -129,6 +164,18 @@ def _build_modules_image_impl_common(
             options = "-al --chmod=F+w --include=source --include=build --exclude='*'",
         )
 
+    if set_ext_modules and ctx.attr._set_ext_modules[BuildSettingInfo].value:
+        ext_modules = ctx.attr.kernel_modules_install[KernelModuleInfo].packages.to_list()
+        command += """EXT_MODULES={quoted_ext_modules}""".format(
+            quoted_ext_modules = shell.quote(" ".join(ext_modules)),
+        )
+
+    if not ctx.attr._set_ext_modules[BuildSettingInfo].value:
+        # buildifier: disable=print
+        print("""\nWARNING: This is a temporary flag to mitigate issues on migrating away from
+setting EXT_MODULES in build.config. If you need --noset_ext_modules, please
+file a bug.""")
+
     command += """
              # Restore System.map to DIST_DIR for run_depmod in create_modules_staging
                mkdir -p ${{DIST_DIR}}
@@ -143,7 +190,8 @@ def _build_modules_image_impl_common(
     debug.print_scripts(ctx, command)
     ctx.actions.run_shell(
         mnemonic = mnemonic,
-        inputs = inputs,
+        inputs = depset(inputs, transitive = transitive_inputs),
+        tools = tools,
         outputs = command_outputs,
         progress_message = "Building {} {}".format(what, ctx.label),
         command = command,
@@ -163,12 +211,53 @@ def _build_modules_image_attrs_common(additional = None):
         "_debug_print_scripts": attr.label(
             default = "//build/kernel/kleaf:debug_print_scripts",
         ),
+        "_set_ext_modules": attr.label(
+            default = "//build/kernel/kleaf:set_ext_modules",
+        ),
     }
     if additional != None:
         ret.update(additional)
     return ret
 
+def _ramdisk_options(ramdisk_compression, ramdisk_compression_args):
+    """Options for how to treat ramdisk images.
+
+    Args:
+        ramdisk_compression: If provided it specfies the format used for any ramdisks generated.
+         If not provided a fallback value from build.config is used.
+         Possible values are `lz4`, `gzip`, None.
+        ramdisk_compression_args: Command line arguments passed to lz4 command
+         to control compression level (defaults to `-12 --favor-decSpeed`).
+         For iterative kernel development where faster compression is more
+         desirable than a high compression ratio, it can be useful to control
+         the compression ratio.
+    """
+
+    # Initially fallback to values from build.config.* files.
+    _ramdisk_compress = "${RAMDISK_COMPRESS}"
+    _ramdisk_decompress = "${RAMDISK_DECOMPRESS}"
+    _ramdisk_ext = "lz4"
+
+    if ramdisk_compression == "lz4":
+        _ramdisk_compress = "lz4 -c -l "
+        if ramdisk_compression_args:
+            _ramdisk_compress += ramdisk_compression_args
+        else:
+            _ramdisk_compress += "-12 --favor-decSpeed"
+        _ramdisk_decompress = "lz4 -c -d -l"
+    if ramdisk_compression == "gzip":
+        _ramdisk_compress = "gzip -c -f"
+        _ramdisk_decompress = "gzip -c -d"
+        _ramdisk_ext = "gz"
+
+    return struct(
+        ramdisk_compress = _ramdisk_compress,
+        ramdisk_decompress = _ramdisk_decompress,
+        ramdisk_ext = _ramdisk_ext,
+    )
+
 image_utils = struct(
     build_modules_image_impl_common = _build_modules_image_impl_common,
     build_modules_image_attrs_common = _build_modules_image_attrs_common,
+    ramdisk_options = _ramdisk_options,
 )

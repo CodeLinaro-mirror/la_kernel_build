@@ -12,103 +12,389 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dataclasses
+import json
+import logging
 import os
+import pathlib
 import shutil
 import subprocess
 import sys
+import xml.dom.minidom
+import xml.parsers.expat
+
+_FAKE_KERNEL_VERSION = "99.99.99"
 
 
-def call_setlocalversion(bin, srctree, *args):
-  """Call setlocalversion.
+@dataclasses.dataclass
+class PathCollectible(object):
+    """Represents a path and the result of an asynchronous task."""
+    path: pathlib.Path
 
-  Args:
-    bin: path to setlocalversion, or None if it does not exist.
-    srctree: The argument to setlocalversion.
-    args: additional arguments
-  Return:
-    A subprocess.Popen object, or None if bin or srctree does not exist.
-  """
-  working_dir = "build/kernel/kleaf/workspace_status_dir"
-  if bin and os.path.isdir(srctree):
-    return subprocess.Popen([bin, srctree] + list(args),
-                            text=True, stdout=subprocess.PIPE,
-                            cwd=working_dir)
-  return None
+    def collect(self) -> str:
+        return NotImplementedError
 
 
-def collect(popen_obj):
-  """Collect the result of a Popen object.
+@dataclasses.dataclass
+class PathPopen(PathCollectible):
+    """Consists of a path and the result of a subprocess."""
+    popen: subprocess.Popen
 
-  Terminates the program if return code is non-zero.
-
-  Return:
-    stdout of the subprocess.
-  """
-  stdout, _ = popen_obj.communicate()
-  if popen_obj.returncode != 0:
-    sys.stderr.write("ERROR: return code is {}\n".format(popen_obj.returncode))
-    sys.exit(1)
-  return stdout.strip()
+    def collect(self) -> str:
+        return collect(self.popen)
 
 
-def main():
-  kernel_dir = os.path.realpath(".source_date_epoch_dir")
-  has_kernel_dir = os.path.isdir(kernel_dir)
+@dataclasses.dataclass
+class PresetResult(PathCollectible):
+    """Consists of a path and a pre-defined result."""
+    result: str
 
-  setlocalversion = os.path.join(kernel_dir, "scripts/setlocalversion")
-  if not has_kernel_dir or not os.access(setlocalversion, os.X_OK):
-    setlocalversion = None
+    def collect(self) -> str:
+        return self.result
 
-  stable_scmversion_obj = None
-  if setlocalversion and has_kernel_dir:
-    stable_scmversion_obj = call_setlocalversion(setlocalversion, kernel_dir)
 
-  ext_modules = []
-  stable_scmversion_extmod_objs = []
-  if setlocalversion:
-    ext_modules = []
+@dataclasses.dataclass
+class LocalversionResult(PathPopen):
+    """Consists of results of localversion."""
+    removed_prefix: str | None
+    suffix: str | None
+
+    def collect(self) -> str:
+        ret = super().collect()
+        if self.removed_prefix:
+            ret = ret.removeprefix(self.removed_prefix)
+        if self.suffix:
+            ret += self.suffix
+        return ret
+
+
+def get_localversion_from_script(bin: pathlib.Path | None, project: pathlib.Path, *args) \
+        -> PathCollectible | None:
+    """Call setlocalversion.
+
+    Args:
+      bin: path to setlocalversion, or None if it does not exist.
+      project: relative path to the project
+      args: additional arguments
+    Return:
+      A PathCollectible object that resolves to the result, or None if bin or
+      project does not exist.
+    """
+    if not project.is_dir():
+        return None
+    srctree = project.resolve()
+
+    if bin:
+        working_dir = "build/kernel/kleaf/workspace_status_dir"
+        env = dict(os.environ)
+        env["KERNELVERSION"] = _FAKE_KERNEL_VERSION
+        env.pop("BUILD_NUMBER", None)
+        popen = subprocess.Popen([bin, srctree] + list(args),
+                                 text=True,
+                                 stdout=subprocess.PIPE,
+                                 cwd=working_dir,
+                                 env=env)
+
+        suffix = None
+        if os.environ.get("BUILD_NUMBER"):
+            suffix = "-ab" + os.environ["BUILD_NUMBER"]
+        return LocalversionResult(
+            path=project,
+            popen=popen,
+            removed_prefix=_FAKE_KERNEL_VERSION,
+            suffix=suffix
+        )
+
+    return None
+
+
+def get_localversion_from_git(project: pathlib.Path) -> PathCollectible | None:
+    """Calculate localversion without calling setlocalversion script.
+
+    Args:
+      project: relative path to the project
+    Return:
+      A PathCollectible object that resolves to the result, or None if bin or
+      project does not exist.
+    """
+
+    if not project.is_dir():
+        return None
+
+    # Note: To ensure hermeticity as much as possible, only get git from
+    # host, then clear PATH.
+    script = """
+        GIT=$(command -v git)
+        PATH=
+        if head=$($GIT rev-parse --verify --short=12 HEAD 2>/dev/null); then
+            echo -n -g"$head"
+        fi
+        if {
+            $GIT --no-optional-locks status -uno --porcelain 2>/dev/null ||
+            $GIT diff-index --name-only HEAD
+        } | read placeholder; then
+            echo -n -dirty
+        fi
+    """
+    popen = subprocess.Popen(script, shell=True, text=True,
+                             stdout=subprocess.PIPE, cwd=project)
+    suffix = None
+    if os.environ.get("BUILD_NUMBER"):
+        suffix = "-ab" + os.environ["BUILD_NUMBER"]
+    return LocalversionResult(
+        path=project,
+        popen=popen,
+        removed_prefix=None,
+        suffix=suffix
+    )
+
+
+def list_projects() -> list[pathlib.Path]:
+    """Lists projects in the repository.
+
+    Returns:
+        a list of projects in the repository.
+    """
+    if "KLEAF_REPO_MANIFEST" in os.environ:
+        with open(os.environ["KLEAF_REPO_MANIFEST"]) as repo_prop_file:
+            return parse_repo_manifest(repo_prop_file.read())
+
     try:
-      ext_modules = subprocess.check_output("""
-        source build/build_utils.sh
-        source build/_setup_env.sh
-        echo $EXT_MODULES
-        """, shell=True, text=True, stderr=subprocess.PIPE, executable="/bin/bash").split()
-    except subprocess.CalledProcessError as e:
-      msg = "WARNING: Unable to determine EXT_MODULES; scmversion for external modules may be incorrect. code={}, stderr={}\n".format(
-          e.returncode, e.stderr.strip())
-      sys.stderr.write(msg)
-    stable_scmversion_extmod_objs = [
-        call_setlocalversion(setlocalversion, os.path.realpath(ext_mod))
-        for ext_mod in ext_modules]
+        output = subprocess.check_output(["repo", "list", "-f"], text=True)
+        return parse_repo_list(output)
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        logging.warning("Unable to execute repo list -f: %s", e)
+        return []
 
-  stable_source_date_epoch = os.environ.get("SOURCE_DATE_EPOCH")
-  stable_source_date_epoch_obj = None
-  if not stable_source_date_epoch and has_kernel_dir and shutil.which("git"):
-    stable_source_date_epoch_obj = subprocess.Popen(
-        ["git", "-C", kernel_dir, "log", "-1", "--pretty=%ct"], text=True,
-        stdout=subprocess.PIPE)
-  else:
-    stable_source_date_epoch = 0
 
-  # Wait for subprocesses to finish, and print result.
+def parse_repo_manifest(manifest: str) -> list[pathlib.Path]:
+    """Parses a repo manifest file.
 
-  if stable_scmversion_obj:
-    print("STABLE_SCMVERSION", collect(stable_scmversion_obj))
+    Returns:
+        a list of paths to all projects in the repository.
+    """
+    try:
+        dom = xml.dom.minidom.parseString(manifest)
+    except xml.parsers.expat.ExpatError as e:
+        logging.error("Unable to parse repo manifest: %s", e)
+        return []
+    projects = dom.documentElement.getElementsByTagName("project")
+    # https://gerrit.googlesource.com/git-repo/+/master/docs/manifest-format.md#element-project
+    return [
+        pathlib.Path(proj.getAttribute("path") or proj.getAttribute("name"))
+        for proj in projects
+    ]
 
-  if stable_source_date_epoch_obj:
-    stable_source_date_epoch = collect(stable_source_date_epoch_obj)
-  print("STABLE_SOURCE_DATE_EPOCH", stable_source_date_epoch)
 
-  # If the list is empty, this prints "STABLE_SCMVERSION_EXT_MOD", and is
-  # filtered by Bazel.
-  print("STABLE_SCMVERSION_EXT_MOD", " ".join(
-      "{}:{}".format(ext_mod, result) for ext_mod, result in zip(ext_modules,
-                                                                 [collect(obj)
-                                                                  for obj in
-                                                                  stable_scmversion_extmod_objs])))
+def parse_repo_list(repo_list: str) -> list[pathlib.Path]:
+    """Parses the result of `repo list -f`.
 
-  return 0
+    Returns:
+        a list of paths to all projects in the repository.
+    """
+    workspace = pathlib.Path(".").absolute()
+    paths = []
+    for line in repo_list.splitlines():
+        line = line.strip()
+        if not line or ":" not in line:
+            continue
+        proj = pathlib.Path(line.split(":", 2)[0].strip())
+        if proj.is_relative_to(workspace):
+            paths.append(proj.relative_to(workspace))
+        else:
+            logging.info(
+                "Ignoring project %s because it is not under the Bazel workspace",
+                proj)
+    return paths
+
+
+def collect(popen_obj: subprocess.Popen) -> str:
+    """Collect the result of a Popen object.
+
+    Terminates the program if return code is non-zero.
+
+    Return:
+      stdout of the subprocess.
+    """
+    stdout, _ = popen_obj.communicate()
+    if popen_obj.returncode != 0:
+        logging.error("return code is %d", popen_obj.returncode)
+        sys.exit(1)
+    return stdout.strip()
+
+
+class Stamp(object):
+
+    def __init__(self):
+        self.ignore_missing_projects = os.environ.get(
+            "KLEAF_IGNORE_MISSING_PROJECTS") == "true"
+        self.use_kleaf_localversion = os.environ.get(
+            "KLEAF_USE_KLEAF_LOCALVERSION") == "true"
+        self.projects = list_projects()
+        self.init_for_dot_source_date_epoch_dir()
+
+    def init_for_dot_source_date_epoch_dir(self) -> None:
+        self.kernel_dir = pathlib.Path(".source_date_epoch_dir").resolve()
+        if not self.kernel_dir.is_dir():
+            self.kernel_dir = None
+        if self.kernel_dir:
+            self.kernel_rel = self.kernel_dir.relative_to(
+                pathlib.Path(".").resolve())
+
+        self.find_setlocalversion()
+
+    def main(self) -> int:
+        scmversion_map = self.get_localversion_all()
+
+        source_date_epoch_map = self.async_get_source_date_epoch_all()
+
+        scmversion_result_map = self.collect_map(scmversion_map)
+
+        source_date_epoch_result_map = self.collect_map(source_date_epoch_map)
+
+        self.print_result(
+            scmversion_result_map=scmversion_result_map,
+            source_date_epoch_result_map=source_date_epoch_result_map,
+        )
+        return 0
+
+    def find_setlocalversion(self) -> None:
+        self.setlocalversion = None
+
+        if self.use_kleaf_localversion:
+            return
+
+        all_projects = []
+        if self.kernel_dir:
+            all_projects.append(self.kernel_rel)
+        all_projects.extend(self.projects)
+
+        if self.ignore_missing_projects:
+            all_projects = filter(pathlib.Path.is_dir, all_projects)
+
+        for proj in all_projects:
+            if not proj.is_dir():
+                logging.error(
+                    "Project %s in repo manifest does not exist on disk.",
+                    proj
+                )
+                sys.exit(1)
+
+            candidate = proj / "scripts/setlocalversion"
+            if os.access(candidate, os.X_OK):
+                self.setlocalversion = candidate.resolve()
+                return
+
+    def get_localversion_all(self) -> dict[pathlib.Path, PathCollectible]:
+        all_projects: set[pathlib.Path] = set()
+        if self.kernel_dir:
+            all_projects.add(self.kernel_rel)
+        all_projects |= set(self.get_ext_modules())
+        all_projects |= set(self.projects)
+
+        if self.ignore_missing_projects:
+            all_projects = filter(pathlib.Path.is_dir, all_projects)
+
+        scmversion_map = {}
+        for project in all_projects:
+            if not project.is_dir():
+                logging.error(
+                    "Project %s in repo manifest does not exist on disk.",
+                    project)
+                sys.exit(1)
+
+            path_popen = self.get_localversion(project)
+            if path_popen:
+                scmversion_map[project] = path_popen
+
+        return scmversion_map
+
+    def get_localversion(self, project: pathlib.Path) -> PathCollectible | None:
+        if not self.use_kleaf_localversion:
+            return get_localversion_from_script(self.setlocalversion, project)
+
+        return get_localversion_from_git(project)
+
+    def get_ext_modules(self) -> list[pathlib.Path]:
+        if not self.setlocalversion:
+            return []
+        try:
+            cmd = """
+                    source build/build_utils.sh
+                    source build/_setup_env.sh
+                    echo $EXT_MODULES
+                  """
+            out = subprocess.check_output(cmd,
+                                          shell=True,
+                                          text=True,
+                                          stderr=subprocess.PIPE,
+                                          executable="/bin/bash")
+            return [pathlib.Path(path) for path in out.split()]
+        except subprocess.CalledProcessError as e:
+            logging.warning(
+                "Unable to determine EXT_MODULES; scmversion "
+                "for external modules may be incorrect. "
+                "code=%d, stderr=%s", e.returncode, e.stderr.strip())
+        return []
+
+    def async_get_source_date_epoch_all(self) \
+            -> dict[str, PathCollectible]:
+
+        all_projects: set[pathlib.Path] = set()
+        if self.kernel_dir:
+            all_projects.add(self.kernel_rel)
+        all_projects |= set(self.projects)
+
+        if self.ignore_missing_projects:
+            all_projects = filter(pathlib.Path.is_dir, all_projects)
+
+        return {
+            proj: self.async_get_source_date_epoch(proj)
+            for proj in filter(os.path.exists, all_projects)
+        }
+
+    def async_get_source_date_epoch(self, rel_path: pathlib.Path) -> PathCollectible:
+        env_val = os.environ.get("SOURCE_DATE_EPOCH")
+        if env_val:
+            return PresetResult(rel_path, env_val)
+        if shutil.which("git"):
+            args = [
+                "git", "-C",
+                rel_path.resolve(), "log", "-1", "--pretty=%ct"
+            ]
+            popen = subprocess.Popen(args, text=True, stdout=subprocess.PIPE)
+            return PathPopen(rel_path, popen)
+        return PresetResult(rel_path, "0")
+
+    def collect_map(
+        self,
+        legacy_map: dict[pathlib.Path, PathCollectible],
+    ) -> dict[pathlib.Path, str]:
+        return {
+            path: path_popen.collect()
+            for path, path_popen in legacy_map.items()
+        }
+
+    def print_result(
+        self,
+        scmversion_result_map: dict[pathlib.Path, str],
+        source_date_epoch_result_map: dict[pathlib.Path, str],
+    ) -> None:
+        stable_source_date_epochs = json.dumps({
+            str(key): value for key, value in source_date_epoch_result_map.items()
+        }, sort_keys=True)
+        print("STABLE_SOURCE_DATE_EPOCHS", stable_source_date_epochs)
+
+        # If the list is empty, this prints "STABLE_SCMVERSIONS", and is
+        # filtered by Bazel.
+        stable_scmversions = json.dumps({
+            str(key): value for key, value in scmversion_result_map.items()
+        }, sort_keys=True)
+        print("STABLE_SCMVERSIONS", stable_scmversions)
 
 
 if __name__ == '__main__':
-  sys.exit(main())
+    logging.basicConfig(stream=sys.stderr,
+                        level=logging.WARNING,
+                        format="%(levelname)s: %(message)s")
+    sys.exit(Stamp().main())

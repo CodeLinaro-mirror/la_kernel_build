@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Various configs to boost developer builds.
-# See build/kernel/kleaf/docs/fast.md.
+# --config=fast: Various configs to boost developer builds.
+# See build/kernel/kleaf/docs/fast.md
 
 # Let rules know what configs we are using now
 build:fast --//build/kernel/kleaf:config_fast
 
-# Thin LTO by default.
-build:fast --lto=thin
+# Also let the config decide what is best for LTO
+build:fast --lto=fast
 
 # Inherit from local: reduce sandboxes.
 build:fast --config=local

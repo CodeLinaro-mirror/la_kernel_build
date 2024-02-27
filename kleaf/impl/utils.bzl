@@ -12,9 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+Utilities for kleaf.
+"""
+
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:sets.bzl", "sets")
-load(":common_providers.bzl", "KernelModuleInfo")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load(
+    ":common_providers.bzl",
+    "DdkConfigInfo",
+    "DdkSubmoduleInfo",
+    "KernelBuildExtModuleInfo",
+    "KernelBuildInfo",
+    "KernelEnvAndOutputsInfo",
+    "KernelImagesInfo",
+    "KernelModuleDepInfo",
+    "KernelModuleInfo",
+    "KernelModuleKernelBuildInfo",
+    "KernelModuleSetupInfo",
+    "ModuleSymversInfo",
+)
+load(":ddk/ddk_headers.bzl", "DdkHeadersInfo")
+
+visibility("//build/kernel/kleaf/...")
 
 def _reverse_dict(d):
     """Reverse a dictionary of {key: [value, ...]}
@@ -36,7 +57,17 @@ def _getoptattr(thing, attr, default_value = None):
     return default_value
 
 def find_file(name, files, what, required = False):
-    """Find a file named |name| in the list of |files|. Expect zero or one match."""
+    """Find a file named |name| in the list of |files|. Expect zero or one match.
+
+    Args:
+        name: Name of the file to be searched.
+        files: List of files.
+        what: Target.
+        required: whether to fail if a non exact result is produced.
+
+    Returns:
+        A match when found or `None`.
+    """
     result = []
     for file in files:
         if file.basename == name:
@@ -47,14 +78,19 @@ def find_file(name, files, what, required = False):
             actual_len = len(result),
             name = name,
             expected_len = "1" if required else "0 or 1",
-            files = ":\n  " + ("\n  ".join(result)) if result else "",
+            files = ":\n  " + ("\n  ".join([e.path for e in result])) if result else "",
         ))
     return result[0] if result else None
 
-def find_files(files, what, suffix = None):
-    """Find files with given condition. The following conditions are accepted:
+def find_files(files, suffix = None):
+    """Find files which names end with a given |suffix|.
 
-    - Looking for files ending with a given suffix.
+    Args:
+        files: list of files to inspect.
+        suffix: Looking for files ending with this given suffix.
+
+    Returns:
+        A list of files.
     """
     result = []
     for file in files:
@@ -82,7 +118,7 @@ def _intermediates_dir(ctx):
     a previous build may remain and affect a later build. Use with caution.
     """
     return paths.join(
-        ctx.genfiles_dir.path,
+        ctx.bin_dir.path,
         paths.dirname(ctx.build_file_path),
         ctx.attr.name + "_intermediates",
     )
@@ -111,7 +147,61 @@ def _compare_file_names(files, expected_file_names, what):
 def _sanitize_label_as_filename(label):
     """Sanitize a Bazel label so it is safe to be used as a filename."""
     label_text = str(label)
-    return "".join([c if c.isalnum() else "_" for c in label_text.elems()])
+    return _normalize(label_text)
+
+def _normalize(s):
+    """Returns a normalized string by replacing non-letters / non-numbers as underscores."""
+    return "".join([c if c.isalnum() else "_" for c in s.elems()])
+
+def _hash_hex(x):
+    """Returns `hash(x)` in hex format."""
+    ret = "%x" % hash(x)
+    if len(ret) < 8:
+        ret = "0" * (8 - len(ret)) + ret
+    return ret
+
+def _get_check_sandbox_cmd():
+    """Returns a script that tries to check if we are running in a sandbox.
+
+    Note: This is not always accurate."""
+
+    return """
+           if [[ ! $PWD =~ /(sandbox|bazel-working-directory)/ ]]; then
+             echo "FATAL: this action must be executed in a sandbox!" >&2
+             exit 1
+           fi
+    """
+
+def _write_depset(ctx, d, out):
+    """Writes a depset to a file.
+
+    Requires `_write_depset` in attrs.
+
+    Args:
+        ctx: ctx
+        d: the depset
+        out: name of the output file
+    Returns:
+        A struct with the following fields:
+        - depset_file: the declared output file.
+        - depset: a depset that contains `d` and `depset_file`
+    """
+    out_file = ctx.actions.declare_file("{}/{}".format(ctx.attr.name, out))
+
+    args = ctx.actions.args()
+    args.add(out_file)
+    args.add_all(d)
+    ctx.actions.run(
+        executable = ctx.executable._write_depset,
+        arguments = [args],
+        outputs = [out_file],
+        mnemonic = "WriteDepset",
+        progress_message = "Dumping depset to {}: {}".format(out, ctx.label),
+    )
+    return struct(
+        depset_file = out_file,
+        depset = depset([out_file], transitive = [d]),
+    )
 
 # Utilities that applies to all Bazel stuff in general. These functions are
 # not Kleaf specific.
@@ -123,18 +213,30 @@ utils = struct(
     find_files = find_files,
     compare_file_names = _compare_file_names,
     sanitize_label_as_filename = _sanitize_label_as_filename,
+    normalize = _normalize,
+    hash_hex = _hash_hex,
+    get_check_sandbox_cmd = _get_check_sandbox_cmd,
+    write_depset = _write_depset,
 )
 
 def _filter_module_srcs(files):
-    """Create the list of `module_srcs` for a [`kernel_build`] or similar."""
-    return [
-        s
-        for s in files
-        if s.path.endswith(".h") or any([token in s.path for token in [
-            "Makefile",
-            "scripts/",
-        ]])
-    ]
+    """Filters and categorizes sources for building `kernel_module`."""
+    hdrs = []
+    scripts = []
+    kconfig = []
+    for file in files:
+        if file.path.endswith(".h"):
+            hdrs.append(file)
+        if ("Makefile" in file.path or "scripts/" in file.path or
+            file.basename == "module.lds.S"):
+            scripts.append(file)
+        if "Kconfig" in file.basename:
+            kconfig.append(file)
+    return struct(
+        module_scripts = depset(scripts),
+        module_hdrs = depset(hdrs),
+        module_kconfig = depset(kconfig),
+    )
 
 def _transform_kernel_build_outs(name, what, outs):
     """Transform `*outs` attributes for `kernel_build`.
@@ -154,64 +256,152 @@ def _transform_kernel_build_outs(name, what, outs):
     else:
         fail("{}: Invalid type for {}: {}".format(name, what, type(outs)))
 
-def _kernel_build_outs_add_vmlinux(name, outs):
-    """Add vmlinux etc. to the outs attribute of a `kernel_build`.
-
-    The logic should be in par with `_transform_kernel_build_outs`.
-    """
-    files_to_add = ("vmlinux", "System.map")
-    outs_changed = False
-    if outs == None:
-        outs = ["vmlinux"]
-        outs_changed = True
-    if type(outs) == type([]):
-        for file in files_to_add:
-            if file not in outs:
-                # don't use append to avoid changing outs
-                outs = outs + [file]
-                outs_changed = True
-    elif type(outs) == type({}):
-        outs_new = {}
-        for k, v in outs.items():
-            for file in files_to_add:
-                if file not in v:
-                    # don't use append to avoid changing outs
-                    v = v + [file]
-                    outs_changed = True
-            outs_new[k] = v
-        outs = outs_new
-    else:
-        fail("{}: Invalid type for outs: {}".format(name, type(outs)))
-    return outs, outs_changed
-
-def _check_kernel_build(kernel_modules, kernel_build, this_label):
+def _check_kernel_build(kernel_module_infos, kernel_build_label, this_label):
     """Check that kernel_modules have the same kernel_build as the given one.
 
     Args:
-        kernel_modules: the attribute of kernel_module dependencies. Should be
-          an attribute of a list of labels.
-        kernel_build: the attribute of kernel_build. Should be an attribute of
-          a label.
+        kernel_module_infos: list of KernelModuleInfo of kernel module dependencies.
+        kernel_build_label: the label of kernel_build.
         this_label: label of the module being checked.
     """
 
-    for kernel_module in kernel_modules:
-        if kernel_module[KernelModuleInfo].kernel_build.label != \
-           kernel_build.label:
+    for kernel_module_info in kernel_module_infos:
+        if kernel_build_label == None:
+            kernel_build_label = kernel_module_info.kernel_build_infos.label
+            continue
+
+        if kernel_module_info.kernel_build_infos.label != \
+           kernel_build_label:
             fail((
                 "{this_label} refers to kernel_build {kernel_build}, but " +
                 "depended kernel_module {dep} refers to kernel_build " +
                 "{dep_kernel_build}. They must refer to the same kernel_build."
             ).format(
                 this_label = this_label,
-                kernel_build = kernel_build.label,
-                dep = kernel_module.label,
-                dep_kernel_build = kernel_module[KernelModuleInfo].kernel_build.label,
+                kernel_build = kernel_build_label,
+                dep = kernel_module_info.label,
+                dep_kernel_build = kernel_module_info.kernel_build_infos.label,
             ))
+
+def _create_kernel_module_kernel_build_info(kernel_build):
+    """Creates KernelModuleKernelBuildInfo.
+
+    This info represents information on a kernel_module.kernel_build.
+
+    Args:
+        kernel_build: the `kernel_build` Target.
+    """
+    return KernelModuleKernelBuildInfo(
+        label = kernel_build.label,
+        ext_module_info = kernel_build[KernelBuildExtModuleInfo],
+        env_and_outputs_info = kernel_build[KernelEnvAndOutputsInfo],
+        kernel_build_info = kernel_build[KernelBuildInfo],
+        images_info = kernel_build[KernelImagesInfo],
+    )
+
+def _local_exec_requirements(ctx):
+    """Returns the execution requirement for `--config=local`.
+
+    This should only be used on the actions that are proven to be safe to be
+    built outside of the sandbox.
+    """
+    if ctx.attr._config_is_local[BuildSettingInfo].value:
+        return {"local": "1"}
+    return None
+
+def _split_kernel_module_deps(deps, this_label):
+    """Splits `deps` for a `kernel_module` or `ddk_module`.
+
+    Args:
+        deps: The list of deps
+        this_label: label of the module being checked.
+    """
+
+    kernel_module_deps = []
+    hdr_deps = []
+    submodule_deps = []
+    module_symvers_deps = []
+    ddk_config_deps = []
+    for dep in deps:
+        is_valid_dep = False
+        if DdkHeadersInfo in dep:
+            hdr_deps.append(dep)
+            is_valid_dep = True
+        if all([info in dep for info in [KernelModuleSetupInfo, KernelModuleInfo, ModuleSymversInfo]]):
+            kernel_module_deps.append(dep)
+            is_valid_dep = True
+        if all([info in dep for info in [DdkHeadersInfo, DdkSubmoduleInfo]]):
+            submodule_deps.append(dep)
+            is_valid_dep = True
+        if ModuleSymversInfo in dep:
+            module_symvers_deps.append(dep)
+            is_valid_dep = True
+        if DdkConfigInfo in dep:
+            ddk_config_deps.append(dep)
+            is_valid_dep = True
+        if not is_valid_dep:
+            fail("{}: {} is not a valid item in deps. Only kernel_module, ddk_module, ddk_headers, ddk_submodule are accepted.".format(this_label, dep.label))
+    return struct(
+        kernel_modules = kernel_module_deps,
+        hdrs = hdr_deps,
+        submodules = submodule_deps,
+        module_symvers_deps = module_symvers_deps,
+        ddk_configs = ddk_config_deps,
+    )
+
+def _create_kernel_module_dep_info(kernel_module):
+    """Creates KernelModuleDepInfo.
+
+    Args:
+        kernel_module: A `kernel_module` Target.
+    """
+
+    return KernelModuleDepInfo(
+        label = kernel_module.label,
+        kernel_module_setup_info = kernel_module[KernelModuleSetupInfo],
+        kernel_module_info = kernel_module[KernelModuleInfo],
+        module_symvers_info = kernel_module[ModuleSymversInfo],
+    )
+
+# Cross compiler name is not always the same as the linux arch
+# ARCH is not always the same as the architecture dir (b/254348147)
+def _set_src_arch_cmd():
+    """Returns a script that sets SRCARCH based on ARCH.
+
+    This is where we find DEFCONFIG.
+
+    The logic should be synced with common/Makefile.
+    """
+
+    return """
+        SRCARCH=${ARCH}
+        # Additional ARCH settings for x86
+        if [[ ${ARCH} == "i386" ]]; then
+                SRCARCH=x86
+        fi
+        if [[ ${ARCH} == "x86_64" ]]; then
+                SRCARCH=x86
+        fi
+        # Additional ARCH settings for sparc
+        if [[ ${ARCH} == "sparc32" ]]; then
+               SRCARCH=sparc
+        fi
+        if [[ ${ARCH} == "sparc64" ]]; then
+               SRCARCH=sparc
+        fi
+        # Additional ARCH settings for parisc
+        if [[ ${ARCH} == "parisc64" ]]; then
+               SRCARCH=parisc
+        fi
+    """
 
 kernel_utils = struct(
     filter_module_srcs = _filter_module_srcs,
     transform_kernel_build_outs = _transform_kernel_build_outs,
     check_kernel_build = _check_kernel_build,
-    kernel_build_outs_add_vmlinux = _kernel_build_outs_add_vmlinux,
+    local_exec_requirements = _local_exec_requirements,
+    split_kernel_module_deps = _split_kernel_module_deps,
+    set_src_arch_cmd = _set_src_arch_cmd,
+    create_kernel_module_kernel_build_info = _create_kernel_module_kernel_build_info,
+    create_kernel_module_dep_info = _create_kernel_module_dep_info,
 )

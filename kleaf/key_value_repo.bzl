@@ -1,14 +1,23 @@
+"""Turn a simple build.config into a Bazel extension."""
+
 def _impl(repository_ctx):
     repository_content = ""
+    all_vars = {}
 
     for src in repository_ctx.attr.srcs:
         raw_content = repository_ctx.read(src)
         for line in raw_content.splitlines():
             key, value = line.split("=", 1)
             repository_content += '{} = "{}"\n'.format(key.strip(), value.strip())
+            all_vars[key.strip()] = value.strip()
 
     for key, value in repository_ctx.attr.additional_values.items():
         repository_content += '{} = "{}"\n'.format(key, value)
+
+    if "VARS" in all_vars:
+        fail("{}: VARS is a reserved variable name.".format(repository_ctx.attr.name))
+
+    repository_content += "VARS = " + repr(all_vars) + "\n"
 
     repository_ctx.file("BUILD", """
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
@@ -17,8 +26,8 @@ bzl_library(
     srcs = ["dict.bzl"],
     visibility = ["//visibility:public"],
 )
-""")
-    repository_ctx.file("dict.bzl", repository_content)
+""", executable = False)
+    repository_ctx.file("dict.bzl", repository_content, executable = False)
 
 key_value_repo = repository_rule(
     implementation = _impl,
