@@ -217,6 +217,7 @@ KernelBuildExtModuleInfo = provider(
                                    "Does not contain the lib/modules/* suffix.",
         "module_hdrs": "A [depset](https://bazel.build/extending/depsets) containing headers for this `kernel_build` for building external modules",
         "ddk_config_env": "`KernelSerializedEnvInfo` for configuring DDK modules (excl. legacy `kernel_module`).",
+        "ddk_module_defconfig_fragments": "A [depset](https://bazel.build/extending/depsets) containing additional defconfig fragments for DDK modules.",
         "mod_min_env": "`KernelSerializedEnvInfo` for building external modules, including minimal needed `kernel_build` outputs.",
         "mod_full_env": "`KernelSerializedEnvInfo` for building external modules, including all `kernel_build` outputs.",
         "modinst_env": "`KernelSerializedEnvInfo` for running `modules_install`.",
@@ -340,6 +341,10 @@ KernelModuleInfo = provider(
             For other rules that contains multiple `kernel_module`s, a [depset] containing package
             names of all external modules in an unspecified order.""",
         "label": "Label to the `kernel_module` target.",
+        "modules_order": """A [depset](https://bazel.build/extending/depsets) of `modules.order`
+            files from ddk_module's, kernel_module, etc.
+            It uses [`postorder`](https://bazel.build/rules/lib/builtins/depset) ordering (dependencies
+            first).""",
     },
 )
 

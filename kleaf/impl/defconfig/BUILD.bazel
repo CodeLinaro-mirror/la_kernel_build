@@ -60,6 +60,15 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
+filegroup(
+    name = "rust",
+    srcs = select({
+        "//build/kernel/kleaf:rust_is_enabled": ["rust_defconfig"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:public"],
+)
+
 fail_action(
     name = "fail_debug_lto",
     message = "--debug requires --lto=none or default.",
@@ -147,4 +156,10 @@ fail_action(
     name = "fail_kcsan_lto",
     message = "--kcsan requires --lto=none or default.",
     visibility = ["//visibility:private"],
+)
+
+filegroup(
+    name = "signing_modules_disabled",
+    srcs = ["signing_modules_disabled_defconfig"],
+    visibility = ["//visibility:public"],
 )

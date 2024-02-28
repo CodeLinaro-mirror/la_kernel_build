@@ -1,5 +1,4 @@
-#!/bin/bash -e
-# Copyright (C) 2022 The Android Open Source Project
+# Copyright (C) 2024 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Script used as --workspace_status_command for common variables.
-# https://docs.bazel.build/versions/main/command-line-reference.html#flag--workspace_status_command
-
-if [[ -n "$KLEAF_MAKE_JOBS" ]]; then
-  echo "MAKE_JOBS $KLEAF_MAKE_JOBS"
-fi
+exports_files(
+    [
+        "make_kernel_toolchain_ext.bzl",
+    ],
+    visibility = ["//build/kernel/kleaf/docs:__pkg__"],
+)
