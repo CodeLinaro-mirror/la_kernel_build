@@ -350,7 +350,9 @@ for EXT_MOD in ${EXT_MODULES}; do
     done
   else
     # Fall back on legacy make if Bazel build is not present
-    echo "warning - building kernel modules with legacy make. Please migrate to DDK."
+    if [[ ! $EXT_MOD =~ devicetree ]]; then
+      echo "warning - building kernel modules with legacy make. Please migrate to DDK."
+    fi
     make -C ${EXT_MOD} M=${EXT_MOD_REL} KERNEL_SRC=${ROOT_DIR}/${KERNEL_DIR}  \
                         O=${OUT_DIR} "${TOOL_ARGS[@]}" ${MAKE_ARGS}
   fi
