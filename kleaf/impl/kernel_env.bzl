@@ -157,7 +157,7 @@ def _kernel_env_impl(ctx):
         command += """
               export KCONFIG_EXT={kconfig_ext}
             """.format(
-            kconfig_ext = kconfig_ext.short_path,
+            kconfig_ext = kconfig_ext.path,
         )
     if dtstree_makefile:
         command += """
@@ -226,6 +226,8 @@ def _kernel_env_impl(ctx):
           {toolchains_setup_env_var_cmd}
         # TODO(b/236012223) Remove the warning after deprecation.
           {make_goals_deprecation_warning}
+        # Identify the build user as 'kleaf' to recognize a kleaf-built kernel
+          export KBUILD_BUILD_USER=kleaf
         # Add a comment with config_tags for debugging
           cp -p {config_tags_comment_file} {out}
           chmod +w {out}
@@ -375,7 +377,18 @@ def _get_env_setup_cmds(ctx):
         if [ -n "${{DTSTREE_MAKEFILE}}" ]; then
             export dtstree=$(realpath -s $(dirname ${{DTSTREE_MAKEFILE}}) --relative-to ${{ROOT_DIR}}/${{KERNEL_DIR}})
         fi
-        # Set up KCPPFLAGS
+
+        # Redeclare KERNEL_DIR to be under $KLEAF_REPO_WORKSPACE_ROOT if requested.
+        if [[ "${{KLEAF_REDECLARE_KERNEL_DIR_UNDER_DYNAMIC_KLEAF_REPO_WORKSPACE_ROOT}}" == "1" ]]; then
+            export KERNEL_DIR=${{KLEAF_REPO_WORKSPACE_ROOT:+$KLEAF_REPO_WORKSPACE_ROOT/}}${{KERNEL_DIR#{kleaf_repo_workspace_root}}}
+        fi
+
+        ## Set up KCPPFLAGS
+
+        # use relative paths for file name references in the binaries
+        # (e.g. debug info)
+        export KCPPFLAGS="-ffile-prefix-map=${{ROOT_DIR}}/${{KERNEL_DIR}}/= -ffile-prefix-map=${{ROOT_DIR}}/="
+
         # For Kleaf local (non-sandbox) builds, $ROOT_DIR is under execroot but
         # $ROOT_DIR/$KERNEL_DIR is a symlink to the real source tree under
         # workspace root, making $abs_srctree not under $ROOT_DIR.
@@ -385,6 +398,7 @@ def _get_env_setup_cmds(ctx):
     """.format(
         get_make_jobs_cmd = status.get_volatile_status_cmd(ctx, "MAKE_JOBS"),
         linux_x86_libs_path = ctx.files._linux_x86_libs[0].dirname,
+        kleaf_repo_workspace_root = (ctx.label.workspace_root + "/") if ctx.label.workspace_root else "",
     )
     return struct(
         pre_env = pre_env,

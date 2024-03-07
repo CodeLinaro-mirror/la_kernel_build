@@ -119,6 +119,7 @@ def kernel_build(
         page_size = None,
         pack_module_env = None,
         sanitizers = None,
+        ddk_module_defconfig_fragments = None,
         **kwargs):
     """Defines a kernel build target with all dependent targets.
 
@@ -363,8 +364,6 @@ def kernel_build(
           and the KMI resulting from the build, to ensure
           they match 1-1.
         collect_unstripped_modules: If `True`, provide all unstripped in-tree.
-
-          Approximately equivalent to `UNSTRIPPED_MODULES=*` in `build.sh`.
         enable_interceptor: If set to `True`, enable interceptor so it can be
           used in [`kernel_compile_commands`](#kernel_compile_commands).
         kbuild_symtypes: The value of `KBUILD_SYMTYPES`.
@@ -406,6 +405,8 @@ def kernel_build(
           (e.g. `kasan_defconfig`) or `<prop>_<value>_defconfig` (e.g. `lto_none_defconfig`)
           to provide human-readable hints during the build. The prefix should
           describe what the defconfig does. However, this is not a requirement.
+          These configs are also applied to external modules, including
+          `kernel_module`s and `ddk_module`s.
         page_size: Default is `"default"`. Page size of the kernel build.
 
           Value may be one of `"default"`, `"4k"`, `"16k"` or `"64k"`. If
@@ -423,6 +424,10 @@ def kernel_build(
             - `["kasan_sw_tags"]`
             - `["kasan_generic"]`
             - `["kcsan"]`
+        ddk_module_defconfig_fragments: A list of additional defconfigs, to be used
+          in `ddk_module`s building against this kernel.
+          Unlike `defconfig_fragments`, `ddk_module_defconfig_fragments` is not applied
+          to this `kernel_build` target, nor dependent legacy `kernel_module`s.
         **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
@@ -610,6 +615,7 @@ def kernel_build(
         trim_nonlisted_kmi = trim_nonlisted_kmi,
         pack_module_env = pack_module_env,
         sanitizers = sanitizers,
+        ddk_module_defconfig_fragments = ddk_module_defconfig_fragments,
         **kwargs
     )
 
@@ -750,6 +756,8 @@ def _get_defconfig_fragments(
     additional_fragments = [
         Label("//build/kernel/kleaf:defconfig_fragment"),
         Label("//build/kernel/kleaf/impl/defconfig:debug"),
+        Label("//build/kernel/kleaf/impl/defconfig:rust"),
+        Label("//build/kernel/kleaf/impl/defconfig:zstd_dwarf_compression"),
     ]
 
     btf_debug_info_target = kernel_build_name + "_defconfig_fragment_btf_debug_info"
@@ -869,7 +877,7 @@ def _create_kbuild_mixed_tree(ctx):
             rm -rf ${{KBUILD_MIXED_TREE}}
             mkdir -p ${{KBUILD_MIXED_TREE}}
             for base_kernel_file in {base_kernel_files}; do
-              ln -s $(readlink -m ${{base_kernel_file}}) ${{KBUILD_MIXED_TREE}}
+              cp -a -t ${{KBUILD_MIXED_TREE}} $(readlink -m ${{base_kernel_file}})
             done
         """.format(
             base_kernel_files = " ".join([file.path for file in base_kernel_files.to_list()]),
@@ -1203,7 +1211,7 @@ def _get_grab_gcno_step(ctx):
                 inputs.append(base_kernel[GcovInfo].gcno_dir)
                 base_kernel_gcno_dir_cmd = """
                     # Copy all *.gcno files and its subdirectories recursively.
-                    rsync -a --prune-empty-dirs --include '*/' --include '*.gcno' --exclude '*' {base_gcno_dir}/ {gcno_dir}/
+                    rsync -a -L --prune-empty-dirs --include '*/' --include '*.gcno' --exclude '*' {base_gcno_dir}/ {gcno_dir}/
                 """.format(
                     base_gcno_dir = base_kernel[GcovInfo].gcno_dir.path,
                     gcno_dir = gcno_dir.path,
@@ -1871,6 +1879,10 @@ def _create_infos(
         modinst_env = modinst_env,
         collect_unstripped_modules = ctx.attr.collect_unstripped_modules,
         strip_modules = ctx.attr.strip_modules,
+        ddk_module_defconfig_fragments = depset(transitive = [
+            target.files
+            for target in ctx.attr.ddk_module_defconfig_fragments
+        ]),
     )
 
     kernel_uapi_depsets = []
@@ -2159,6 +2171,10 @@ _kernel_build = rule(
         "sanitizers": attr.string_list(
             allow_empty = False,
             default = ["default"],
+        ),
+        "ddk_module_defconfig_fragments": attr.label_list(
+            doc = "Additional defconfig fragments for dependant DDK modules.",
+            allow_empty = True,
         ),
     } | _kernel_build_additional_attrs(),
     toolchains = [hermetic_toolchain.type],

@@ -401,6 +401,20 @@ config_setting(
     visibility = ["//build/kernel:__pkg__"],
 )
 
+# Default is false.
+# If true, use pigz as drop-in replacement for gzip.
+bool_flag(
+    name = "gzip_is_pigz",
+    build_setting_default = False,
+    visibility = ["//visibility:private"],
+)
+
+config_setting(
+    name = "gzip_is_pigz_is_true",
+    flag_values = {":gzip_is_pigz": "1"},
+    visibility = ["//build/kernel:__pkg__"],
+)
+
 # Debug options
 
 # Flag to control whether enable debug features in the kernel
@@ -530,6 +544,32 @@ label_flag(
     name = "defconfig_fragment",
     build_setting_default = "//build/kernel/kleaf/impl:empty_filegroup",
     visibility = ["//visibility:public"],
+)
+
+# If true, enable Rust support and drivers under development.
+bool_flag(
+    name = "rust",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "rust_is_enabled",
+    flag_values = {":rust": "1"},
+    visibility = ["//build/kernel/kleaf/impl/defconfig:__subpackages__"],
+)
+
+# If true, enable Zstd dwarf compression
+bool_flag(
+    name = "zstd_dwarf_compression",
+    build_setting_default = True,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "zstd_dwarf_compression_is_disabled",
+    flag_values = {":zstd_dwarf_compression": "0"},
+    visibility = ["//build/kernel/kleaf/impl/defconfig:__subpackages__"],
 )
 
 # If true, enable CONFIG_GDB_SCRIPTS and collect gdb scripts.
@@ -728,6 +768,7 @@ exports_files(
         "fail.bzl",
         "hermetic_tools.bzl",
         "kernel.bzl",
+        "kernel_prebuilt_ext.bzl",
         "key_value_repo.bzl",
         "print_debug.bzl",
         "update_source_file.bzl",
@@ -745,8 +786,8 @@ alias(
 
 alias(
     name = "docs_server",
-    actual = "//build/kernel/kleaf/docs:docs_server",
-    deprecation = "Use //build/kernel/kleaf/docs:docs_server instead.",
+    actual = "//build/kernel/kleaf/docs:docs_dist",
+    deprecation = "Use //build/kernel/kleaf/docs:docs_dist instead.",
 )
 
 alias(

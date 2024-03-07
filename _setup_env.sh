@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an implementation detail of build.sh and friends. Do not source
-# directly as it will spoil your shell and make build.sh unusable. You have
-# been warned! If you have a good reason to source the result of this file into
-# a shell, please let kernel-team@android.com know and we are happy to help
-# with your use case.
+# This is an implementation detail of Kleaf. Do not source directly as it will
+# spoil your shell. You have been warned! If you have a good reason to source
+# the result of this file into a shell, please let kernel-team@android.com know
+# and we will be happy to help with your use case.
 
 [ -n "$_SETUP_ENV_SH_INCLUDED" ] && return || export _SETUP_ENV_SH_INCLUDED=1
 
@@ -79,6 +78,9 @@ export MODULES_ARCHIVE=modules.tar.gz
 
 export TZ=UTC
 export LC_ALL=C
+# TODO(b/291918087): KERNEL_DIR is modified with
+#   KLEAF_REDECLARE_KERNEL_DIR_UNDER_DYNAMIC_KLEAF_REPO_WORKSPACE_ROOT, making
+#   the value here incorrect.
 if [ -z "${SOURCE_DATE_EPOCH}" ]; then
   if [[ -n "${KLEAF_SOURCE_DATE_EPOCHS}" ]]; then
     export SOURCE_DATE_EPOCH=$(extract_git_metadata "${KLEAF_SOURCE_DATE_EPOCHS}" "${KERNEL_DIR}" SOURCE_DATE_EPOCH)
@@ -130,10 +132,6 @@ if [ "${HERMETIC_TOOLCHAIN:-0}" -eq 1 ]; then
       ln -sf $(which $tool) ${HOST_TOOLS}
   done
   PATH=${HOST_TOOLS}
-
-  # use relative paths for file name references in the binaries
-  # (e.g. debug info)
-  export KCPPFLAGS="-ffile-prefix-map=${ROOT_DIR}/${KERNEL_DIR}/= -ffile-prefix-map=${ROOT_DIR}/="
 fi
 
 for prebuilt_bin in "${prebuilts_paths[@]}"; do
@@ -228,6 +226,10 @@ else
   RAMDISK_DECOMPRESS="${DECOMPRESS_LZ4}"
   RAMDISK_EXT="lz4"
 fi
+
+# Set libclang.so location for use by bindgen for Rust
+LIBCLANG_PATH=${ROOT_DIR}/${CLANG_PREBUILT_BIN}/../lib/
+export LIBCLANG_PATH
 
 # verifies that defconfig matches the DEFCONFIG
 function check_defconfig() {
