@@ -555,7 +555,20 @@ bool_flag(
 config_setting(
     name = "rust_is_enabled",
     flag_values = {":rust": "1"},
+    visibility = ["//build/kernel/kleaf/impl/defconfig:__subpackages__"],
+)
+
+# If true, enable Zstd dwarf compression
+bool_flag(
+    name = "zstd_dwarf_compression",
+    build_setting_default = True,
     visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "zstd_dwarf_compression_is_disabled",
+    flag_values = {":zstd_dwarf_compression": "0"},
+    visibility = ["//build/kernel/kleaf/impl/defconfig:__subpackages__"],
 )
 
 # If true, enable CONFIG_GDB_SCRIPTS and collect gdb scripts.
@@ -754,6 +767,7 @@ exports_files(
         "fail.bzl",
         "hermetic_tools.bzl",
         "kernel.bzl",
+        "kernel_prebuilt_ext.bzl",
         "key_value_repo.bzl",
         "print_debug.bzl",
         "update_source_file.bzl",
@@ -771,8 +785,8 @@ alias(
 
 alias(
     name = "docs_server",
-    actual = "//build/kernel/kleaf/docs:docs_server",
-    deprecation = "Use //build/kernel/kleaf/docs:docs_server instead.",
+    actual = "//build/kernel/kleaf/docs:docs_dist",
+    deprecation = "Use //build/kernel/kleaf/docs:docs_dist instead.",
 )
 
 alias(
