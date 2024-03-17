@@ -37,6 +37,7 @@ bison_wrapper(
     visibility = ["//visibility:private"],
 )
 
+# TODO(b/274975942): Delete these symlinks once build.sh goes away.
 _HERMETIC_TOOLS = [
     # keep sorted
     ":bison",
@@ -143,7 +144,7 @@ _HERMETIC_TOOLS = [
 ] + glob([
     # Intentionally glob here to test for existance of alias destination
     # buildifier: disable=constant-glob
-    "build-tools/kleaf_internal_do_not_use_path/linux-x86/cxx_extractor",
+    "build-tools/path/linux-x86/cxx_extractor",
 ])
 
 # DO NOT ADD MORE TO THIS LIST.
