@@ -25,10 +25,10 @@ load("//build/kernel/kleaf/artifact_tests:kernel_test.bzl", "initramfs_modules_o
 load(
     "//build/kernel/kleaf/impl:constants.bzl",
     "MODULE_OUTS_FILE_OUTPUT_GROUP",
-    "MODULE_OUTS_FILE_SUFFIX",
     "TOOLCHAIN_VERSION_FILENAME",
 )
 load("//build/kernel/kleaf/impl:gki_artifacts.bzl", "gki_artifacts", "gki_artifacts_prebuilts")
+load("//build/kernel/kleaf/impl:kernel_filegroup_declaration.bzl", "kernel_filegroup_declaration")
 load(
     "//build/kernel/kleaf/impl:kernel_prebuilt_utils.bzl",
     "CI_TARGET_MAPPING",
@@ -49,7 +49,6 @@ load(
     "kernel_build",
     "kernel_build_config",
     "kernel_compile_commands",
-    "kernel_filegroup",
     "kernel_images",
     "kernel_kythe",
     "kernel_modules_install",
@@ -581,7 +580,7 @@ KLEAF_REDECLARE_KERNEL_DIR_UNDER_DYNAMIC_KLEAF_REPO_WORKSPACE_ROOT=1
         flat = True,
     )
 
-    _define_prebuilts(target_configs = target_configs, visibility = visibility)
+    _define_prebuilts(visibility = visibility)
 
 def _get_target_config(
         name,
@@ -843,6 +842,18 @@ def _define_common_kernel(
         ],
     )
 
+    filegroup_extra_deps = [
+        name + "_unstripped_modules_archive",
+    ]
+    kernel_filegroup_declaration(
+        name = name + "_filegroup_declaration",
+        kernel_build = name,
+        extra_deps = filegroup_extra_deps,
+        visibility = ["//visibility:private"],
+    )
+
+    # TODO(b/291918087): Drop after common_kernels no longer use kernel_filegroup.
+    #   These files should already be in kernel_filegroup_declaration.
     # Everything in name + "_dist" for the DDK.
     # These are necessary for driver development. Hence they are also added to
     # kernel_*_dist so they can be downloaded.
@@ -854,9 +865,9 @@ def _define_common_kernel(
         visibility = ["//visibility:private"],
     )
     ddk_artifacts = [
-        name + "_modules_prepare",
-        name + "_modules_staging_archive",
+        name + "_filegroup_declaration",
         name + "_internal_ddk_artifacts",
+        name + "_unstripped_modules_archive",
     ]
     if ddk_headers_archive:
         ddk_artifacts.append(ddk_headers_archive)
@@ -868,7 +879,6 @@ def _define_common_kernel(
     dist_targets = [
         name,
         name + "_uapi_headers",
-        name + "_unstripped_modules_archive",
         name + "_additional_artifacts",
         name + "_ddk_artifacts",
         name + "_modules",
@@ -941,7 +951,8 @@ def _define_common_kernel(
         flat = True,
     )
 
-def _define_prebuilts(target_configs, **kwargs):
+# TODO(b/291918087): Delete once users have migrated to @gki_prebuilts
+def _define_prebuilts(**kwargs):
     # Legacy flag for backwards compatibility
     # TODO(https://github.com/bazelbuild/bazel/issues/13463): alias to bool_flag does not
     # work. Hence we use a composite flag here.
@@ -975,55 +986,33 @@ def _define_prebuilts(target_configs, **kwargs):
         name = value["target"]
         main_target_outs = value["outs"]  # outs of target named {name}
         gki_prebuilts_outs = value["gki_prebuilts_outs"]  # outputs of _gki_prebuilts
+        deprecate_msg = "Use @{}//{} directly".format(repo_name, name)
+        not_available_msg = "This will no longer be available. File a bug if you rely on this target."
 
         native.filegroup(
             name = name + "_downloaded",
             srcs = ["@{}//{}".format(repo_name, filename) for filename in main_target_outs],
             tags = ["manual"],
+            deprecation = deprecate_msg,
         )
 
         native.filegroup(
             name = name + "_module_outs_file",
             srcs = [":" + name],
             output_group = MODULE_OUTS_FILE_OUTPUT_GROUP,
+            deprecation = not_available_msg,
         )
 
         # A kernel_filegroup that:
         # - If --use_prebuilt_gki_num is set, use downloaded prebuilt of kernel_aarch64
         # - Otherwise build kernel_aarch64 from sources.
-        kernel_filegroup(
+        native.alias(
             name = name + "_download_or_build",
-            srcs = select({
-                ":use_prebuilt_gki_set": [":" + name + "_downloaded"],
-                "//conditions:default": [name],
+            actual = select({
+                ":use_prebuilt_gki_set": "@{}//{}".format(repo_name, name),
+                "//conditions:default": name,
             }),
-            deps = select({
-                ":use_prebuilt_gki_set": [
-                    name + "_ddk_artifacts_downloaded",
-                    name + "_unstripped_modules_archive_downloaded",
-                    name + "_" + TOOLCHAIN_VERSION_FILENAME + "_downloaded",
-                ],
-                "//conditions:default": [
-                    name + "_ddk_artifacts",
-                    name + "_" + TOOLCHAIN_VERSION_FILENAME,
-                    # unstripped modules come from {name} in srcs, KernelUnstrippedModulesInfo
-                ],
-            }),
-            kernel_uapi_headers = name + "_uapi_headers_download_or_build",
-            collect_unstripped_modules = _COLLECT_UNSTRIPPED_MODULES,
-            images = name + "_images_download_or_build",
-            module_outs_file = select({
-                ":use_prebuilt_gki_set": "@{}//{}{}".format(repo_name, name, MODULE_OUTS_FILE_SUFFIX),
-                "//conditions:default": ":" + name + "_module_outs_file",
-            }),
-            protected_modules_list = select({
-                ":use_prebuilt_gki_set": "@{}//{}".format(repo_name, value["protected_modules"]),
-                "//conditions:default": target_configs[name].get("protected_modules_list"),
-            }),
-            gki_artifacts = name + "_gki_artifacts_download_or_build",
-            ddk_module_defconfig_fragments = [
-                Label("//build/kernel/kleaf/impl/defconfig:signing_modules_disabled"),
-            ],
+            deprecation = deprecate_msg,
             **kwargs
         )
 
@@ -1034,6 +1023,7 @@ def _define_prebuilts(target_configs, **kwargs):
                 "//conditions:default": [name + "_boot_img_archive_downloaded"],
             }),
             outs = gki_prebuilts_outs,
+            deprecation = deprecate_msg,
         )
 
         native.filegroup(
@@ -1042,6 +1032,7 @@ def _define_prebuilts(target_configs, **kwargs):
                 ":use_prebuilt_gki_set": [name + "_gki_artifacts_downloaded"],
                 "//conditions:default": [name + "_gki_artifacts"],
             }),
+            deprecation = deprecate_msg,
             **kwargs
         )
 
@@ -1056,6 +1047,7 @@ def _define_prebuilts(target_configs, **kwargs):
                 name = name + "_" + target_suffix + "_downloaded",
                 srcs = ["@{}//{}".format(repo_name, filename) for filename in suffixed_target_outs],
                 tags = ["manual"],
+                deprecation = deprecate_msg,
             )
 
             # A filegroup that:
@@ -1067,6 +1059,7 @@ def _define_prebuilts(target_configs, **kwargs):
                     ":use_prebuilt_gki_set": [":" + name + "_" + target_suffix + "_downloaded"],
                     "//conditions:default": [name + "_" + target_suffix],
                 }),
+                deprecation = deprecate_msg,
                 **kwargs
             )
 
@@ -1080,11 +1073,13 @@ def _define_prebuilts(target_configs, **kwargs):
         native.filegroup(
             name = name + "_additional_artifacts_downloaded",
             srcs = [item + "_downloaded" for item in additional_artifacts_items],
+            deprecation = not_available_msg,
         )
 
         native.filegroup(
             name = name + "_additional_artifacts_download_or_build",
             srcs = [item + "_download_or_build" for item in additional_artifacts_items],
+            deprecation = not_available_msg,
         )
 
 def _define_common_kernels_additional_tests(
