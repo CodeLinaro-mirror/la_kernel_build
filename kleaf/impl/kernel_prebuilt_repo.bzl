@@ -15,6 +15,11 @@
 """Repository for kernel prebuilts."""
 
 load(
+    ":constants.bzl",
+    "FILEGROUP_DEF_ARCHIVE_SUFFIX",
+    "FILEGROUP_DEF_TEMPLATE_NAME",
+)
+load(
     ":kernel_prebuilt_utils.bzl",
     "CI_TARGET_MAPPING",
     "GKI_DOWNLOAD_CONFIGS",
@@ -150,15 +155,21 @@ def _download_remote_file(repository_ctx, local_path, remote_filename, file_mand
           be postponed to the analysis phase when the target is requested.
         """
     build_number = _get_build_number(repository_ctx)
+
+    # This doesn't have to be the same as the Bazel target name, hence
+    # we use a separate variable to signify so. If we have the ci_target_name
+    # != bazel_target_name in the future, this needs to be adjusted properly.
+    ci_target_name = repository_ctx.attr.target
+
     artifact_url = repository_ctx.attr.artifact_url_fmt.format(
         build_number = build_number,
-        target = repository_ctx.attr.target,
+        target = ci_target_name,
         filename = remote_filename,
     )
 
     url_with_fake_build_number = repository_ctx.attr.artifact_url_fmt.format(
         build_number = "__FAKE_BUILD_NUMBER_PLACEHOLDER__",
-        target = repository_ctx.attr.target,
+        target = ci_target_name,
         filename = remote_filename,
     )
     if not build_number and artifact_url != url_with_fake_build_number:
@@ -176,6 +187,7 @@ def _download_remote_file(repository_ctx, local_path, remote_filename, file_mand
     return _true_future if download_status.success else _false_future
 
 def _kernel_prebuilt_repo_impl(repository_ctx):
+    bazel_target_name = repository_ctx.attr.target
     download_config = repository_ctx.attr.download_config
     mandatory = repository_ctx.attr.mandatory
     if repository_ctx.attr.auto_download_config:
@@ -187,14 +199,14 @@ def _kernel_prebuilt_repo_impl(repository_ctx):
             fail("{}: mandatory should not be set when auto_download_config is True".format(
                 repository_ctx.attr.name,
             ))
-        download_config, mandatory = _infer_download_config(repository_ctx.attr.target)
+        download_config, mandatory = _infer_download_config(bazel_target_name)
 
     futures = {}
     for local_filename, remote_filename_fmt in download_config.items():
         local_path = repository_ctx.path(_join(local_filename, _basename(local_filename)))
         remote_filename = remote_filename_fmt.format(
             build_number = repository_ctx.attr.build_number,
-            target = repository_ctx.attr.target,
+            target = bazel_target_name,
         )
         file_mandatory = _str_to_bool(mandatory.get(local_filename, _bool_to_str(True)))
 
@@ -247,9 +259,50 @@ filegroup(
         )
         repository_ctx.file(_join(local_filename, "BUILD.bazel"), content)
 
+    _create_top_level_files(repository_ctx, download_config)
+
+def _create_top_level_files(repository_ctx, download_config):
+    bazel_target_name = repository_ctx.attr.target
     repository_ctx.file("""WORKSPACE.bazel""", """\
 workspace({})
 """.format(repr(repository_ctx.attr.name)))
+
+    filegroup_decl_archives = []
+    for local_filename in download_config:
+        if _basename(local_filename).endswith(FILEGROUP_DEF_ARCHIVE_SUFFIX):
+            local_path = repository_ctx.path(_join(local_filename, _basename(local_filename)))
+            filegroup_decl_archives.append(local_path)
+
+    if not filegroup_decl_archives:
+        return
+    if len(filegroup_decl_archives) > 1:
+        fail("Multiple files with suffix {}: {}".format(
+            FILEGROUP_DEF_ARCHIVE_SUFFIX,
+            filegroup_decl_archives,
+        ))
+
+    filegroup_decl_archive = filegroup_decl_archives[0]
+    repository_ctx.extract(
+        # If local_artifact_path is set, filegroup_decl_archive is a symlink.
+        # The symlink is under the working directory so we can't set
+        # watch_archive = "yes".
+        # Use realpath (which may point outside the working directory) and
+        # watch_archive = "auto" (the default) achieves optimal effect.
+        archive = filegroup_decl_archive.realpath,
+        output = repository_ctx.path(bazel_target_name),
+    )
+
+    template_path = repository_ctx.path(_join(bazel_target_name, FILEGROUP_DEF_TEMPLATE_NAME))
+    template_content = repository_ctx.read(template_path)
+
+    repository_ctx.file(repository_ctx.path(_join(bazel_target_name, "BUILD.bazel")), """\
+load({kernel_bzl_repr}, "kernel_filegroup")
+
+{template_content}
+""".format(
+        kernel_bzl_repr = repr(str(Label("//build/kernel/kleaf:kernel.bzl"))),
+        template_content = template_content,
+    ))
 
 kernel_prebuilt_repo = repository_rule(
     implementation = _kernel_prebuilt_repo_impl,

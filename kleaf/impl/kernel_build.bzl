@@ -34,6 +34,7 @@ load(
     "GcovInfo",
     "KernelBuildAbiInfo",
     "KernelBuildExtModuleInfo",
+    "KernelBuildFilegroupDeclInfo",
     "KernelBuildInTreeModulesInfo",
     "KernelBuildInfo",
     "KernelBuildMixedTreeInfo",
@@ -41,7 +42,6 @@ load(
     "KernelBuildUapiInfo",
     "KernelBuildUnameInfo",
     "KernelCmdsInfo",
-    "KernelConfigArchiveInfo",
     "KernelEnvAndOutputsInfo",
     "KernelEnvAttrInfo",
     "KernelEnvMakeGoalsInfo",
@@ -84,6 +84,8 @@ _kernel_build_internal_outs = [
 
 _KERNEL_BUILD_OUT_ATTRS = ("outs", "module_outs", "implicit_outs", "module_implicit_outs", "internal_outs")
 _KERNEL_BUILD_MODULE_OUT_ATTRS = ("module_outs", "module_implicit_outs")
+
+_MODULES_PREPARE_ARCHIVE = "modules_prepare_outdir.tar.gz"
 
 def kernel_build(
         name,
@@ -583,7 +585,7 @@ def kernel_build(
         name = modules_prepare_target_name,
         config = config_target_name,
         srcs = srcs,
-        outdir_tar_gz = modules_prepare_target_name + "/modules_prepare_outdir.tar.gz",
+        outdir_tar_gz = modules_prepare_target_name + "/" + _MODULES_PREPARE_ARCHIVE,
         trim_nonlisted_kmi = trim_nonlisted_kmi,
         force_generate_headers = modules_prepare_force_generate_headers,
         **internal_kwargs
@@ -756,6 +758,7 @@ def _get_defconfig_fragments(
     additional_fragments = [
         Label("//build/kernel/kleaf:defconfig_fragment"),
         Label("//build/kernel/kleaf/impl/defconfig:debug"),
+        Label("//build/kernel/kleaf/impl/defconfig:gcov"),
         Label("//build/kernel/kleaf/impl/defconfig:rust"),
         Label("//build/kernel/kleaf/impl/defconfig:zstd_dwarf_compression"),
     ]
@@ -1870,6 +1873,11 @@ def _create_infos(
         ]),
     )
 
+    ddk_module_defconfig_fragments = depset(transitive = [
+        target.files
+        for target in ctx.attr.ddk_module_defconfig_fragments
+    ])
+
     kernel_build_module_info = KernelBuildExtModuleInfo(
         modules_staging_archive = modules_staging_archive,
         module_hdrs = module_srcs.module_hdrs,
@@ -1879,18 +1887,16 @@ def _create_infos(
         modinst_env = modinst_env,
         collect_unstripped_modules = ctx.attr.collect_unstripped_modules,
         strip_modules = ctx.attr.strip_modules,
-        ddk_module_defconfig_fragments = depset(transitive = [
-            target.files
-            for target in ctx.attr.ddk_module_defconfig_fragments
-        ]),
+        ddk_module_defconfig_fragments = ddk_module_defconfig_fragments,
     )
 
     kernel_uapi_depsets = []
     if base_kernel:
         kernel_uapi_depsets.append(base_kernel[KernelBuildUapiInfo].kernel_uapi_headers)
     kernel_uapi_depsets.append(ctx.attr.kernel_uapi_headers.files)
+    kernel_uapi_headers_depset = depset(transitive = kernel_uapi_depsets, order = "postorder")
     kernel_build_uapi_info = KernelBuildUapiInfo(
-        kernel_uapi_headers = depset(transitive = kernel_uapi_depsets, order = "postorder"),
+        kernel_uapi_headers = kernel_uapi_headers_depset,
     )
 
     if ctx.files.combined_abi_symbollist:
@@ -1934,26 +1940,22 @@ def _create_infos(
     )
 
     # List of artifacts to be used when creating a kernel_filegroup that mimics this target.
+    # TODO(b/291918087): Drop after common_kernels no longer use kernel_filegroup.
+    #   These files should already be in kernel_filegroup_declaration.
     internal_ddk_artifacts = [
-        all_module_names_file,
     ]
     if module_scripts_archive:
         internal_ddk_artifacts.append(module_scripts_archive)
     if internal_outs_archive:
         internal_ddk_artifacts.append(internal_outs_archive)
-    if ctx.file.src_protected_modules_list:
-        internal_ddk_artifacts.append(ctx.file.src_protected_modules_list)
-    transitive_internal_ddk_artifacts = [
-        ctx.attr.config[KernelConfigArchiveInfo].files,
-    ]
-    internal_ddk_artifacts_depset = depset(
-        internal_ddk_artifacts,
-        transitive = transitive_internal_ddk_artifacts,
-    )
+    internal_ddk_artifacts_depset = depset(internal_ddk_artifacts)
 
     output_group_kwargs = {}
     for d in all_output_files.values():
         output_group_kwargs.update({name: depset([file]) for name, file in d.items()})
+
+    # TODO(b/291918087): Drop after common_kernels no longer use kernel_filegroup.
+    #   These files should already be in kernel_filegroup_declaration.
     output_group_kwargs["modules_staging_archive"] = depset([modules_staging_archive])
     output_group_kwargs[MODULE_OUTS_FILE_OUTPUT_GROUP] = depset([all_module_names_file])
     output_group_kwargs[TOOLCHAIN_VERSION_FILENAME] = depset([toolchain_version_out])
@@ -1968,6 +1970,26 @@ def _create_infos(
     cmds_info = KernelCmdsInfo(
         srcs = depset([target.files for target in ctx.attr.srcs]),
         directories = depset([main_action_ret.cmd_dir]),
+    )
+
+    modules_prepare_archive = utils.find_file(
+        _MODULES_PREPARE_ARCHIVE,
+        ctx.files.modules_prepare,
+        what = ctx.label,
+        required = True,
+    )
+
+    filegroup_decl_info = KernelBuildFilegroupDeclInfo(
+        filegroup_srcs = all_output_files["outs"].values() + all_output_files["module_outs"].values(),
+        module_outs_file = all_module_names_file,
+        modules_staging_archive = modules_staging_archive,
+        toolchain_version_file = toolchain_version_out,
+        kernel_release = all_output_files["internal_outs"]["include/config/kernel.release"],
+        modules_prepare_archive = modules_prepare_archive,
+        collect_unstripped_modules = ctx.attr.collect_unstripped_modules,
+        src_protected_modules_list = ctx.file.src_protected_modules_list,
+        ddk_module_defconfig_fragments = ddk_module_defconfig_fragments,
+        kernel_uapi_headers = kernel_uapi_headers_depset,
     )
 
     default_info_files = all_output_files["outs"].values() + all_output_files["module_outs"].values()
@@ -1997,6 +2019,7 @@ def _create_infos(
         in_tree_modules_info,
         images_info,
         gcov_info,
+        filegroup_decl_info,
         ctx.attr.config[KernelEnvAttrInfo],
         ctx.attr.config[KernelToolchainInfo],
         output_group_info,
@@ -2152,6 +2175,7 @@ _kernel_build = rule(
         "_warn_undeclared_modules": attr.label(default = "//build/kernel/kleaf:warn_undeclared_modules"),
         "_preserve_cmd": attr.label(default = "//build/kernel/kleaf/impl:preserve_cmd"),
         "_kmi_symbol_list_violations_check": attr.label(default = "//build/kernel/kleaf:kmi_symbol_list_violations_check"),
+        "_gcov": attr.label(default = "//build/kernel/kleaf:gcov"),
         # Though these rules are unrelated to the `_kernel_build` rule, they are added as fake
         # dependencies so KernelBuildExtModuleInfo and KernelBuildUapiInfo works.
         # There are no real dependencies. Bazel does not build these targets before building the
@@ -2175,6 +2199,7 @@ _kernel_build = rule(
         "ddk_module_defconfig_fragments": attr.label_list(
             doc = "Additional defconfig fragments for dependant DDK modules.",
             allow_empty = True,
+            allow_files = True,
         ),
     } | _kernel_build_additional_attrs(),
     toolchains = [hermetic_toolchain.type],
