@@ -42,6 +42,7 @@ bzl_library(
         "abi/protected_exports.bzl",
         "abi/trim_nonlisted_kmi_utils.bzl",
         "android_filegroup.bzl",
+        "bison_wrapper.bzl",
         "btf.bzl",
         "cache_dir.bzl",
         "checkpatch.bzl",
@@ -55,8 +56,12 @@ bzl_library(
         "ddk/ddk_headers_archive.bzl",
         "ddk/ddk_module.bzl",
         "ddk/ddk_submodule.bzl",
+        "ddk/ddk_uapi_headers.bzl",
         "ddk/makefiles.bzl",
         "debug.bzl",
+        "declare_host_tools.bzl",
+        "declare_kernel_prebuilts.bzl",
+        "declare_toolchain_constants.bzl",
         "file.bzl",
         "file_selector.bzl",
         "gki_artifacts.bzl",
@@ -76,6 +81,7 @@ bzl_library(
         "kernel_dtstree.bzl",
         "kernel_env.bzl",
         "kernel_filegroup.bzl",
+        "kernel_filegroup_declaration.bzl",
         "kernel_headers.bzl",
         "kernel_kythe.bzl",
         "kernel_module.bzl",
@@ -91,7 +97,6 @@ bzl_library(
         "kernel_uapi_headers_cc_library.bzl",
         "kernel_unstripped_modules_archive.bzl",
         "kgdb.bzl",
-        "kleaf_host_tools_repo.bzl",
         "kmi_symbol_list.bzl",
         "local_repository.bzl",
         "merge_kzip.bzl",
@@ -285,15 +290,6 @@ config_setting(
     flag_values = {"//build/kernel/kleaf:debug": "1"},
     # All kernel_* from different packages can see this
     visibility = ["//visibility:public"],
-)
-
-# Default is true.
-# If true, //build/kernel:hermetic-tools and other hermetic_tools
-# targets no longer emits HermeticToolsInfo.
-bool_flag(
-    name = "incompatible_disable_hermetic_tools_info",
-    build_setting_default = True,
-    visibility = ["//build/kernel:__pkg__"],
 )
 
 # If true, fail_action() does not fail to build, but write failure

@@ -33,6 +33,7 @@ load(
     ":constants.bzl",
     "MODULES_STAGING_ARCHIVE",
     "TOOLCHAIN_VERSION_FILENAME",
+    "UNSTRIPPED_MODULES_ARCHIVE",
 )
 load(":debug.bzl", "debug")
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
@@ -58,6 +59,11 @@ def _get_toolchain_version_info(ctx, all_deps):
 
 def _get_kernel_release(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
+    kernel_release = ctx.file.kernel_release
+    if kernel_release:
+        return kernel_release
+
+    # TODO(b/291918087): Delete legacy code path once users are not present.
     gki_info = utils.find_file(
         name = "gki-info.txt",
         files = ctx.files.gki_artifacts,
@@ -99,6 +105,10 @@ def _kernel_filegroup_impl(ctx):
         # Building kernel_module (excluding ddk_module) on top of kernel_filegroup is unsupported.
         # module_hdrs = None,
         collect_unstripped_modules = ctx.attr.collect_unstripped_modules,
+        ddk_module_defconfig_fragments = depset(transitive = [
+            target.files
+            for target in ctx.attr.ddk_module_defconfig_fragments
+        ]),
     )
 
     kernel_uapi_depsets = []
@@ -115,7 +125,7 @@ def _kernel_filegroup_impl(ctx):
             break
     if unstripped_modules_info == None:
         # Reverse of kernel_unstripped_modules_archive
-        unstripped_modules_archive = utils.find_file("unstripped_modules.tar.gz", all_deps, what = ctx.label, required = True)
+        unstripped_modules_archive = utils.find_file(UNSTRIPPED_MODULES_ARCHIVE, all_deps, what = ctx.label, required = True)
         unstripped_dir = ctx.actions.declare_directory("{}/unstripped".format(ctx.label.name))
         command = hermetic_tools.setup + """
             tar xf {unstripped_modules_archive} -C $(dirname {unstripped_dir}) $(basename {unstripped_dir})
@@ -288,14 +298,25 @@ default, which in turn sets `collect_unstripped_modules` to `True` by default.
         "gki_artifacts": attr.label(
             allow_files = True,
             doc = """A list of files that were built from the [`gki_artifacts`](#gki_artifacts) target.
-            The `gki-info.txt` file should be part of that list.""",
-            mandatory = True,
+                The `gki-info.txt` file should be part of that list.
+
+                If `kernel_release` is set, this attribute has no effect.
+            """,
+        ),
+        "kernel_release": attr.label(
+            allow_single_file = True,
+            doc = "A file providing the kernel release string. This is preferred over `gki_artifacts`.",
         ),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
         "_cache_dir_config_tags": attr.label(
             default = "//build/kernel/kleaf/impl:cache_dir_config_tags",
             executable = True,
             cfg = "exec",
+        ),
+        "ddk_module_defconfig_fragments": attr.label_list(
+            doc = "Additional defconfig fragments for dependant DDK modules.",
+            allow_empty = True,
+            allow_files = True,
         ),
     } | _kernel_filegroup_additional_attrs(),
     toolchains = [hermetic_toolchain.type],
