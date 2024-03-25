@@ -306,6 +306,16 @@ KernelBuildFilegroupDeclInfo = provider(
         "kernel_uapi_headers": """[depset](https://bazel.build/extending/depsets) of
             [`File`](https://bazel.build/rules/lib/File)s containing
             archives of UAPI headers.""",
+        "arch": "[`kernel_build.arch`](#kernel_build-arch)",
+        "env_setup_script": """A [depset](https://bazel.build/extending/depsets) of
+            [`File`](https://bazel.build/rules/lib/File)s to replay the `kernel_config` environment.
+
+            See [`KernelConfigInfo`](#KernelConfigInfo).""",
+        "config_out_dir": """The output directory of `kernel_config`.""",
+        "internal_outs": """[depset](https://bazel.build/extending/depsets) of `kernel_build`'s
+            `internal_outs`. May be `None`.""",
+        "ruledir": "`ruledir` from `kernel_build` that signifies the root for `internal_outs`.",
+        "module_env_archive": "Archive preparing an environment to build modules. May be `None`.",
     },
 )
 
@@ -455,9 +465,9 @@ ImagesInfo = provider(
     },
 )
 
-KernelConfigArchiveInfo = provider(
+KernelConfigInfo = provider(
     doc = "For `kernel_config` to provide files to replay the environment",
     fields = {
-        "files": "depset of files",
+        "env_setup_script": "script from `kernel_env`",
     },
 )
