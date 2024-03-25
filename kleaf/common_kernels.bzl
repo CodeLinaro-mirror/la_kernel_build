@@ -482,10 +482,7 @@ def define_common_kernels(
 
     # Workaround to set KERNEL_DIR correctly and
     #  avoid using the fallback (directory of the config).
-    set_kernel_dir_cmd = """\
-KERNEL_DIR=\"{kernel_dir}\"
-KLEAF_REDECLARE_KERNEL_DIR_UNDER_DYNAMIC_KLEAF_REPO_WORKSPACE_ROOT=1
-""".format(
+    set_kernel_dir_cmd = "KERNEL_DIR=\"{kernel_dir}\"".format(
         kernel_dir = paths.join(
             native.package_relative_label(":x").workspace_root,
             native.package_relative_label(":x").package,
@@ -852,21 +849,11 @@ def _define_common_kernel(
         visibility = ["//visibility:private"],
     )
 
-    # TODO(b/291918087): Drop after common_kernels no longer use kernel_filegroup.
-    #   These files should already be in kernel_filegroup_declaration.
     # Everything in name + "_dist" for the DDK.
     # These are necessary for driver development. Hence they are also added to
     # kernel_*_dist so they can be downloaded.
-    # Note: This poke into details of kernel_build!
-    native.filegroup(
-        name = name + "_internal_ddk_artifacts",
-        srcs = [name],
-        output_group = "internal_ddk_artifacts",
-        visibility = ["//visibility:private"],
-    )
     ddk_artifacts = [
         name + "_filegroup_declaration",
-        name + "_internal_ddk_artifacts",
         name + "_unstripped_modules_archive",
     ]
     if ddk_headers_archive:
