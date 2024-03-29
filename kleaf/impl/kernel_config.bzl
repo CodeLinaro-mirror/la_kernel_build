@@ -21,7 +21,7 @@ load(":cache_dir.bzl", "cache_dir")
 load(
     ":common_providers.bzl",
     "KernelBuildOriginalEnvInfo",
-    "KernelConfigArchiveInfo",
+    "KernelConfigInfo",
     "KernelEnvAttrInfo",
     "KernelEnvInfo",
     "KernelEnvMakeGoalsInfo",
@@ -104,28 +104,6 @@ def _determine_system_trusted_key_path(ctx):
         return None
 
     return _determine_local_path(ctx, "trusted_key.pem", ctx.file.system_trusted_key)
-
-def _config_gcov(ctx):
-    """Return configs for GCOV.
-
-    Args:
-        ctx: ctx
-    Returns:
-        A struct, where `configs` is a list of arguments to `scripts/config`,
-        and `deps` is a list of input files.
-    """
-    gcov = ctx.attr.gcov[BuildSettingInfo].value
-
-    if not gcov:
-        return struct(configs = [], deps = [])
-    configs = [
-        _config.enable("GCOV_KERNEL"),
-        _config.enable("GCOV_PROFILE_ALL"),
-        # TODO(b/291710318) Allow section mismatch when using GCOV_PROFILE_ALL
-        #  modpost: vmlinux.o: section mismatch in reference: cpumask_andnot (section: .text) -> efi_systab_phys (section: .init.data)
-        _config.enable("SECTION_MISMATCH_WARN_ONLY"),
-    ]
-    return struct(configs = configs, deps = [])
 
 def _config_lto(ctx):
     """Return configs for LTO.
@@ -340,7 +318,6 @@ def _reconfig(ctx):
         _config_kasan,
         _config_kasan_sw_tags,
         _config_kasan_generic,
-        _config_gcov,
         _config_keys,
         kgdb.get_scripts_config_args,
     ):
@@ -479,20 +456,6 @@ def _kernel_config_impl(ctx):
     )
 
     post_setup_deps = [out_dir]
-    post_setup = """
-           [ -z ${{OUT_DIR}} ] && echo "FATAL: configs post_env_info setup run without OUT_DIR set!" >&2 && exit 1
-         # Restore kernel config inputs
-           mkdir -p ${{OUT_DIR}}/include/
-           rsync -aL {out_dir}/.config ${{OUT_DIR}}/.config
-           rsync -aL --chmod=D+w {out_dir}/include/ ${{OUT_DIR}}/include/
-           rsync -aL --chmod=F+w {out_dir}/localversion ${{OUT_DIR}}/localversion
-
-         # Restore real value of $ROOT_DIR in auto.conf.cmd
-           sed -i'' -e 's:${{ROOT_DIR}}:'"${{ROOT_DIR}}"':g' ${{OUT_DIR}}/include/config/auto.conf.cmd
-    """.format(
-        out_dir = out_dir.path,
-    )
-
     if trim_nonlisted_kmi_utils.get_value(ctx):
         # Ensure the dependent action uses the up-to-date abi_symbollist.raw
         # at the absolute path specified in abi_symbollist.raw.abspath
@@ -502,14 +465,9 @@ def _kernel_config_impl(ctx):
     serialized_env_info_setup_script = ctx.actions.declare_file("{name}/{name}_setup.sh".format(name = ctx.attr.name))
     ctx.actions.write(
         output = serialized_env_info_setup_script,
-        content = """
-            {pre_setup}
-            {eval_restore_out_dir_cmd}
-            {post_setup}
-        """.format(
-            pre_setup = ctx.attr.env[KernelEnvInfo].setup,
-            eval_restore_out_dir_cmd = kernel_utils.eval_restore_out_dir_cmd(),
-            post_setup = post_setup,
+        content = get_config_setup_command(
+            env_setup_command = ctx.attr.env[KernelEnvInfo].setup,
+            out_dir = out_dir,
         ),
     )
 
@@ -522,7 +480,6 @@ def _kernel_config_impl(ctx):
     )
 
     config_script_ret = _get_config_script(ctx, inputs)
-    outdir_tar_gz = _package_config_outdir(ctx, out_dir)
 
     return [
         serialized_env_info,
@@ -537,8 +494,8 @@ def _kernel_config_impl(ctx):
             executable = config_script_ret.executable,
             runfiles = config_script_ret.runfiles,
         ),
-        KernelConfigArchiveInfo(
-            files = depset([outdir_tar_gz], transitive = [ctx.attr.env.files]),
+        KernelConfigInfo(
+            env_setup_script = ctx.file.env,
         ),
     ]
 
@@ -598,38 +555,34 @@ def _get_config_script(ctx, inputs):
         runfiles = runfiles,
     )
 
-def _package_config_outdir(ctx, out_dir):
-    """Package OUT_DIR.
+def get_config_setup_command(
+        env_setup_command,
+        out_dir):
+    """Returns the content of `<kernel_build>_config_setup.sh`, given the parameters.
 
     Args:
-        ctx: ctx
-        out_dir: declared directory `out_dir`
-    Returns:
-        tarball
+        env_setup_command: command to set up environment from `kernel_env`
+        out_dir: output directory from `kernel_config`
     """
 
-    hermetic_tools = hermetic_toolchain.get(ctx)
+    return """
+        {env_setup_command}
+        {eval_restore_out_dir_cmd}
 
-    # <kernel_build>_config_outdir.tar.gz
-    outdir_tar_gz = ctx.actions.declare_file("{name}/{name}_outdir.tar.gz".format(name = ctx.attr.name))
-    cmd = hermetic_tools.setup + """
-        tar czf {outdir_tar_gz} --dereference -C {out_dir} .
+        [ -z ${{OUT_DIR}} ] && echo "FATAL: configs post_env_info setup run without OUT_DIR set!" >&2 && exit 1
+        # Restore kernel config inputs
+        mkdir -p ${{OUT_DIR}}/include/
+        rsync -aL {out_dir}/.config ${{OUT_DIR}}/.config
+        rsync -aL --chmod=D+w {out_dir}/include/ ${{OUT_DIR}}/include/
+        rsync -aL --chmod=F+w {out_dir}/localversion ${{OUT_DIR}}/localversion
+
+        # Restore real value of $ROOT_DIR in auto.conf.cmd
+        sed -i'' -e 's:${{ROOT_DIR}}:'"${{ROOT_DIR}}"':g' ${{OUT_DIR}}/include/config/auto.conf.cmd
     """.format(
-        outdir_tar_gz = outdir_tar_gz.path,
+        env_setup_command = env_setup_command,
+        eval_restore_out_dir_cmd = kernel_utils.eval_restore_out_dir_cmd(),
         out_dir = out_dir.path,
     )
-    ctx.actions.run_shell(
-        inputs = [out_dir],
-        outputs = [outdir_tar_gz],
-        tools = hermetic_tools.deps,
-        command = cmd,
-        progress_message = "Packaging OUT_DIR {}".format(
-            ctx.attr.env[KernelEnvAttrInfo].progress_message_note,
-            ctx.label,
-        ),
-        mnemonic = "KernelConfigPackageOutDir",
-    )
-    return outdir_tar_gz
 
 def _kernel_config_additional_attrs():
     return dicts.add(
@@ -654,6 +607,7 @@ kernel_config = rule(
                 KernelToolchainInfo,
             ],
             doc = "environment target that defines the kernel build environment",
+            allow_single_file = True,
         ),
         "srcs": attr.label_list(mandatory = True, doc = "kernel sources", allow_files = True),
         "raw_kmi_symbol_list": attr.label(

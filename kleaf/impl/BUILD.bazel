@@ -81,6 +81,7 @@ bzl_library(
         "kernel_dtstree.bzl",
         "kernel_env.bzl",
         "kernel_filegroup.bzl",
+        "kernel_filegroup_declaration.bzl",
         "kernel_headers.bzl",
         "kernel_kythe.bzl",
         "kernel_module.bzl",
@@ -426,6 +427,9 @@ platform(
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
     ],
+    visibility = [
+        "//build/kernel/kleaf/tests:__subpackages__",
+    ],
 )
 
 # 32-bit
@@ -442,6 +446,9 @@ platform(
     constraint_values = [
         "@platforms//os:android",
         "@platforms//cpu:arm64",
+    ],
+    visibility = [
+        "//build/kernel/kleaf/tests:__subpackages__",
     ],
 )
 
