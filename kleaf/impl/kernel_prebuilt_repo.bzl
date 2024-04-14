@@ -22,29 +22,12 @@ load(
 load(
     ":kernel_prebuilt_utils.bzl",
     "CI_TARGET_MAPPING",
-    "GKI_DOWNLOAD_CONFIGS",
 )
 
 visibility("//build/kernel/kleaf/...")
 
 _BUILD_NUM_ENV_VAR = "KLEAF_DOWNLOAD_BUILD_NUMBER_MAP"
 ARTIFACT_URL_FMT = "https://androidbuildinternal.googleapis.com/android/internal/build/v3/builds/{build_number}/{target}/attempts/latest/artifacts/{filename}/url?redirect=true"
-
-def _bool_to_str(b):
-    """Turns boolean to string."""
-
-    # We can't use str() because bool(str(False)) != False
-    return "True" if b else ""
-
-def _str_to_bool(s):
-    """Turns string to boolean."""
-
-    # We can't use bool() because bool(str(False)) != False
-    if s == "True":
-        return True
-    if not s:
-        return False
-    fail("Invalid value {}".format(s))
 
 def _parse_env(repository_ctx, var_name, expected_key):
     """
@@ -85,43 +68,34 @@ def _get_build_number(repository_ctx):
         build_number = repository_ctx.attr.build_number
     return build_number
 
-def _infer_download_config(target):
+def _infer_download_configs(target):
     """Returns inferred `download_config` and `mandatory` from target."""
-    chosen_mapping = None
-    for mapping in CI_TARGET_MAPPING.values():
-        if mapping["target"] == target:
-            chosen_mapping = mapping
+    chosen_mapping = CI_TARGET_MAPPING.get(target)
     if not chosen_mapping:
         fail("auto_download_config with {} is not supported yet.".format(target))
 
-    download_config = {}
-    mandatory = {}
+    return chosen_mapping["download_configs"]
 
-    for out in chosen_mapping["outs"]:
-        download_config[out] = out
-        mandatory[out] = True
-
-    protected_modules = chosen_mapping["protected_modules"]
-    download_config[protected_modules] = protected_modules
-    mandatory[protected_modules] = False
-
-    for config in GKI_DOWNLOAD_CONFIGS:
-        config_mandatory = config.get("mandatory", True)
-        for out in config.get("outs", []):
-            download_config[out] = out
-            mandatory[out] = config_mandatory
-        for out, remote_filename_fmt in config.get("outs_mapping", {}).items():
-            download_config[out] = remote_filename_fmt
-            mandatory[out] = config_mandatory
-
-    mandatory = {key: _bool_to_str(value) for key, value in mandatory.items()}
-
-    return download_config, mandatory
+def _get_remote_filename(repository_ctx, build_number, remote_filename_fmt):
+    bazel_target_name = repository_ctx.attr.target
+    remote_filename = remote_filename_fmt.format(
+        build_number = build_number,
+        target = bazel_target_name,
+    )
+    remote_filename_with_fake_build_number = remote_filename_fmt.format(
+        build_number = "__FAKE_BUILD_NUMBER_PLACEHOLDER__",
+        target = bazel_target_name,
+    )
+    if not build_number and remote_filename != remote_filename_with_fake_build_number:
+        return struct(wait = lambda: struct(
+            fail_later = repr("ERROR: No build_number specified for @@{}".format(repository_ctx.attr.name)),
+        ))
+    return remote_filename
 
 _true_future = struct(wait = lambda: struct(success = True))
 _false_future = struct(wait = lambda: struct(success = False))
 
-def _symlink_local_file(repository_ctx, local_path, remote_filename, file_mandatory):
+def _symlink_local_file(repository_ctx, local_path, remote_filename_fmt, file_mandatory):
     """Creates symlink in local_path that points to remote_filename.
 
     Returns:
@@ -133,6 +107,10 @@ def _symlink_local_file(repository_ctx, local_path, remote_filename, file_mandat
         - Or a string, `fail_later`, an error message for an error that should
           be postponed to the analysis phase when the target is requested.
         """
+
+    build_number = _get_build_number(repository_ctx)
+    remote_filename = _get_remote_filename(repository_ctx, build_number, remote_filename_fmt)
+
     artifact_path = repository_ctx.workspace_root.get_child(repository_ctx.attr.local_artifact_path).get_child(remote_filename)
     if artifact_path.exists:
         repository_ctx.symlink(artifact_path, local_path)
@@ -141,7 +119,7 @@ def _symlink_local_file(repository_ctx, local_path, remote_filename, file_mandat
         fail("{}: {} does not exist".format(repository_ctx.attr.name, artifact_path))
     return _false_future
 
-def _download_remote_file(repository_ctx, local_path, remote_filename, file_mandatory):
+def _download_remote_file(repository_ctx, local_path, remote_filename_fmt, file_mandatory):
     """Download `remote_filename` to `local_path`.
 
     Returns:
@@ -155,6 +133,7 @@ def _download_remote_file(repository_ctx, local_path, remote_filename, file_mand
           be postponed to the analysis phase when the target is requested.
         """
     build_number = _get_build_number(repository_ctx)
+    remote_filename = _get_remote_filename(repository_ctx, build_number, remote_filename_fmt)
 
     # This doesn't have to be the same as the Bazel target name, hence
     # we use a separate variable to signify so. If we have the ci_target_name
@@ -177,38 +156,26 @@ def _download_remote_file(repository_ctx, local_path, remote_filename, file_mand
             fail_later = repr("ERROR: No build_number specified for @@{}".format(repository_ctx.attr.name)),
         ))
 
-    # TODO(b/325494748): With bazel 7.1.0, use parallel download
-    download_status = repository_ctx.download(
+    return repository_ctx.download(
         url = artifact_url,
         output = local_path,
         allow_fail = not file_mandatory,
-        # block = False,
+        block = False,
     )
-    return _true_future if download_status.success else _false_future
 
 def _kernel_prebuilt_repo_impl(repository_ctx):
     bazel_target_name = repository_ctx.attr.target
-    download_config = repository_ctx.attr.download_config
-    mandatory = repository_ctx.attr.mandatory
+    download_configs = json.decode(repository_ctx.attr.download_configs)
     if repository_ctx.attr.auto_download_config:
-        if download_config:
-            fail("{}: download_config should not be set when auto_download_config is True".format(
+        if download_configs:
+            fail("{}: download_configs should not be set when auto_download_config is True".format(
                 repository_ctx.attr.name,
             ))
-        if mandatory:
-            fail("{}: mandatory should not be set when auto_download_config is True".format(
-                repository_ctx.attr.name,
-            ))
-        download_config, mandatory = _infer_download_config(bazel_target_name)
+        download_configs = _infer_download_configs(bazel_target_name)
 
     futures = {}
-    for local_filename, remote_filename_fmt in download_config.items():
+    for local_filename, config in download_configs.items():
         local_path = repository_ctx.path(_join(local_filename, _basename(local_filename)))
-        remote_filename = remote_filename_fmt.format(
-            build_number = repository_ctx.attr.build_number,
-            target = bazel_target_name,
-        )
-        file_mandatory = _str_to_bool(mandatory.get(local_filename, _bool_to_str(True)))
 
         if repository_ctx.attr.local_artifact_path:
             download = _symlink_local_file
@@ -218,8 +185,8 @@ def _kernel_prebuilt_repo_impl(repository_ctx):
         futures[local_filename] = download(
             repository_ctx = repository_ctx,
             local_path = local_path,
-            remote_filename = remote_filename,
-            file_mandatory = file_mandatory,
+            remote_filename_fmt = config["remote_filename_fmt"],
+            file_mandatory = config["mandatory"],
         )
 
     download_statuses = {}
@@ -259,16 +226,16 @@ filegroup(
         )
         repository_ctx.file(_join(local_filename, "BUILD.bazel"), content)
 
-    _create_top_level_files(repository_ctx, download_config)
+    _create_top_level_files(repository_ctx, download_configs)
 
-def _create_top_level_files(repository_ctx, download_config):
+def _create_top_level_files(repository_ctx, download_configs):
     bazel_target_name = repository_ctx.attr.target
     repository_ctx.file("""WORKSPACE.bazel""", """\
 workspace({})
 """.format(repr(repository_ctx.attr.name)))
 
     filegroup_decl_archives = []
-    for local_filename in download_config:
+    for local_filename in download_configs:
         if _basename(local_filename).endswith(FILEGROUP_DEF_ARCHIVE_SUFFIX):
             local_path = repository_ctx.path(_join(local_filename, _basename(local_filename)))
             filegroup_decl_archives.append(local_path)
@@ -327,32 +294,23 @@ kernel_prebuilt_repo = repository_rule(
         ),
         "apparent_name": attr.string(doc = "apparant repo name", mandatory = True),
         "auto_download_config": attr.bool(
-            doc = """If `True`, infer `download_config` and `mandatory`
-                from `target`.""",
+            doc = """If `True`, infer `download_configs` from `target`.""",
         ),
-        "download_config": attr.string_dict(
-            doc = """Configure the list of files to download.
+        "download_configs": attr.string(
+            doc = """A JSON dictionary that configure the list of files to download.
 
                 Key: local file name.
 
-                Value: remote file name format string, with the following anchors:
-                    * {build_number}
-                    * {target}
+                Value: A dictionary with the following keys:
+                    * `mandatory`: Whether the files in `outs_mapping` is mandatory.
+                        If mandatory, failure to download the
+                        file results in a build failure.
+                    * `remote_filename_fmt`: remote file name format string, with the following anchors:
+                        * {build_number}
+                        * {target}
             """,
         ),
         "target": attr.string(doc = "Name of target on the download location, e.g. `kernel_aarch64`"),
-        "mandatory": attr.string_dict(
-            doc = """Configure whether files are mandatory.
-
-                Key: local file name.
-
-                Value: Whether the file is mandatory.
-
-                If a file name is not found in the dictionary, default
-                value is `True`. If mandatory, failure to download the
-                file results in a build failure.
-            """,
-        ),
         "artifact_url_fmt": attr.string(
             doc = """API endpoint for Android CI artifacts.
 
