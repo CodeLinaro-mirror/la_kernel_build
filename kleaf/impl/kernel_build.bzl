@@ -43,7 +43,6 @@ load(
     "KernelBuildUnameInfo",
     "KernelCmdsInfo",
     "KernelConfigInfo",
-    "KernelEnvAndOutputsInfo",
     "KernelEnvAttrInfo",
     "KernelEnvMakeGoalsInfo",
     "KernelImagesInfo",
@@ -495,7 +494,7 @@ def kernel_build(
 
     toolchain_constraints = []
     if toolchain_version != None:
-        toolchain_constraint = "//prebuilts/clang/host/linux-x86/kleaf:{}".format(toolchain_version)
+        toolchain_constraint = Label("//prebuilts/clang/host/linux-x86/kleaf:{}".format(toolchain_version))
         toolchain_constraints.append(Label(toolchain_constraint))
     else:
         # use default toolchain, e.g.
@@ -1185,8 +1184,13 @@ def _get_grab_symtypes_step(ctx):
         outputs = outputs,
     )
 
-def _get_grab_gcno_step(ctx):
-    """Returns a step for grabbing the `*.gcno`files from `OUT_DIR`.
+def get_grab_gcno_step(ctx, src_dir, is_kernel_build):
+    """Returns a step for grabbing the `*.gcno`files from `src_dir`.
+
+    Args:
+        ctx: Context from the rule.
+        src_dir: Source directory.
+        is_kernel_build: The flag to indicate whether the rule is `kernel_build`.
 
     Returns:
       A struct with fields (inputs, tools, outputs, cmd, gcno_mapping, gcno_dir)
@@ -1207,7 +1211,9 @@ def _get_grab_gcno_step(ctx):
         tools.append(ctx.executable._print_gcno_mapping)
 
         extra_args = ""
-        base_kernel = base_kernel_utils.get_base_kernel(ctx)
+        base_kernel = ""
+        if is_kernel_build == True:
+            base_kernel = base_kernel_utils.get_base_kernel(ctx)
         base_kernel_gcno_dir_cmd = ""
         if base_kernel and base_kernel[GcovInfo].gcno_mapping:
             extra_args = "--base {}".format(base_kernel[GcovInfo].gcno_mapping.path)
@@ -1222,17 +1228,18 @@ def _get_grab_gcno_step(ctx):
                     gcno_dir = gcno_dir.path,
                 )
 
-        # Note: Emitting ${OUT_DIR} is one source of ir-reproducible output for sandbox actions.
+        # Note: Emitting `src_dir` is one source of ir-reproducible output for sandbox actions.
         # However, note that these ir-reproducibility are tied to vmlinux, because these paths are already
         # embedded in vmlinux. This file just makes such ir-reproducibility more explicit.
         grab_gcno_cmd = """
-            rsync -a --prune-empty-dirs --include '*/' --include '*.gcno' --exclude '*' ${{OUT_DIR}}/ {gcno_dir}/
-            {print_gcno_mapping} {extra_args} ${{OUT_DIR}}:{gcno_dir} > {gcno_mapping}
+            rsync -a --prune-empty-dirs --include '*/' --include '*.gcno' --exclude '*' {src_dir}/ {gcno_dir}/
+            {print_gcno_mapping} {extra_args} {src_dir}:{gcno_dir} > {gcno_mapping}
             # Archive gcno_dir + gcno_mapping + base_kernel_gcno_dir
             {base_kernel_gcno_cmd}
             cp {gcno_mapping} {gcno_dir}
             tar czf {gcno_archive} -C {gcno_dir} .
         """.format(
+            src_dir = src_dir,
             gcno_dir = gcno_dir.path,
             gcno_mapping = gcno_mapping.path,
             print_gcno_mapping = ctx.executable._print_gcno_mapping.path,
@@ -1474,7 +1481,7 @@ def _build_main_action(
         all_module_basenames_file = all_module_basenames_file,
     )
     grab_symtypes_step = _get_grab_symtypes_step(ctx)
-    grab_gcno_step = _get_grab_gcno_step(ctx)
+    grab_gcno_step = get_grab_gcno_step(ctx, "${OUT_DIR}", is_kernel_build = True)
     grab_cmd_step = get_grab_cmd_step(ctx, "${OUT_DIR}")
     compile_commands_step = compile_commands_utils.kernel_build_step(ctx)
     grab_gdb_scripts_step = kgdb.get_grab_gdb_scripts_step(ctx)
@@ -1638,68 +1645,13 @@ def _build_main_action(
         module_symvers_outputs = copy_module_symvers_step.outputs,
     )
 
-def _env_and_outputs_info_get_setup_script(data, restore_out_dir_cmd):
-    """Setup script generator for `KernelEnvAndOutputsInfo`.
-
-    Args:
-        data: `data` from `KernelEnvAndOutputsInfo`
-        restore_out_dir_cmd: See `KernelEnvAndOutputsInfo`. Provided by user of the info.
-    Returns:
-        The setup script."""
-
-    # This may be KernelEnvAndOutputsInfo or KernelSerializedEnvInfo
-    pre_info = data.pre_info
-
-    restore_outputs_cmd = data.restore_outputs_cmd
-
-    # Set up env variables, esp. OUT_DIR
-    script = kernel_utils.setup_serialized_env_cmd(
-        serialized_env_info = pre_info,
-        restore_out_dir_cmd = restore_out_dir_cmd,
-    )
-
-    # Restore files to $OUT_DIR
-    script += restore_outputs_cmd
-
-    return script
-
-def _create_env_and_outputs_info(
-        pre_info,
-        restore_outputs_cmd_deps,
-        restore_outputs_cmd,
-        extra_inputs):
-    """Creates an KernelEnvAndOutputsInfo.
-
-    Args:
-        pre_info: KernelSerializedEnvInfo
-        restore_outputs_cmd_deps: list of outputs to restore
-        restore_outputs_cmd: command to restore these outputs
-        extra_inputs: a depset attached to `inputs` of returned object
-
-    Returns:
-        A KernelEnvAndOutputsInfo that runs pre_info, then restore outputs given the list of
-        outputs and cmd."""
-
-    inputs_transitive = [pre_info.inputs, extra_inputs]
-
-    return KernelEnvAndOutputsInfo(
-        get_setup_script = _env_and_outputs_info_get_setup_script,
-        inputs = depset(
-            restore_outputs_cmd_deps,
-            transitive = inputs_transitive,
-        ),
-        tools = pre_info.tools,
-        data = struct(
-            pre_info = pre_info,
-            restore_outputs_cmd = restore_outputs_cmd,
-        ),
-    )
-
-def _create_serialized_env_info(
+def create_serialized_env_info(
         ctx,
         setup_script_name,
         pre_info,
-        restore_outputs_cmd,
+        outputs,
+        fake_system_map,
+        extra_restore_outputs_cmd,
         extra_inputs):
     """Creates an KernelSerializedEnvInfo.
 
@@ -1707,12 +1659,23 @@ def _create_serialized_env_info(
         ctx: ctx,
         setup_script_name: name of the setup script
         pre_info: KernelSerializedEnvInfo
-        restore_outputs_cmd: command to restore these outputs
+        outputs: dictionary where
+            keys are `File`, and values are the relative paths under $OUT_DIR as the
+            destination
+        fake_system_map: Whether to create a fake `$OUT_DIR/System.map`
+        extra_restore_outputs_cmd: Extra CMD to restore outputs
         extra_inputs: a depset attached to `inputs` of returned object
 
     Returns:
         A KernelSerializedEnvInfo that runs pre_info, then restore outputs given the list of
         outputs and cmd."""
+
+    restore_outputs_cmd = \
+        _get_serialized_env_info_setup_restore_outputs_command(
+            outputs = outputs,
+            fake_system_map = fake_system_map,
+        )
+    restore_outputs_cmd += extra_restore_outputs_cmd
 
     setup_script = ctx.actions.declare_file(setup_script_name)
     setup_script_cmd = """
@@ -1733,25 +1696,29 @@ def _create_serialized_env_info(
             transitive = [
                 pre_info.inputs,
                 extra_inputs,
+                depset(outputs.keys()),
             ],
         ),
         tools = pre_info.tools,
     )
 
-def get_env_and_outputs_info_setup_restore_outputs_command(outputs):
+def _get_serialized_env_info_setup_restore_outputs_command(outputs, fake_system_map):
     """Returns the `restore_outputs` command for the environment to build kernel_module.
 
     Args:
         outputs: dictionary where
             keys are `File`, and values are the relative paths under $OUT_DIR as the
             destinastion
+        fake_system_map: Whether to create a fake `$OUT_DIR/System.map`
     Returns:
         the `restore_outputs` command for the environment to build kernel_module.
     """
 
-    cmd = """
-        # Restore kernel build outputs
-    """
+    cmd = ""
+    if outputs:
+        cmd += """
+            # Restore kernel build outputs
+        """
     for dep, relpath in outputs.items():
         cmd += """
             mkdir -p $(dirname ${{OUT_DIR}}/{relpath})
@@ -1765,12 +1732,10 @@ def get_env_and_outputs_info_setup_restore_outputs_command(outputs):
     # `make modules` does not need it. For kernel_module(),
     # make modules_install needs it, but we aren't running depmod in
     # kernel_module, so a fake one is good enough.
-    cmd += """
-        # Fake System.map for kernel_module if it does not already exist.
-          if [[ ! -f ${OUT_DIR}/System.map ]]; then
+    if fake_system_map:
+        cmd += """
             touch ${OUT_DIR}/System.map
-          fi
-    """
+        """
 
     return cmd
 
@@ -1806,26 +1771,21 @@ def _create_infos(
 
     # outs and internal_outs are needed. implicit_outs are needed to
     # build GKI's system_dlkm image to sign modules. Modules are not needed.
-    env_and_outputs_info_dependencies = list(all_output_files["outs"].values())
-    env_and_outputs_info_dependencies += all_output_files["internal_outs"].values()
-    env_and_outputs_info_dependencies += all_output_files["implicit_outs"].values()
+    serialized_env_info_dependencies = list(all_output_files["outs"].values())
+    serialized_env_info_dependencies += all_output_files["internal_outs"].values()
+    serialized_env_info_dependencies += all_output_files["implicit_outs"].values()
 
-    env_and_outputs_info_setup_restore_outputs = \
-        get_env_and_outputs_info_setup_restore_outputs_command(
-            outputs = {
-                dep: paths.relativize(dep.path, main_action_ret.ruledir)
-                for dep in env_and_outputs_info_dependencies
-            },
-        )
-
-    env_and_outputs_info_dependencies += kbuild_mixed_tree_ret.outputs
-    env_and_outputs_info_setup_restore_outputs += kbuild_mixed_tree_ret.cmd
-
-    env_and_outputs_info = _create_env_and_outputs_info(
+    serialized_env_info = create_serialized_env_info(
+        ctx = ctx,
+        setup_script_name = "{name}/{name}_setup.sh".format(name = ctx.attr.name),
         pre_info = ctx.attr.config[KernelSerializedEnvInfo],
-        restore_outputs_cmd_deps = env_and_outputs_info_dependencies,
-        restore_outputs_cmd = env_and_outputs_info_setup_restore_outputs,
-        extra_inputs = depset(),
+        outputs = {
+            dep: paths.relativize(dep.path, main_action_ret.ruledir)
+            for dep in serialized_env_info_dependencies
+        },
+        fake_system_map = False,
+        extra_restore_outputs_cmd = kbuild_mixed_tree_ret.cmd,
+        extra_inputs = depset(kbuild_mixed_tree_ret.outputs),
     )
 
     orig_env_info = ctx.attr.config[KernelBuildOriginalEnvInfo]
@@ -1843,58 +1803,50 @@ def _create_infos(
         kernel_release = all_output_files["internal_outs"]["include/config/kernel.release"],
     )
 
-    ext_mod_env_and_outputs_info_deps = all_output_files["internal_outs"].values()
-
-    ext_mod_env_and_outputs_info_setup_restore_outputs = \
-        get_env_and_outputs_info_setup_restore_outputs_command(
-            outputs = {
-                dep: paths.relativize(dep.path, main_action_ret.ruledir)
-                for dep in ext_mod_env_and_outputs_info_deps
-            },
-        )
-
     # For kernel_module()
-    mod_min_env = _create_serialized_env_info(
+    ext_mod_serialized_env_info_deps = all_output_files["internal_outs"].values()
+    mod_min_env = create_serialized_env_info(
         ctx = ctx,
         setup_script_name = "{name}/{name}_mod_min_setup.sh".format(name = ctx.attr.name),
         pre_info = ctx.attr.modules_prepare[KernelSerializedEnvInfo],
-        restore_outputs_cmd = ext_mod_env_and_outputs_info_setup_restore_outputs,
-        extra_inputs = depset(
-            ext_mod_env_and_outputs_info_deps,
-            transitive = [module_srcs.module_scripts],
-        ),
+        outputs = {
+            dep: paths.relativize(dep.path, main_action_ret.ruledir)
+            for dep in ext_mod_serialized_env_info_deps
+        },
+        fake_system_map = True,
+        extra_restore_outputs_cmd = "",
+        extra_inputs = depset(transitive = [module_srcs.module_scripts]),
     )
 
     # External modules do not need implicit_outs because they are unsigned.
-    ext_mod_full_env_and_outputs_info_dependencies = list(all_output_files["outs"].values())
-    ext_mod_full_env_and_outputs_info_dependencies += all_output_files["internal_outs"].values()
-
-    ext_mod_full_env_and_outputs_info_setup_restore_outputs = \
-        get_env_and_outputs_info_setup_restore_outputs_command(
-            outputs = {
-                dep: paths.relativize(dep.path, main_action_ret.ruledir)
-                for dep in ext_mod_full_env_and_outputs_info_dependencies
-            },
-        )
+    ext_mod_full_serialized_env_info_dependencies = list(all_output_files["outs"].values())
+    ext_mod_full_serialized_env_info_dependencies += all_output_files["internal_outs"].values()
 
     # For kernel_module() that require all kernel_build outputs and kernel_modules_install()
-    mod_full_env = _create_serialized_env_info(
+    mod_full_env = create_serialized_env_info(
         ctx = ctx,
         setup_script_name = "{name}/{name}_mod_full_setup.sh".format(name = ctx.attr.name),
         pre_info = ctx.attr.modules_prepare[KernelSerializedEnvInfo],
-        restore_outputs_cmd = ext_mod_full_env_and_outputs_info_setup_restore_outputs,
+        outputs = {
+            dep: paths.relativize(dep.path, main_action_ret.ruledir)
+            for dep in ext_mod_full_serialized_env_info_dependencies
+        },
+        fake_system_map = False,
+        extra_restore_outputs_cmd = kbuild_mixed_tree_ret.cmd,
         extra_inputs = depset(
-            ext_mod_full_env_and_outputs_info_dependencies,
+            kbuild_mixed_tree_ret.outputs,
             transitive = [module_srcs.module_scripts],
         ),
     )
 
     # For ddk_config()
-    ddk_config_env = _create_serialized_env_info(
+    ddk_config_env = create_serialized_env_info(
         ctx = ctx,
         setup_script_name = "{name}/{name}_ddk_config_setup.sh".format(name = ctx.attr.name),
         pre_info = ctx.attr.config[KernelSerializedEnvInfo],
-        restore_outputs_cmd = "",
+        outputs = {},
+        fake_system_map = False,
+        extra_restore_outputs_cmd = "",
         extra_inputs = depset(transitive = [
             module_srcs.module_scripts,
             module_srcs.module_kconfig,
@@ -1960,7 +1912,11 @@ def _create_infos(
         module_outs_file = all_module_names_file,
     )
 
-    images_info = KernelImagesInfo(base_kernel_label = base_kernel.label if base_kernel else None)
+    images_info = KernelImagesInfo(
+        base_kernel_label = base_kernel.label if base_kernel else None,
+        outs = depset(all_output_files["outs"].values()),
+        base_kernel_files = kbuild_mixed_tree_ret.base_kernel_files,
+    )
 
     gcov_info = GcovInfo(
         gcno_mapping = main_action_ret.gcno_mapping,
@@ -2004,6 +1960,7 @@ def _create_infos(
         kernel_release = all_output_files["internal_outs"]["include/config/kernel.release"],
         modules_prepare_archive = modules_prepare_archive,
         collect_unstripped_modules = ctx.attr.collect_unstripped_modules,
+        strip_modules = ctx.attr.strip_modules,
         src_protected_modules_list = ctx.file.src_protected_modules_list,
         ddk_module_defconfig_fragments = ddk_module_defconfig_fragments,
         kernel_uapi_headers = kernel_uapi_headers_depset,
@@ -2032,7 +1989,7 @@ def _create_infos(
 
     return [
         cmds_info,
-        env_and_outputs_info,
+        serialized_env_info,
         orig_env_info,
         kbuild_mixed_tree_info,
         kernel_build_info,

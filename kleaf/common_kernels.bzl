@@ -32,7 +32,6 @@ load("//build/kernel/kleaf/impl:kernel_filegroup_declaration.bzl", "kernel_fileg
 load(
     "//build/kernel/kleaf/impl:kernel_prebuilt_utils.bzl",
     "CI_TARGET_MAPPING",
-    "GKI_DOWNLOAD_CONFIGS",
 )
 load("//build/kernel/kleaf/impl:kernel_sbom.bzl", "kernel_sbom")
 load("//build/kernel/kleaf/impl:merge_kzip.bzl", "merge_kzip")
@@ -621,7 +620,8 @@ def _define_common_kernel(
         gki_boot_img_sizes = None,
         page_size = None,
         deprecation = None,
-        ddk_headers_archive = None):
+        ddk_headers_archive = None,
+        extra_dist = None):
     json_target_config = dict(
         name = name,
         outs = outs,
@@ -646,6 +646,7 @@ def _define_common_kernel(
         page_size = page_size,
         deprecation = deprecation,
         ddk_headers_archive = ddk_headers_archive,
+        extra_dist = extra_dist,
     )
     json_target_config = json.encode_indent(json_target_config, indent = "    ")
     json_target_config = json_target_config.replace("null", "None")
@@ -777,7 +778,7 @@ def _define_common_kernel(
         name = name + "_images",
         kernel_build = name,
         kernel_modules_install = name + "_modules_install",
-        # Sync with GKI_DOWNLOAD_CONFIGS, "images"
+        # Sync with CI_TARGET_MAPPING.*.download_configs.images
         build_system_dlkm = True,
         build_system_dlkm_flatten = True,
         system_dlkm_fs_types = ["erofs", "ext4"],
@@ -863,7 +864,7 @@ def _define_common_kernel(
         srcs = ddk_artifacts,
     )
 
-    dist_targets = [
+    dist_targets = (extra_dist or []) + [
         name,
         name + "_uapi_headers",
         name + "_additional_artifacts",
@@ -969,17 +970,14 @@ def _define_prebuilts(**kwargs):
         ],
     )
 
-    for repo_name, value in CI_TARGET_MAPPING.items():
-        name = value["target"]
-        main_target_outs = value["outs"]  # outs of target named {name}
-        gki_prebuilts_outs = value["gki_prebuilts_outs"]  # outputs of _gki_prebuilts
+    for name, value in CI_TARGET_MAPPING.items():
+        repo_name = value["repo_name"]
         deprecate_msg = "Use @{}//{} directly".format(repo_name, name)
         not_available_msg = "This will no longer be available. File a bug if you rely on this target."
 
-        native.filegroup(
+        native.alias(
             name = name + "_downloaded",
-            srcs = ["@{}//{}".format(repo_name, filename) for filename in main_target_outs],
-            tags = ["manual"],
+            actual = name + "_files_downloaded",
             deprecation = deprecate_msg,
         )
 
@@ -1009,7 +1007,7 @@ def _define_prebuilts(**kwargs):
                 Label("//build/kernel/kleaf:use_signed_prebuilts_is_true"): [name + "_boot_img_archive_signed_downloaded"],
                 "//conditions:default": [name + "_boot_img_archive_downloaded"],
             }),
-            outs = gki_prebuilts_outs,
+            outs = [name + "_gki_prebuilts_outs_downloaded"],
             deprecation = deprecate_msg,
         )
 
@@ -1023,16 +1021,14 @@ def _define_prebuilts(**kwargs):
             **kwargs
         )
 
-        for config in GKI_DOWNLOAD_CONFIGS:
-            target_suffix = config["target_suffix"]
+        files_by_target_suffix = {}
+        for local_filename, config in value["download_configs"].items():
+            files_by_target_suffix.setdefault(config["target_suffix"], []).append(local_filename)
 
-            # outs of target named {name}_{target_suffix}
-            suffixed_target_outs = list(config.get("outs", []))
-            suffixed_target_outs += list(config.get("outs_mapping", {}).keys())
-
+        for target_suffix, files in files_by_target_suffix.items():
             native.filegroup(
                 name = name + "_" + target_suffix + "_downloaded",
-                srcs = ["@{}//{}".format(repo_name, filename) for filename in suffixed_target_outs],
+                srcs = ["@{}//{}".format(repo_name, filename) for filename in files],
                 tags = ["manual"],
                 deprecation = deprecate_msg,
             )
