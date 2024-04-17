@@ -72,7 +72,6 @@ KernelToolchainInfo = provider(
     doc = "Provides a single toolchain version.",
     fields = {
         "toolchain_version": "The toolchain version",
-        "toolchain_version_file": "A file containing the toolchain version",
     },
 )
 
@@ -203,7 +202,6 @@ KernelBuildAbiInfo = provider(
     fields = {
         "trim_nonlisted_kmi": "Value of `trim_nonlisted_kmi` in [`kernel_build()`](kernel.md#kernel_build).",
         "combined_abi_symbollist": "The **combined** `abi_symbollist` file from the `_kmi_symbol_list` rule, consist of the source `kmi_symbol_list` and `additional_kmi_symbol_lists`.",
-        "module_outs_file": "A file containing `[kernel_build.module_outs]`(kernel.md#kernel_build-module_outs) and `[kernel_build.module_implicit_outs]`(kernel.md#kernel_build-module_implicit_outs).",
         "modules_staging_archive": "Archive containing staging kernel modules. ",
         "base_modules_staging_archive": "Archive containing staging kernel modules of the base kernel",
         "src_kmi_symbol_list": """Source file for `kmi_symbol_list` that points to the symbol list
@@ -250,8 +248,7 @@ KernelBuildFilegroupDeclInfo = provider(
             `[kernel_build.module_outs]`(kernel.md#kernel_build-module_outs) and
             `[kernel_build.module_implicit_outs]`(kernel.md#kernel_build-module_implicit_outs).""",
         "modules_staging_archive": "Archive containing staging kernel modules. ",
-        # TODO(b/291918087): This may be embedded in the generated BUILD file directly
-        "toolchain_version_file": "A file containing the toolchain version",
+        "toolchain_version": "The toolchain version",
         "kernel_release": "The file `kernel.release`.",
         "modules_prepare_archive": """Archive containing the file built by
             [`modules_prepare`](#modules_prepare)""",

@@ -33,7 +33,6 @@ load(
 load(
     ":constants.bzl",
     "MODULES_STAGING_ARCHIVE",
-    "TOOLCHAIN_VERSION_FILENAME",
     "UNSTRIPPED_MODULES_ARCHIVE",
 )
 load(":debug.bzl", "debug")
@@ -56,12 +55,10 @@ def _get_mixed_tree_files(target):
         return target[KernelBuildMixedTreeInfo].files
     return target.files
 
-def _get_toolchain_version_info(ctx, all_deps):
-    # Traverse all dependencies and look for a file named "toolchain_version".
-    # If no file matches, leave it as None so that _kernel_build_check_toolchain prints a
-    # warning.
-    toolchain_version_file = utils.find_file(name = TOOLCHAIN_VERSION_FILENAME, files = all_deps, what = ctx.label)
-    return KernelToolchainInfo(toolchain_version_file = toolchain_version_file)
+def _get_toolchain_version_info(ctx):
+    return KernelToolchainInfo(
+        toolchain_version = kernel_toolchains_utils.get(ctx).compiler_version,
+    )
 
 def _get_kernel_release(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
@@ -372,7 +369,6 @@ def _kernel_filegroup_impl(ctx):
 
     abi_info = KernelBuildAbiInfo(
         src_protected_modules_list = protected_modules_list,
-        module_outs_file = ctx.file.module_outs_file,
         modules_staging_archive = utils.find_file(MODULES_STAGING_ARCHIVE, all_deps, what = ctx.label),
     )
     in_tree_modules_info = KernelBuildInTreeModulesInfo(module_outs_file = ctx.file.module_outs_file)
@@ -415,7 +411,7 @@ def _kernel_filegroup_impl(ctx):
         images_info,
         kernel_env_attr_info,
         gcov_info,
-        _get_toolchain_version_info(ctx, all_deps),
+        _get_toolchain_version_info(ctx),
     ]
     if serialized_env:
         infos.append(serialized_env)
