@@ -29,7 +29,7 @@
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # Changes from Qualcomm Innovation Center are provided under the following license:
-# Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+# Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause-Clear
 
 ## prepare_vendor.sh prepares kernel/build's output for direct consumption in AOSP
@@ -420,10 +420,12 @@ if [ -n "${ANDROID_PRODUCT_OUT}" ] && [ -n "${ANDROID_BUILD_TOP}" ]; then
   echo
   echo "  cleaning up kernel_platform tree for Android"
 
+  BAZEL_CACHE_DIR=$(find ${ANDROID_BUILD_TOP} -type d -name bazel-cache)
+
   set -x
-  find ${ROOT_DIR} \( -name Android.mk -o -name Android.bp \) \
-      -a -not -path ${ROOT_DIR}/common/Android.bp -a -not -path ${ROOT_DIR}/msm-kernel/Android.bp \
-      -delete
+  find "${ROOT_DIR}" ${BAZEL_CACHE_DIR} ${ANDROID_BUILD_TOP}/kernel_platform \( -name Android.mk -o -name Android.bp \) \
+    -a -not -path "${ROOT_DIR}"/common/Android.bp -a -not -path "${ROOT_DIR}"/msm-kernel/Android.bp \
+    -delete
   set +x
 
   ################################################################################
@@ -506,3 +508,6 @@ if [ -n "${ANDROID_PRODUCT_OUT}" ] && [ -n "${ANDROID_BUILD_TOP}" ]; then
       ${ANDROID_KERNEL_OUT}/dtbs
   )
 fi
+
+# remove bazel dir to avoid build issues
+rm -rf ${ANDROID_BUILD_TOP}/kernel_platform/out/bazel
