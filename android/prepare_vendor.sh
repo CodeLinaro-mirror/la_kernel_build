@@ -420,10 +420,12 @@ if [ -n "${ANDROID_PRODUCT_OUT}" ] && [ -n "${ANDROID_BUILD_TOP}" ]; then
   echo
   echo "  cleaning up kernel_platform tree for Android"
 
-  BAZEL_CACHE_DIR=$(find ${ANDROID_BUILD_TOP} -type d -name bazel-cache)
-
   set -x
-  find "${ROOT_DIR}" ${BAZEL_CACHE_DIR} ${ANDROID_BUILD_TOP}/kernel_platform \( -name Android.mk -o -name Android.bp \) \
+  CLEAN_DIRS="${ANDROID_BUILD_TOP}/kernel_platform"
+  if [ -d "${ANDROID_BUILD_TOP}"/bazel-cache ]; then
+    CLEAN_DIRS+=" ${ANDROID_BUILD_TOP}/bazel-cache"
+  fi
+  find "${ROOT_DIR}" ${CLEAN_DIRS} \( -name Android.mk -o -name Android.bp \) \
     -a -not -path "${ROOT_DIR}"/common/Android.bp -a -not -path "${ROOT_DIR}"/msm-kernel/Android.bp \
     -delete
   set +x
