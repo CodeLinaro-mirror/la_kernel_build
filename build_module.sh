@@ -88,11 +88,6 @@ export MODULES_PRIVATE_DIR=$(readlink -m ${COMMON_OUT_DIR}/private)
 export UNSTRIPPED_DIR=${DIST_DIR}/unstripped
 export MODULE_UAPI_HEADERS_DIR=$(readlink -m ${COMMON_OUT_DIR}/module_uapi_headers)
 
-# Create & export bazel cache dir within build workspace
-DEFAULT_CACHE_DIR=${ROOT_DIR}/bazel-cache
-mkdir -p ${DEFAULT_CACHE_DIR}
-export TEST_TMPDIR=${DEFAULT_CACHE_DIR}
-
 cd ${ROOT_DIR}
 
 export CLANG_TRIPLE CROSS_COMPILE CROSS_COMPILE_COMPAT CROSS_COMPILE_ARM32 ARCH SUBARCH MAKE_GOALS
