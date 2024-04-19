@@ -78,6 +78,9 @@ export MODULES_ARCHIVE=modules.tar.gz
 
 export TZ=UTC
 export LC_ALL=C
+# TODO(b/291918087): KERNEL_DIR is modified with
+#   KLEAF_REDECLARE_KERNEL_DIR_UNDER_DYNAMIC_KLEAF_REPO_WORKSPACE_ROOT, making
+#   the value here incorrect.
 if [ -z "${SOURCE_DATE_EPOCH}" ]; then
   if [[ -n "${KLEAF_SOURCE_DATE_EPOCHS}" ]]; then
     export SOURCE_DATE_EPOCH=$(extract_git_metadata "${KLEAF_SOURCE_DATE_EPOCHS}" "${KERNEL_DIR}" SOURCE_DATE_EPOCH)
@@ -164,10 +167,6 @@ if [ "${HERMETIC_TOOLCHAIN:-0}" -eq 1 ]; then
       ln -sf $(which $tool) ${HOST_TOOLS}
   done
   PATH=${HOST_TOOLS}
-
-  # use relative paths for file name references in the binaries
-  # (e.g. debug info)
-  export KCPPFLAGS="-ffile-prefix-map=${ROOT_DIR}/${KERNEL_DIR}/= -ffile-prefix-map=${ROOT_DIR}/="
 
   # set the common sysroot
   sysroot_flags+="--sysroot=${ROOT_DIR}/build/kernel/build-tools/sysroot "
@@ -281,6 +280,10 @@ else
   RAMDISK_DECOMPRESS="${DECOMPRESS_LZ4}"
   RAMDISK_EXT="lz4"
 fi
+
+# Set libclang.so location for use by bindgen for Rust
+LIBCLANG_PATH=${ROOT_DIR}/${CLANG_PREBUILT_BIN}/../lib/
+export LIBCLANG_PATH
 
 # verifies that defconfig matches the DEFCONFIG
 function check_defconfig() {

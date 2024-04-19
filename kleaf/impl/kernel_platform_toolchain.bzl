@@ -39,13 +39,18 @@ def _kernel_platform_toolchain_impl(ctx):
     feature_configuration = cc_common.configure_features(
         ctx = ctx,
         cc_toolchain = cc_toolchain,
-        requested_features = ctx.features,
+        requested_features = ctx.features + [
+            "kleaf-lld-compiler-rt",
+        ],
         unsupported_features = [
             # -no-canonical-prefixes is added to work around
             # https://github.com/bazelbuild/bazel/issues/4605
             # "cxx_builtin_include_directory doesn't work with non-absolute path"
             # Disable it.
             "kleaf-no-canonical-prefixes",
+            # Disable flags for C++. These only applies to cc_* rules with
+            # C++ code.
+            "kleaf-host-cc-rules-flags",
         ],
     )
     compile_variables = cc_common.create_compile_variables(

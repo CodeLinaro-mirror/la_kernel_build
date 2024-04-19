@@ -40,6 +40,10 @@ _SILENT_ARGS = [
     "--noshow_progress",
 ]
 
+# TODO: Find a better way to handle this exceptions;
+_PATH_PREFIX_DENY_LIST = (
+    "external/",
+)
 
 def load_arguments() -> dict[str, Any]:
     parser = argparse.ArgumentParser(
@@ -71,6 +75,10 @@ def _log_command(args):
 
 
 def _find_checkpatch_targets(path: pathlib.Path) -> list[str]:
+    if str(path).startswith(_PATH_PREFIX_DENY_LIST):
+        logging.info("Skipped //%s path in deny list", path)
+        return []
+
     if not _resolve_against_workspace_root(path / "BUILD.bazel").is_file() and \
         not _resolve_against_workspace_root(path / "BUILD").is_file():
         logging.info("//%s is not a package; no BUILD file is found", path)
@@ -143,8 +151,11 @@ def main(
         targets.append((path_targets, git_sha1_list[0]))
 
     checkpatch_log = dist_dir / "checkpatch.log"
+    checkpatch_full_log = dist_dir / "checkpatch_full.log"
     if checkpatch_log.exists():
         os.unlink(checkpatch_log)
+    if checkpatch_full_log.exists():
+        os.unlink(checkpatch_full_log)
     return_codes = []
     for path_targets, git_sha1 in targets:
         for target in path_targets:
@@ -154,6 +165,12 @@ def main(
                 log=checkpatch_log,
                 checkpatch_args=checkpatch_args,
             ))
+            _run_checkpatch(
+                target=target,
+                git_sha1=git_sha1,
+                log=checkpatch_full_log,
+                checkpatch_args=checkpatch_args + ["--ignored_checks", ""],
+            )
 
     success = sum(return_codes) == 0
 
