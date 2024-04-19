@@ -17,6 +17,7 @@
 """Configures the project layout to build DDK modules."""
 
 import argparse
+import dataclasses
 import json
 import logging
 import pathlib
@@ -58,13 +59,17 @@ class KleafProjectSetterError(RuntimeError):
     pass
 
 
+@dataclasses.dataclass(kw_only=True)
 class KleafProjectSetter:
     """Configures the project layout to build DDK modules."""
 
-    def __init__(self, cmd_args: argparse.Namespace):
-        self.ddk_workspace: pathlib.Path | None = cmd_args.ddk_workspace
-        self.kleaf_repo: pathlib.Path | None = cmd_args.kleaf_repo
-        self.prebuilts_dir: pathlib.Path | None = cmd_args.prebuilts_dir
+    build_id: str | None
+    build_target: str | None
+    ddk_workspace: pathlib.Path | None
+    local: bool
+    kleaf_repo: pathlib.Path | None
+    prebuilts_dir: pathlib.Path | None
+    url_fmt: str | None
 
     def _symlink_tools_bazel(self):
         if not self.ddk_workspace or not self.kleaf_repo:
@@ -73,7 +78,7 @@ class KleafProjectSetter:
         tools_bazel = self.ddk_workspace / _TOOLS_BAZEL
         kleaf_tools_bazel = self.kleaf_repo / _TOOLS_BAZEL
         # Prepare the location and clean up if necessary.
-        self._create_directory(tools_bazel.parent)
+        tools_bazel.parent.mkdir(parents=True, exist_ok=True)
         tools_bazel.unlink(missing_ok=True)
         tools_bazel.symlink_to(kleaf_tools_bazel)
 
@@ -168,27 +173,21 @@ class KleafProjectSetter:
             """),
         )
 
-    @staticmethod
-    def _create_directory(path: pathlib.Path):
-        if not path.exists():
-            logging.info("Creating directory %s.", path)
-        path.mkdir(parents=True, exist_ok=True)
-
     def _handle_ddk_workspace(self):
         if not self.ddk_workspace:
             return
-        self._create_directory(self.ddk_workspace)
+        self.ddk_workspace.mkdir(parents=True, exist_ok=True)
 
     def _handle_kleaf_repo(self):
         if not self.kleaf_repo:
             return
-        self._create_directory(self.kleaf_repo)
+        self.kleaf_repo.mkdir(parents=True, exist_ok=True)
         # TODO: b/328770706 - According to the needs, syncing git repos logic should go here.
 
     def _handle_prebuilts(self):
         if not self.ddk_workspace or not self.prebuilts_dir:
             return
-        self._create_directory(self.ddk_workspace / self.prebuilts_dir)
+        self.prebuilts_dir.mkdir(parents=True, exist_ok=True)
         # TODO: b/328770706 - When build_id is given dowloand artifacts here.
 
     def _run(self):
@@ -232,6 +231,11 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
+        "--local",
+        help="Whether to use a local source tree containing Kleaf.",
+        action="store_true",
+    )
+    parser.add_argument(
         "--kleaf_repo",
         help="Absolute path to Kleaf's repo dir.",
         type=abs_path,
@@ -256,7 +260,7 @@ if __name__ == "__main__":
                         format="%(levelname)s: %(message)s")
 
     try:
-        KleafProjectSetter(cmd_args=args).run()
+        KleafProjectSetter(**vars(args)).run()
     except KleafProjectSetterError as e:
         logging.error(e, exc_info=e)
         sys.exit(1)
