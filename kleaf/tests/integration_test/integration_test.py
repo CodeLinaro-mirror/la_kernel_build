@@ -605,7 +605,6 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
         self.assertNotIn("DECLARED_SET", stderr)
         self.assertNotIn("DECLARED_UNSET", stderr)
 
-    @unittest.skip("b/293357796")
     def test_dash_dash_help(self):
         """Test that `bazel --help` works."""
         self._check_output("--help", [], use_bazelrc=False)
@@ -617,6 +616,11 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
     def test_help_kleaf(self):
         """Test that `bazel help kleaf` works."""
         self._check_output("help", ["kleaf"])
+
+    def test_strip_execroot(self):
+        """Test that --strip_execroot works."""
+        self._check_output("build", ["--nobuild", "--strip_execroot",
+                                     "//build/kernel:hermetic-tools"])
 
 
 class ScmversionIntegrationTest(KleafIntegrationTestBase):
