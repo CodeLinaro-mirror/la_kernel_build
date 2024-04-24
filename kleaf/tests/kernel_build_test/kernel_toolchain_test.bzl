@@ -19,6 +19,7 @@ load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
     "//build/kernel/kleaf/impl:constants.bzl",
     "MODULES_STAGING_ARCHIVE",
+    "UNSTRIPPED_MODULES_ARCHIVE",
 )
 load("//build/kernel/kleaf/impl:kernel_build.bzl", "kernel_build")
 load("//build/kernel/kleaf/impl:kernel_filegroup.bzl", "kernel_filegroup")
@@ -76,7 +77,7 @@ def kernel_toolchain_test(name):
         )
         write_file(
             name = filegroup_name + "_unstripped_modules",
-            out = filegroup_name + "_unstripped_modules/unstripped_modules.tar.gz",
+            out = filegroup_name + "_unstripped_modules/" + UNSTRIPPED_MODULES_ARCHIVE,
         )
 
         write_file(
@@ -108,6 +109,8 @@ def kernel_toolchain_test(name):
             ],
             module_outs_file = filegroup_name + "_module_outs_file",
             gki_artifacts = filegroup_name + "_gki_info",
+            target_platform = Label("//build/kernel/kleaf/impl:android_arm64"),
+            exec_platform = Label("//build/kernel/kleaf/impl:linux_x86_64"),
             tags = ["manual"],
         )
 

@@ -85,12 +85,12 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_pkg",
-    version = "0.9.1",
+    version = "0.10.1",
 )
 
 bazel_dep(
     name = "rules_rust",
-    version = "0.39.0",
+    version = "0.40.0",
 
     # If RUSTC_VERSION is set in kernel_toolchain_ext, kernel_build depends
     # on rules_rust, so rules_rust is needed for at least GKI.
