@@ -40,7 +40,6 @@ def _kernel_filegroup_declaration_impl(ctx):
         # _modules_prepare
         info.modules_prepare_archive,
         info.modules_staging_archive,
-        info.toolchain_version_file,
     ]
 
     # Get the only file from the depset, so using to_list() here is fast.
@@ -80,6 +79,8 @@ platform(
     constraint_values = [
         "@platforms//os:android",
         "@platforms//cpu:{arch}",
+        # @kleaf//prebuilts/clang/host/linux-x86/kleaf:{toolchain_version}
+        package_relative_label(_CLANG_KLEAF_PKG).same_package_label({toolchain_version_repr}),
     ],
     visibility = ["//visibility:private"],
 )
@@ -89,6 +90,8 @@ platform(
     constraint_values = [
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
+        # @kleaf//prebuilts/clang/host/linux-x86/kleaf:{toolchain_version}
+        package_relative_label(_CLANG_KLEAF_PKG).same_package_label({toolchain_version_repr}),
     ],
     visibility = ["//visibility:private"],
 )
@@ -100,7 +103,7 @@ kernel_filegroup(
     kernel_uapi_headers = {uapi_headers_repr},
     collect_unstripped_modules = {collect_unstripped_modules_repr},
     strip_modules = {strip_modules_repr},
-    module_outs_file = {module_outs_repr},
+    all_module_names = {all_module_names_repr},
     kernel_release = {kernel_release_repr},
     protected_modules_list = {protected_modules_repr},
     ddk_module_defconfig_fragments = {ddk_module_defconfig_fragments_repr},
@@ -156,7 +159,12 @@ def _write_filegroup_decl_file(ctx, info, deps_files, kernel_uapi_headers, templ
     sub.add_joined("{uapi_headers_repr}", depset([kernel_uapi_headers]), **(one | extra))
     sub.add("{collect_unstripped_modules_repr}", repr(info.collect_unstripped_modules))
     sub.add("{strip_modules_repr}", repr(info.strip_modules))
-    sub.add_joined("{module_outs_repr}", depset([info.module_outs_file]), **(one | pkg))
+    sub.add_joined(
+        "{all_module_names_repr}",
+        depset(info.all_module_names),
+        map_each = repr,
+        **join
+    )
     sub.add_joined("{kernel_release_repr}", depset([info.kernel_release]), **(one | pkg))
     sub.add_joined(
         "{protected_modules_repr}",
@@ -196,13 +204,15 @@ def _write_filegroup_decl_file(ctx, info, deps_files, kernel_uapi_headers, templ
         info.internal_outs,
         allow_closure = True,
         map_each = lambda file: "{key}: {value}".format(
-            key = repr(":{}".format(file.path) if file else None),
+            key = repr(file.path if file else None),
             value = repr(paths.relativize(file.path, info.ruledir)),
         ),
         join_with = ",\n        ",
         format_joined = "{\n        %s\n    }",
     )
 
+    sub.add("{toolchain_version}", info.toolchain_version)
+    sub.add("{toolchain_version_repr}", repr(info.toolchain_version))
     sub.add("{target_platform_repr}", repr(ctx.attr.kernel_build.label.name + "_platform_target"))
     sub.add("{exec_platform_repr}", repr(ctx.attr.kernel_build.label.name + "_platform_exec"))
     sub.add("{arch}", info.arch)
@@ -227,7 +237,6 @@ def _create_archive(ctx, info, deps_files, kernel_uapi_headers, filegroup_decl_f
     ))
     direct_inputs = deps_files + [
         filegroup_decl_file,
-        info.module_outs_file,
         info.kernel_release,
         kernel_uapi_headers,
         info.config_out_dir,
