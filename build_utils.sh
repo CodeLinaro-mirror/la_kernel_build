@@ -25,14 +25,27 @@ function rel_path() {
 # $1 directory of kernel modules ($1/lib/modules/x.y)
 # $2 flags to pass to depmod
 # $3 kernel version
+# $4 Optional: File with list of modules to run depmod on.
+#              If left empty, depmod will run on all modules
+#              under $1/lib/modules/x.y
 function run_depmod() {
   (
     local ramdisk_dir=$1
     local depmod_stdout
     local depmod_stderr=$(mktemp)
+    local version=$3
+    local modules_list_file=$4
+    local modules_list=""
+
+    if [[ -n "${modules_list_file}" ]]; then
+      while read -r line; do
+        # depmod expects absolute paths for module files
+        modules_list+="$(realpath ${ramdisk_dir}/lib/modules/${version}/${line}) "
+      done <${modules_list_file}
+    fi
 
     cd ${ramdisk_dir}
-    if ! depmod_stdout="$(depmod $2 -F ${DIST_DIR}/System.map -b . $3 \
+    if ! depmod_stdout="$(depmod $2 -F ${DIST_DIR}/System.map -b . ${version} ${modules_list} \
         2>${depmod_stderr})"; then
       echo "$depmod_stdout"
       cat ${depmod_stderr} >&2
@@ -50,12 +63,116 @@ function run_depmod() {
   )
 }
 
+# $1 MODULES_LIST, <File containing the list of modules that should go in the
+#                   ramdisk.>
+# $2 MODULES_RECOVERY_LIST, <File containing the list of modules that should
+#                            go in the ramdisk and be loaded when booting into
+#                            recovery mode during first stage init.
+#
+#                            This parameter is optional, and if not used, should
+#                            be passed as an empty string to ensure that
+#                            subsequent parameters are treated correctly.>
+# $3 MODULES_CHARGER_LIST, <File containing the list of modules that should
+#                           go in the ramdisk and be loaded when booting into
+#                           charger mode during first stage init.
+#
+#                           This parameter is optional, and if not used, should
+#                           be passed as an empty string to ensure that
+#                           subsequent paratmers are treated correctly.>
+# $4 MODULES_ORDER_LIST, <The modules.order file that contains all of the
+#                         modules that were built.>
+#
+# This function creates new modules.order* files by filtering the module lists
+# through the set of modules that were built ($MODULES_ORDER_LIST).
+#
+# Each modules.order* file is created by filtering each list as follows:
+#
+# Let f be the filter_module_list function, which filters arg 1 through arg 2.
+#
+# f(MODULES_LIST, MODULES_ORDER_LIST) ==> modules.order
+#
+# f(MODULES_RECOVERY_LIST, MODULES_ORDER_LIST) ==> modules.order.recovery
+#
+# f(MODULES_CHARGER_LIST, MODULES_ORDER_LIST) ==> modules.order.charger
+#
+# Filtering ensures that only the modules in MODULES_LIST end up in the
+# respective partition that create_modules_staging() is invoked for.
+#
+# Note: This function overwrites the original file pointed to by
+# MODULES_ORDER_LIST when MODULES_LIST is set.
+function create_modules_order_lists() {
+  local modules_list_file="${1}"
+  local modules_recovery_list_file="${2}"
+  local modules_charger_list_file="${3}"
+  local modules_order_list_file="${4}"
+  local dest_dir=$(dirname $(realpath ${modules_order_list_file}))
+  local tmp_modules_order_file=$(mktemp)
+
+  cp ${modules_order_list_file} ${tmp_modules_order_file}
+
+  declare -A module_lists_arr
+  module_lists_arr["modules.order"]=${modules_list_file}
+  module_lists_arr["modules.order.recovery"]=${modules_recovery_list_file}
+  module_lists_arr["modules.order.charger"]=${modules_charger_list_file}
+
+  for mod_order_file in ${!module_lists_arr[@]}; do
+    local mod_list_file=${module_lists_arr[${mod_order_file}]}
+    local dest_file=${dest_dir}/${mod_order_file}
+
+    # Need to make sure we can find modules_list_file from the staging dir
+    if [[ -n "${mod_list_file}" ]]; then
+      if [[ -f "${ROOT_DIR}/${mod_list_file}" ]]; then
+        modules_list_file="${ROOT_DIR}/${mod_list_file}"
+      elif [[ "${mod_list_file}" != /* ]]; then
+        echo "ERROR: modules list must be an absolute path or relative to ${ROOT_DIR}: ${mod_list_file}" >&2
+        rm -f ${tmp_modules_order_file}
+        exit 1
+      elif [[ ! -f "${mod_list_file}" ]]; then
+        echo "ERROR: Failed to find modules list: ${mod_list_file}" >&2
+        rm -f ${tmp_modules_order_file}
+        exit 1
+      fi
+
+      local modules_list_filter=$(mktemp)
+
+      # Remove all lines starting with "#" (comments)
+      # Exclamation point makes interpreter ignore the exit code under set -e
+      ! grep -v "^#" ${mod_list_file} > ${modules_list_filter}
+
+      # Append a new line at the end of file
+      # If file doesn't end in newline the last module is skipped from filter
+      echo >> ${modules_list_filter}
+
+      # grep the modules.order for any KOs in the modules list
+      ! grep -w -f ${modules_list_filter} ${tmp_modules_order_file} > ${dest_file}
+
+      rm -f ${modules_list_filter}
+    fi
+  done
+
+  rm -f ${tmp_modules_order_file}
+}
+
 # $1 MODULES_LIST, <File contains the list of modules that should go in the ramdisk>
 # $2 MODULES_STAGING_DIR    <The directory to look for all the compiled modules>
 # $3 IMAGE_STAGING_DIR  <The destination directory in which MODULES_LIST is
 #                        expected, and it's corresponding modules.* files>
 # $4 MODULES_BLOCKLIST, <File contains the list of modules to prevent from loading>
-# $5 flags to pass to depmod
+# $5 MODULES_RECOVERY_LIST <File contains the list of modules that should go in
+#                           the ramdisk but should only be loaded when booting
+#                           into recovery.
+#
+#                           This parameter is optional, and if not used, should
+#                           be passed as an empty string to ensure that the depmod
+#                           flags are assigned correctly.>
+# $6 MODULES_CHARGER_LIST <File contains the list of modules that should go in
+#                          the ramdisk but should only be loaded when booting
+#                          into charger mode.
+#
+#                          This parameter is optional, and if not used, should
+#                          be passed as an empty string to ensure that the
+#                          depmod flags are assigned correctly.>
+# $7 flags to pass to depmod
 function create_modules_staging() {
   local modules_list_file=$1
   local src_dir=$(echo $2/lib/modules/*)
@@ -63,7 +180,9 @@ function create_modules_staging() {
   local dest_dir=$3/lib/modules/${version}
   local dest_stage=$3
   local modules_blocklist_file=$4
-  local depmod_flags=$5
+  local modules_recovery_list_file=$5
+  local modules_charger_list_file=$6
+  local depmod_flags=$7
 
   rm -rf ${dest_dir}
   mkdir -p ${dest_dir}/kernel
@@ -74,7 +193,11 @@ function create_modules_staging() {
   cp ${src_dir}/modules.builtin ${dest_dir}/modules.builtin
   cp ${src_dir}/modules.builtin.modinfo ${dest_dir}/modules.builtin.modinfo
 
-  if [[ -n "${EXT_MODULES}" ]] || [[ -n "${EXT_MODULES_MAKEFILE}" ]]; then
+  if [[ -n "${KLEAF_MODULES_ORDER}" ]] && [[ -d "${src_dir}/extra" ]]; then
+    mkdir -p ${dest_dir}/extra/
+    cp -r ${src_dir}/extra/* ${dest_dir}/extra/
+    cat ${KLEAF_MODULES_ORDER} >> ${dest_dir}/modules.order
+  elif [[ -n "${EXT_MODULES}" ]] || [[ -n "${EXT_MODULES_MAKEFILE}" ]]; then
     mkdir -p ${dest_dir}/extra/
     cp -r ${src_dir}/extra/* ${dest_dir}/extra/
 
@@ -117,34 +240,10 @@ function create_modules_staging() {
       -exec ${OBJCOPY:-${CROSS_COMPILE}objcopy} --strip-debug {} \;
   fi
 
-  if [ -n "${modules_list_file}" ]; then
-    # Need to make sure we can find modules_list_file from the staging dir
-    if [[ -f "${ROOT_DIR}/${modules_list_file}" ]]; then
-      modules_list_file="${ROOT_DIR}/${modules_list_file}"
-    elif [[ "${modules_list_file}" != /* ]]; then
-      echo "modules list must be an absolute path or relative to ${ROOT_DIR}: ${modules_list_file}"
-      exit 1
-    elif [[ ! -f "${modules_list_file}" ]]; then
-      echo "Failed to find modules list: ${modules_list_file}"
-      exit 1
-    fi
-
-    local modules_list_filter=$(mktemp)
-    local old_modules_list=$(mktemp)
-
-    # Remove all lines starting with "#" (comments)
-    # Exclamation point makes interpreter ignore the exit code under set -e
-    ! grep -v "^\#" ${modules_list_file} > ${modules_list_filter}
-
-    # Append a new line at the end of file
-    # If file doesn't end in newline the last module is skipped from filter
-    echo >> ${modules_list_filter}
-
-    # grep the modules.order for any KOs in the modules list
-    cp ${dest_dir}/modules.order ${old_modules_list}
-    ! grep -w -f ${modules_list_filter} ${old_modules_list} > ${dest_dir}/modules.order
-    rm -f ${modules_list_filter} ${old_modules_list}
-  fi
+  # create_modules_order_lists() will overwrite modules.order if MODULES_LIST is
+  # set.
+  create_modules_order_lists "${modules_list_file:-""}" "${modules_recovery_list_file:-""}" \
+	                     "${modules_charger_list_file:-""}" ${dest_dir}/modules.order
 
   if [ -n "${modules_blocklist_file}" ]; then
     # Need to make sure we can find modules_blocklist_file from the staging dir
@@ -170,18 +269,46 @@ function create_modules_staging() {
       sed -n -E -e 's/blocklist (.+)/\1/p' ${dest_dir}/modules.blocklist > $used_blocklist_modules
     fi
 
-    # Trim modules from tree that aren't mentioned in modules.order
+    # Remove modules from tree that aren't mentioned in modules.order
     (
       cd ${dest_dir}
-      find * -type f -name "*.ko" | (grep -v -w -f modules.order -f $used_blocklist_modules - || true) | xargs -r rm
+      local grep_flags="-v -w -f modules.order -f ${used_blocklist_modules} "
+      if [[ -f modules.order.recovery ]]; then
+        grep_flags+="-f modules.order.recovery "
+      fi
+      if [[ -f modules.order.charger ]]; then
+        grep_flags+="-f modules.order.charger "
+      fi
+      find * -type f -name "*.ko" | (grep ${grep_flags} - || true) | xargs -r rm
     )
     rm $used_blocklist_modules
   fi
 
   # Re-run depmod to detect any dependencies between in-kernel and external
-  # modules. Then, create modules.order based on all the modules compiled.
-  run_depmod ${dest_stage} "${depmod_flags}" "${version}"
-  cp ${dest_dir}/modules.order ${dest_dir}/modules.load
+  # modules, as well as recovery and charger modules. Then, create the
+  # modules.order files based on all the modules compiled.
+  #
+  # It is important that "modules.order" is last, as that will force depmod
+  # to run on all the modules in the directory, instead of just a list of them.
+  # It is desirable for depmod to run with all the modules last so that the
+  # dependency information is available for all modules, not just the recovery
+  # or charger sets.
+  modules_order_files=("modules.order.recovery" "modules.order.charger" "modules.order")
+  modules_load_files=("modules.load.recovery" "modules.load.charger" "modules.load")
+
+  for i in ${!modules_order_files[@]}; do
+    local mod_order_filepath=${dest_dir}/${modules_order_files[$i]}
+    local mod_load_filepath=${dest_dir}/${modules_load_files[$i]}
+
+    if [[ -f ${mod_order_filepath} ]]; then
+      if [[ "${modules_order_files[$i]}" == "modules.order" ]]; then
+        run_depmod ${dest_stage} "${depmod_flags}" "${version}"
+      else
+        run_depmod ${dest_stage} "${depmod_flags}" "${version}" "${mod_order_filepath}"
+      fi
+      cp ${mod_order_filepath} ${mod_load_filepath}
+    fi
+  done
 }
 
 function build_system_dlkm() {
@@ -189,8 +316,12 @@ function build_system_dlkm() {
   echo " Creating system_dlkm image"
 
   rm -rf ${SYSTEM_DLKM_STAGING_DIR}
+  # MODULES_[RECOVERY_LIST|CHARGER]_LIST should not influence system_dlkm, as
+  # GKI modules are not loaded when booting into either recovery or charger
+  # modes, so do not consider them, and pass empty strings instead.
   create_modules_staging "${SYSTEM_DLKM_MODULES_LIST:-${MODULES_LIST}}" "${MODULES_STAGING_DIR}" \
-    ${SYSTEM_DLKM_STAGING_DIR} "${SYSTEM_DLKM_MODULES_BLOCKLIST:-${MODULES_BLOCKLIST}}" "-e"
+    ${SYSTEM_DLKM_STAGING_DIR} "${SYSTEM_DLKM_MODULES_BLOCKLIST:-${MODULES_BLOCKLIST}}" \
+    "" "" "-e"
 
   local system_dlkm_root_dir=$(echo ${SYSTEM_DLKM_STAGING_DIR}/lib/modules/*)
   cp ${system_dlkm_root_dir}/modules.load ${DIST_DIR}/system_dlkm.modules.load
@@ -366,6 +497,11 @@ function build_vendor_dlkm() {
   build_image "${VENDOR_DLKM_STAGING_DIR}" "${vendor_dlkm_props_file}" \
     "${DIST_DIR}/vendor_dlkm.img" /dev/null
 
+  avbtool add_hashtree_footer \
+    --partition_name vendor_dlkm \
+    --hash_algorithm sha256 \
+    --image "${DIST_DIR}/vendor_dlkm.img"
+
   if [ -n "${vendor_dlkm_archive}" ]; then
     # Archive vendor_dlkm_staging_dir
     tar -czf "${DIST_DIR}/vendor_dlkm_staging_archive.tar.gz" -C "${VENDOR_DLKM_STAGING_DIR}" .
@@ -439,6 +575,12 @@ function build_boot_images() {
   fi
   if [ -n "${RAMDISK_OFFSET}" ]; then
     MKBOOTIMG_ARGS+=("--ramdisk_offset" "${RAMDISK_OFFSET}")
+  fi
+  if [ -n "${DTB_OFFSET}" ]; then
+    MKBOOTIMG_ARGS+=("--dtb_offset" "${DTB_OFFSET}")
+  fi
+  if [ -n "${KERNEL_OFFSET}" ]; then
+    MKBOOTIMG_ARGS+=("--kernel_offset" "${KERNEL_OFFSET}")
   fi
 
   DTB_FILE_LIST=$(find ${DIST_DIR} -name "*.dtb" | sort)
@@ -675,30 +817,44 @@ function gki_get_boot_img_size() {
   echo "${!boot_size_var}"
 }
 
-# gki_add_avb_footer <image> <partition_size>
+# gki_add_avb_footer <image> <partition_size> <security_patch_level>
 function gki_add_avb_footer() {
+  local spl_date="$3"
+  local additional_props=""
+  if [ -n "${spl_date}" ]; then
+    additional_props="--prop com.android.build.boot.security_patch:${spl_date}"
+  fi
+
   avbtool add_hash_footer --image "$1" \
-    --partition_name boot --partition_size "$2"
+    --partition_name boot --partition_size "$2" \
+    ${additional_props}
 }
 
-# gki_dry_run_certify_bootimg <boot_image> <gki_artifacts_info_file>
+# gki_dry_run_certify_bootimg <boot_image> <gki_artifacts_info_file> <security_patch_level>
 # The certify_bootimg script will be executed on a server over a GKI
 # boot.img during the official certification process, which embeds
 # a GKI certificate into the boot.img. The certificate is for Android
 # VTS to verify that a GKI boot.img is authentic.
 # Dry running the process here so we can catch related issues early.
 function gki_dry_run_certify_bootimg() {
+  local spl_date="$3"
+  local additional_props=()
+  if [ -n "${spl_date}" ]; then
+    additional_props+=("--extra_footer_args" \
+      "--prop com.android.build.boot.security_patch:${spl_date}")
+  fi
+
   certify_bootimg --boot_img "$1" \
     --algorithm SHA256_RSA4096 \
     --key tools/mkbootimg/gki/testdata/testkey_rsa4096.pem \
     --gki_info "$2" \
-    --output "$1"
+    --output "$1" \
+    "${additional_props[@]}"
 }
 
 # build_gki_artifacts_info <output_gki_artifacts_info_file>
 function build_gki_artifacts_info() {
-  local artifacts_info="certify_bootimg_extra_args=--prop ARCH:${ARCH} \
---prop BRANCH:${BRANCH}"
+  local artifacts_info="certify_bootimg_extra_args=--prop ARCH:${ARCH} --prop BRANCH:${BRANCH}"
 
   if [ -n "${BUILD_NUMBER}" ]; then
     artifacts_info="${artifacts_info} --prop BUILD_NUMBER:${BUILD_NUMBER}"
@@ -757,10 +913,28 @@ function build_gki_boot_images() {
     "${MKBOOTIMG_PATH}" "${GKI_MKBOOTIMG_ARGS[@]}"
 
     if [[ -z "${BUILD_GKI_BOOT_SKIP_AVB}" ]]; then
+      # Pick a SPL date far enough in the future so that you can flash
+      # development GKI kernels on an unlocked device without wiping the
+      # userdata. This is for development purposes only and should be
+      # overwritten by the Android platform build to include an accurate SPL.
+      # Note, the certified GKI release builds will not include the SPL
+      # property.
+      local spl_month=$((($(date +'%m') + 3) % 12))
+      local spl_year="$(date +'%Y')"
+      if [ $((${spl_month} % 3)) -gt 0 ]; then
+        # Round up to the next quarterly platform release (QPR) month
+        spl_month=$((${spl_month} + 3 - (${spl_month} % 3)))
+      fi
+      if [ "${spl_month}" -lt "$(date +'%m')" ]; then
+        # rollover to the next year
+        spl_year="$((${spl_year} + 1))"
+      fi
+      local spl_date=$(printf "%d-%02d-05\n" ${spl_year} ${spl_month})
+
       gki_add_avb_footer "${boot_image_path}" \
-        "$(gki_get_boot_img_size "${compression}")"
+        "$(gki_get_boot_img_size "${compression}")" "${spl_date}"
       gki_dry_run_certify_bootimg "${boot_image_path}" \
-        "${GKI_ARTIFACTS_INFO_FILE}"
+        "${GKI_ARTIFACTS_INFO_FILE}" "${spl_date}"
     fi
     images_to_pack+=("${boot_image}")
   done

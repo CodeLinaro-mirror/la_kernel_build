@@ -536,6 +536,18 @@ def define_common_kernels(
                 "BUILD.bazel",
                 "**/*.bzl",
                 ".git/**",
+
+                # ctag files
+                "tags",
+                "TAGS",
+
+                # temporary ctag files
+                "tags.temp",
+                "tags.lock",
+
+                # cscope files
+                "cscope.*",
+                "ncscope.*",
             ],
         ),
     )
@@ -772,6 +784,7 @@ def _define_common_kernel(
         # Sync with GKI_DOWNLOAD_CONFIGS, "images"
         build_system_dlkm = True,
         build_system_dlkm_flatten = True,
+        system_dlkm_fs_types = ["erofs", "ext4"],
         # Keep in sync with build.config.gki* MODULES_LIST
         modules_list = gki_system_dlkm_modules,
     )
