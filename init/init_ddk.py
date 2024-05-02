@@ -39,7 +39,7 @@ _KLEAF_DEPENDENCY_TEMPLATE = """\
 bazel_dep(name = "kleaf")
 local_path_override(
     module_name = "kleaf",
-    path = "{kleaf_repo}",
+    path = "{kleaf_repo_relative}",
 )
 """
 
@@ -117,7 +117,7 @@ class KleafProjectSetter:
                 output_file.write(_FILE_MARKER_BEGIN)
                 output_file.write(update + "\n")
                 output_file.write(_FILE_MARKER_END)
-            shutil.move(output_file.name, path)
+        shutil.move(output_file.name, path)
 
     def _try_rel_workspace(self, path: pathlib.Path):
         """Tries to convert |path| to be relative to ddk_workspace."""
@@ -146,7 +146,7 @@ class KleafProjectSetter:
         module_bazel_content = ""
         if self.kleaf_repo:
             module_bazel_content += _KLEAF_DEPENDENCY_TEMPLATE.format(
-                kleaf_repo=self.kleaf_repo,
+                kleaf_repo_relative=self._try_rel_workspace(self.kleaf_repo),
             )
         if self.prebuilts_dir:
             module_bazel_content += "\n"
@@ -167,11 +167,16 @@ class KleafProjectSetter:
         if not self.ddk_workspace or not self.kleaf_repo:
             return
         bazelrc = self.ddk_workspace / _DEVICE_BAZELRC
+
+        kleaf_repo = self._try_rel_workspace(self.kleaf_repo)
+        if not kleaf_repo.is_absolute():
+            kleaf_repo = (pathlib.Path("%workspace%") / kleaf_repo)
+
         self._update_file(
             bazelrc,
             textwrap.dedent(f"""\
             common --config=internet
-            common --registry=file:{self.kleaf_repo}/external/bazelbuild-bazel-central-registry
+            common --registry=file://{kleaf_repo}/external/bazelbuild-bazel-central-registry
             """),
         )
 
