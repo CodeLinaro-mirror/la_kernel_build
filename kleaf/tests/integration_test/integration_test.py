@@ -144,58 +144,51 @@ class Exec(object):
 
 class KleafIntegrationTestBase(unittest.TestCase):
 
-    def _check_call(self,
-                    command: str,
-                    command_args: list[str],
-                    startup_options=(),
-                    **kwargs) -> None:
+    def _build_subprocess_args(
+        self,
+        command: str,
+        command_args: Iterable[str] = (),
+        use_bazelrc=True,
+        startup_options=(),
+        use_wrapper_args=True,
+        **kwargs,
+    ) -> tuple[list[str], dict[str, Any]]:
+        """Builds subprocess arguments."""
+        subprocess_args = [str(_BAZEL)]
+        subprocess_args.extend(startup_options)
+        if use_bazelrc:
+            subprocess_args.append(f"--bazelrc={self._bazel_rc.name}")
+        subprocess_args.append(command)
+        subprocess_args.extend(command_args)
+        if use_wrapper_args:
+            subprocess_args.extend(arguments.bazel_wrapper_args)
+
+        # kwargs has known arguments filtered out.
+        return subprocess_args, kwargs
+
+    def _check_call(self, *args, **kwargs) -> None:
         """Executes a bazel command."""
+        subprocess_args, kwargs = self._build_subprocess_args(*args, **kwargs)
+        Exec.check_call(subprocess_args, **kwargs)
 
-        startup_options = list(startup_options)
-        startup_options.append(f"--bazelrc={self._bazel_rc.name}")
-        command_args = list(command_args)
-        command_args.extend(arguments.bazel_wrapper_args)
-        Exec.check_call([str(_BAZEL)] + startup_options + [
-            command,
-        ] + command_args, **kwargs)
-
-    def _build(self, command_args: list[str], **kwargs) -> None:
+    def _build(self, *args, **kwargs) -> None:
         """Executes a bazel build command."""
-        self._check_call("build", command_args, **kwargs)
+        self._check_call("build", *args, **kwargs)
 
-    def _check_output(self, command: str, command_args: list[str],
-                      use_bazelrc=True,
-                      **kwargs) -> str:
+    def _check_output(self, *args, **kwargs) -> str:
         """Returns output of a bazel command."""
+        subprocess_args, kwargs = self._build_subprocess_args(*args, **kwargs)
+        return Exec.check_output(subprocess_args, **kwargs)
 
-        args = [str(_BAZEL)]
-        if use_bazelrc:
-            args.append(f"--bazelrc={self._bazel_rc.name}")
-        args.append(command)
-        args += command_args
-
-        return Exec.check_output(args, **kwargs)
-
-    def _check_errors(self, command: str, command_args: list[str],
-                      use_bazelrc=True,
-                      **kwargs) -> str:
+    def _check_errors(self, *args, **kwargs) -> str:
         """Returns errors of a bazel command."""
+        subprocess_args, kwargs = self._build_subprocess_args(*args, **kwargs)
+        return Exec.check_errors(subprocess_args, **kwargs)
 
-        args = [str(_BAZEL)]
-        if use_bazelrc:
-            args.append(f"--bazelrc={self._bazel_rc.name}")
-        args.append(command)
-        args += command_args
-
-        return Exec.check_errors(args, **kwargs)
-
-    def _popen(self, command: str, command_args: list[str], **kwargs) \
-            -> subprocess.Popen:
-        return Exec.popen([
-            str(_BAZEL),
-            f"--bazelrc={self._bazel_rc.name}",
-            command,
-        ] + command_args, **kwargs)
+    def _popen(self, *args, **kwargs) -> subprocess.Popen:
+        """Executes a bazel command, returning the Popen object."""
+        subprocess_args, kwargs = self._build_subprocess_args(*args, **kwargs)
+        return Exec.popen(subprocess_args, **kwargs)
 
     def setUp(self) -> None:
         self.assertTrue(os.environ.get("BUILD_WORKSPACE_DIRECTORY"),
@@ -210,7 +203,6 @@ class KleafIntegrationTestBase(unittest.TestCase):
         self._bazel_rc = tempfile.NamedTemporaryFile()
         self.addCleanup(self._bazel_rc.close)
         with open(self._bazel_rc.name, "w") as f:
-            f.write(f"import %workspace%/build/kernel/kleaf/common.bazelrc\n")
             for arg in arguments.bazel_args:
                 f.write(f"build {shlex.quote(arg)}\n")
 
@@ -607,11 +599,11 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
 
     def test_dash_dash_help(self):
         """Test that `bazel --help` works."""
-        self._check_output("--help", [], use_bazelrc=False)
+        self._check_output("--help", use_bazelrc=False, use_wrapper_args=False)
 
     def test_help(self):
         """Test that `bazel help` works."""
-        self._check_output("help", [])
+        self._check_output("help")
 
     def test_help_kleaf(self):
         """Test that `bazel help kleaf` works."""
@@ -622,6 +614,60 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
         self._check_output("build", ["--nobuild", "--strip_execroot",
                                      "//build/kernel:hermetic-tools"])
 
+    def test_strip_execroot_error(self):
+        """Tests that if cmd with --strip_execroot fails, exit code is set."""
+        popen = self._popen("what",
+                            ["--strip_execroot"],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+        popen.communicate()
+        self.assertNotEqual(popen.returncode, 0)
+
+    def test_no_unexpected_output_error_with_proper_flags(self):
+        """With --config=silent, no errors emitted on unexpected lines."""
+
+        # Do a build with `--config=local` to force analysis cache to be invalid
+        # in the next run, which triggers
+        # WARNING: Build options [...] have changed, discarding analysis cache
+        self._build(
+            ["//build/kernel:hermetic-tools", "--config=local"],
+        )
+
+        allowlist = pathlib.Path("build/kernel/kleaf/spotless_log_regex.txt")
+
+        startup_options = [
+            f"--stdout_stderr_regex_allowlist={allowlist.resolve()}",
+        ]
+        self._build(["--config=silent", "//build/kernel:hermetic-tools"],
+                    startup_options=startup_options)
+
+    def test_detect_unexpected_output_error(self):
+        """Without --config=silent, there are errors on unexpected lines."""
+        allowlist = pathlib.Path("build/kernel/kleaf/spotless_log_regex.txt")
+
+        startup_options = [
+            f"--stdout_stderr_regex_allowlist={allowlist.resolve()}",
+        ]
+        stderr = self._check_errors(
+            "build",
+            ["//build/kernel:hermetic-tools"],
+            startup_options=startup_options,
+        )
+        self.assertIn("unexpected lines", stderr)
+
+    def test_no_unexpected_output_error_if_process_exits_abnormally(self):
+        """If the bazel command fails, no errors emitted on unexpected lines."""
+        allowlist = pathlib.Path("build/kernel/kleaf/spotless_log_regex.txt")
+
+        startup_options = [
+            f"--stdout_stderr_regex_allowlist={allowlist.resolve()}",
+        ]
+        stderr = self._check_errors(
+            "build",
+            ["//does_not_exist"],
+            startup_options=startup_options,
+        )
+        self.assertNotIn("unexpected lines", stderr)
 
 class ScmversionIntegrationTest(KleafIntegrationTestBase):
 
