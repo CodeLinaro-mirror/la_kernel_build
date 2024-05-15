@@ -126,7 +126,6 @@ _HERMETIC_TOOLS = [
     "//prebuilts/kernel-build-tools:linux-x86/bin/interceptor",
     "//prebuilts/kernel-build-tools:linux-x86/bin/interceptor_analysis",
     "//prebuilts/kernel-build-tools:linux-x86/bin/lpmake",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/lz4",
     "//prebuilts/kernel-build-tools:linux-x86/bin/mkbootfs",
     "//prebuilts/kernel-build-tools:linux-x86/bin/mkdtimg",
     "//prebuilts/kernel-build-tools:linux-x86/bin/mke2fs",
@@ -309,6 +308,13 @@ hermetic_tools(
             "//prebuilts/build-tools:path/linux-x86/find": "find",
         },
     }) | select({
+        "//build/kernel/kleaf:toolchain_from_sources_is_true": {
+            "@lz4": "lz4",
+        },
+        "//conditions:default": {
+            "//prebuilts/kernel-build-tools:linux-x86/bin/lz4": "lz4",
+        },
+    }) | select({
         "//build/kernel/kleaf:gzip_is_pigz_is_true": {
             "@pigz": "gzip",
         },
@@ -464,6 +470,7 @@ py_binary(
 py_binary(
     name = "init_ddk",
     srcs = ["init/init_ddk.py"],
+    data = ["init/init_download.py"],
     main = "init/init_ddk.py",
     visibility = ["//visibility:private"],
 )

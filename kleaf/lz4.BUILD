@@ -1,4 +1,4 @@
-# Copyright (C) 2022 The Android Open Source Project
+# Copyright (C) 2023 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,11 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# --config=fast: Various configs to boost developer builds.
-# See build/kernel/kleaf/docs/fast.md
+cc_library(
+    name = "liblz4",
+    srcs = glob([
+        "lib/*.c",
+    ]),
+    hdrs = glob([
+        "lib/*.h",
+    ]),
+    copts = ["-O3"],
+    includes = ["lib"],
+    textual_hdrs = ["lib/lz4.c"],
+)
 
-# Let rules know what configs we are using now
-build:fast --//build/kernel/kleaf:config_fast
-
-# Inherit from local: reduce sandboxes.
-build:fast --config=local
+cc_binary(
+    name = "lz4",
+    srcs = glob([
+        "programs/*.c",
+        "programs/*.h",
+    ]),
+    copts = ["-O3"],
+    visibility = ["//visibility:public"],
+    deps = [":liblz4"],
+)

@@ -501,8 +501,8 @@ def kernel_build(
     native.platform(
         name = name + "_platform_target",
         constraint_values = [
-            "@platforms//os:android",
-            "@platforms//cpu:{}".format(arch),
+            Label("@platforms//os:android"),
+            Label("@platforms//cpu:{}".format(arch)),
         ] + toolchain_constraints,
         **internal_kwargs
     )
@@ -510,8 +510,8 @@ def kernel_build(
     native.platform(
         name = name + "_platform_exec",
         constraint_values = [
-            "@platforms//os:linux",
-            "@platforms//cpu:x86_64",
+            Label("@platforms//os:linux"),
+            Label("@platforms//cpu:x86_64"),
         ] + toolchain_constraints,
         **internal_kwargs
     )
@@ -740,6 +740,12 @@ def _skip_build_checks(ctx, what):
     if ctx.attr.sanitizers[0] != "default":
         print("\nWARNING: {this_label}: {what} was\
               IGNORED because kernel_build.sanitizers is set!".format(this_label = ctx.label, what = what))
+        return True
+
+    # Skip for --gcov builds.
+    if ctx.attr._gcov[BuildSettingInfo].value:
+        print("\nWARNING: {this_label}: {what} was\
+              IGNORED because --gcov is set!".format(this_label = ctx.label, what = what))
         return True
 
     return False
