@@ -151,10 +151,9 @@ class KleafProjectSetter:
                     self.prebuilts_dir
                 ),
             )
-        if module_bazel_content:
-            self._update_file(module_bazel, module_bazel_content)
-        else:
+        if not module_bazel_content:
             logging.info("Nothing to update in %s", module_bazel)
+        self._update_file(module_bazel, module_bazel_content)
 
     def _generate_bazelrc(self):
         """Creates a Bazel configuration file with the minimum setup required."""
@@ -164,7 +163,7 @@ class KleafProjectSetter:
 
         kleaf_repo = self._try_rel_workspace(self.kleaf_repo)
         if not kleaf_repo.is_absolute():
-            kleaf_repo = (pathlib.Path("%workspace%") / kleaf_repo)
+            kleaf_repo = pathlib.Path("%workspace%") / kleaf_repo
 
         self._update_file(
             bazelrc,
@@ -194,6 +193,7 @@ class KleafProjectSetter:
         """Validates that download are possible within the current context."""
         if not self.url_fmt:
             return False
+        # Check if build_id is missing and url_fmt has an anchor depending on it.
         if self._get_url("") is None:
             return False
         return True
