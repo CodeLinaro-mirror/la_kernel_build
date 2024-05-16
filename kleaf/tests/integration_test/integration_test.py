@@ -37,6 +37,7 @@ Example:
 
 import argparse
 import hashlib
+import json
 import os
 import re
 import shlex
@@ -84,10 +85,29 @@ def load_arguments():
                         dest="include_abi_tests",
                         help="Include ABI Monitoring related tests." +
                         "NOTE: It requires a branch with ABI monitoring enabled.")
+    parser.add_argument("--mount-spec",
+                        type=_deserialize_mount_spec,
+                        help="""A JSON dictionary specifying bind mounts.
+
+                            If not set, some tests will re-run itself
+                            in an unshare-d namespace with the flag set.""",
+                        default=MountSpec())
     return parser.parse_known_args()
 
 
 arguments = None
+
+
+MountSpec = dict[pathlib.Path, pathlib.Path]
+
+
+def _serialize_mount_spec(val: MountSpec):
+    return json.dumps({str(key): str(value) for key, value in val.items()})
+
+
+def _deserialize_mount_spec(s: str) -> MountSpec:
+    return {pathlib.Path(key): pathlib.Path(value)
+            for key, value in json.loads(s).items()}
 
 
 class Exec(object):
@@ -267,6 +287,35 @@ class KleafIntegrationTestBase(unittest.TestCase):
     def _common(self) -> str:
         """Returns the common package."""
         return "common"
+
+    def _mount(self):
+        """Mount according to --mount-spec"""
+        for from_path, to_path in arguments.mount_spec.items():
+            to_path.mkdir(parents=True, exist_ok=True)
+            Exec.check_call([shutil.which("mount"), "--bind", "-o", "ro",
+                            str(from_path), str(to_path)])
+            self.addCleanup(Exec.check_call,
+                            [shutil.which("umount"), str(to_path)])
+
+    def _unshare_mount_run(self, mount_spec: MountSpec):
+        """Reruns the test in an unshare-d namespace with --mount-spec set."""
+        args = [shutil.which("unshare"), "--mount", "--map-root-user"]
+
+        # toybox unshare -R does not imply -U, so explicitly say so.
+        args.append("--user")
+
+        args.extend([shutil.which("bash"), "-c"])
+
+        test_args = [sys.executable, __file__]
+        test_args.extend(f"--bazel-arg={arg}" for arg in arguments.bazel_args)
+        test_args.extend(f"--bazel-wrapper-arg={arg}"
+                         for arg in arguments.bazel_wrapper_args)
+        test_args.append(f"--mount-spec={_serialize_mount_spec(mount_spec)}")
+        test_args.append(self.id().removeprefix("__main__."))
+        args.append(" ".join(shlex.quote(str(test_arg))
+                             for test_arg in test_args))
+
+        Exec.check_call(args)
 
 
 # NOTE: It requires a branch with ABI monitoring enabled.
