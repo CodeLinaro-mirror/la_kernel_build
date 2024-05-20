@@ -42,6 +42,7 @@ def kernel_images(
         build_system_dlkm_flatten = None,
         build_dtbo = None,
         dtbo_srcs = None,
+        dtbo_config = None,
         mkbootimg = None,
         deps = None,
         boot_image_outs = None,
@@ -211,6 +212,7 @@ def kernel_images(
               ]
           )
           ```
+        dtbo_config: a config file to create dtbo image by cfg_create command.
         base_kernel_images: The `kernel_images()` corresponding to the `base_kernel` of the
           `kernel_build`. This is required for building a device-specific `system_dlkm` image.
           For example, if `base_kernel` of `kernel_build()` is `//common:kernel_aarch64`,
@@ -493,6 +495,7 @@ def kernel_images(
         dtbo(
             name = "{}_dtbo".format(name),
             srcs = dtbo_srcs,
+            config_file = dtbo_config,
             kernel_build = kernel_build,
             **kwargs
         )

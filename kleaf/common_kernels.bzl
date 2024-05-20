@@ -22,17 +22,11 @@ load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
 load("//build/kernel/kleaf/artifact_tests:device_modules_test.bzl", "device_modules_test")
 load("//build/kernel/kleaf/artifact_tests:kernel_test.bzl", "initramfs_modules_options_test")
-load(
-    "//build/kernel/kleaf/impl:constants.bzl",
-    "MODULE_OUTS_FILE_OUTPUT_GROUP",
-    "TOOLCHAIN_VERSION_FILENAME",
-)
 load("//build/kernel/kleaf/impl:gki_artifacts.bzl", "gki_artifacts", "gki_artifacts_prebuilts")
 load("//build/kernel/kleaf/impl:kernel_filegroup_declaration.bzl", "kernel_filegroup_declaration")
 load(
     "//build/kernel/kleaf/impl:kernel_prebuilt_utils.bzl",
     "CI_TARGET_MAPPING",
-    "GKI_DOWNLOAD_CONFIGS",
 )
 load("//build/kernel/kleaf/impl:kernel_sbom.bzl", "kernel_sbom")
 load("//build/kernel/kleaf/impl:merge_kzip.bzl", "merge_kzip")
@@ -482,10 +476,7 @@ def define_common_kernels(
 
     # Workaround to set KERNEL_DIR correctly and
     #  avoid using the fallback (directory of the config).
-    set_kernel_dir_cmd = """\
-KERNEL_DIR=\"{kernel_dir}\"
-KLEAF_REDECLARE_KERNEL_DIR_UNDER_DYNAMIC_KLEAF_REPO_WORKSPACE_ROOT=1
-""".format(
+    set_kernel_dir_cmd = "KERNEL_DIR=\"{kernel_dir}\"".format(
         kernel_dir = paths.join(
             native.package_relative_label(":x").workspace_root,
             native.package_relative_label(":x").package,
@@ -624,7 +615,8 @@ def _define_common_kernel(
         gki_boot_img_sizes = None,
         page_size = None,
         deprecation = None,
-        ddk_headers_archive = None):
+        ddk_headers_archive = None,
+        extra_dist = None):
     json_target_config = dict(
         name = name,
         outs = outs,
@@ -649,6 +641,7 @@ def _define_common_kernel(
         page_size = page_size,
         deprecation = deprecation,
         ddk_headers_archive = ddk_headers_archive,
+        extra_dist = extra_dist,
     )
     json_target_config = json.encode_indent(json_target_config, indent = "    ")
     json_target_config = json_target_config.replace("null", "None")
@@ -780,7 +773,7 @@ def _define_common_kernel(
         name = name + "_images",
         kernel_build = name,
         kernel_modules_install = name + "_modules_install",
-        # Sync with GKI_DOWNLOAD_CONFIGS, "images"
+        # Sync with CI_TARGET_MAPPING.*.download_configs.images
         build_system_dlkm = True,
         build_system_dlkm_flatten = True,
         system_dlkm_fs_types = ["erofs", "ext4"],
@@ -800,13 +793,6 @@ def _define_common_kernel(
             name = name + "_gki_artifacts",
             srcs = [],
         )
-
-    # toolchain_version from <name>
-    native.filegroup(
-        name = name + "_" + TOOLCHAIN_VERSION_FILENAME,
-        srcs = [name],
-        output_group = TOOLCHAIN_VERSION_FILENAME,
-    )
 
     # modules_staging_archive from <name>
     native.filegroup(
@@ -830,7 +816,6 @@ def _define_common_kernel(
     # - UAPI headers, because device-specific external kernel modules may install different
     #   headers.
     # - DDK; see _ddk_artifacts below.
-    # - toolchain_version: avoid conflict with device kernel's kernel_build() in dist dir.
     native.filegroup(
         name = name + "_additional_artifacts",
         srcs = [
@@ -851,22 +836,22 @@ def _define_common_kernel(
         extra_deps = filegroup_extra_deps,
         visibility = ["//visibility:private"],
     )
+    target_mapping = CI_TARGET_MAPPING.get(name, {})
+    write_file(
+        name = name + "_download_configs",
+        content = [
+            json.encode_indent(target_mapping.get("download_configs", {})),
+        ],
+        # / is needed to distinguish between variants as 16k (and avoid conflicts).
+        out = name + "/download_configs.json",
+    )
 
-    # TODO(b/291918087): Drop after common_kernels no longer use kernel_filegroup.
-    #   These files should already be in kernel_filegroup_declaration.
     # Everything in name + "_dist" for the DDK.
     # These are necessary for driver development. Hence they are also added to
     # kernel_*_dist so they can be downloaded.
-    # Note: This poke into details of kernel_build!
-    native.filegroup(
-        name = name + "_internal_ddk_artifacts",
-        srcs = [name],
-        output_group = "internal_ddk_artifacts",
-        visibility = ["//visibility:private"],
-    )
     ddk_artifacts = [
+        name + "_download_configs",
         name + "_filegroup_declaration",
-        name + "_internal_ddk_artifacts",
         name + "_unstripped_modules_archive",
     ]
     if ddk_headers_archive:
@@ -876,14 +861,13 @@ def _define_common_kernel(
         srcs = ddk_artifacts,
     )
 
-    dist_targets = [
+    dist_targets = (extra_dist or []) + [
         name,
         name + "_uapi_headers",
         name + "_additional_artifacts",
         name + "_ddk_artifacts",
         name + "_modules",
         name + "_modules_install",
-        name + "_" + TOOLCHAIN_VERSION_FILENAME,
         # BUILD_GKI_CERTIFICATION_TOOLS=1 for all kernel_build defined here.
         Label("//build/kernel:gki_certification_tools"),
         "build.config.constants",
@@ -982,25 +966,15 @@ def _define_prebuilts(**kwargs):
         ],
     )
 
-    for repo_name, value in CI_TARGET_MAPPING.items():
-        name = value["target"]
-        main_target_outs = value["outs"]  # outs of target named {name}
-        gki_prebuilts_outs = value["gki_prebuilts_outs"]  # outputs of _gki_prebuilts
+    for name, value in CI_TARGET_MAPPING.items():
+        repo_name = value["repo_name"]
         deprecate_msg = "Use @{}//{} directly".format(repo_name, name)
         not_available_msg = "This will no longer be available. File a bug if you rely on this target."
 
-        native.filegroup(
+        native.alias(
             name = name + "_downloaded",
-            srcs = ["@{}//{}".format(repo_name, filename) for filename in main_target_outs],
-            tags = ["manual"],
+            actual = name + "_files_downloaded",
             deprecation = deprecate_msg,
-        )
-
-        native.filegroup(
-            name = name + "_module_outs_file",
-            srcs = [":" + name],
-            output_group = MODULE_OUTS_FILE_OUTPUT_GROUP,
-            deprecation = not_available_msg,
         )
 
         # A kernel_filegroup that:
@@ -1022,7 +996,7 @@ def _define_prebuilts(**kwargs):
                 Label("//build/kernel/kleaf:use_signed_prebuilts_is_true"): [name + "_boot_img_archive_signed_downloaded"],
                 "//conditions:default": [name + "_boot_img_archive_downloaded"],
             }),
-            outs = gki_prebuilts_outs,
+            outs = [name + "_gki_prebuilts_outs_downloaded"],
             deprecation = deprecate_msg,
         )
 
@@ -1036,16 +1010,14 @@ def _define_prebuilts(**kwargs):
             **kwargs
         )
 
-        for config in GKI_DOWNLOAD_CONFIGS:
-            target_suffix = config["target_suffix"]
+        files_by_target_suffix = {}
+        for local_filename, config in value["download_configs"].items():
+            files_by_target_suffix.setdefault(config["target_suffix"], []).append(local_filename)
 
-            # outs of target named {name}_{target_suffix}
-            suffixed_target_outs = list(config.get("outs", []))
-            suffixed_target_outs += list(config.get("outs_mapping", {}).keys())
-
+        for target_suffix, files in files_by_target_suffix.items():
             native.filegroup(
                 name = name + "_" + target_suffix + "_downloaded",
-                srcs = ["@{}//{}".format(repo_name, filename) for filename in suffixed_target_outs],
+                srcs = ["@{}//{}".format(repo_name, filename) for filename in files],
                 tags = ["manual"],
                 deprecation = deprecate_msg,
             )
