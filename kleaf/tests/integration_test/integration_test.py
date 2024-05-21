@@ -36,8 +36,12 @@ Example:
 """
 
 import argparse
+import collections
 import contextlib
+import dataclasses
 import hashlib
+import io
+import json
 import os
 import re
 import shlex
@@ -48,6 +52,7 @@ import pathlib
 import tempfile
 import textwrap
 import unittest
+import xml.dom.minidom
 from typing import Any, Callable, Iterable, TextIO
 
 from absl.testing import absltest
@@ -85,13 +90,20 @@ def load_arguments():
                         dest="include_abi_tests",
                         help="Include ABI Monitoring related tests." +
                         "NOTE: It requires a branch with ABI monitoring enabled.")
-    parser.add_argument("--mounted-kleaf-repo",
-                        type=_require_absolute_path,
-                        help="""The path to Kleaf tooling repository.
+    parser.add_argument("--mount-spec",
+                        type=_deserialize_mount_spec,
+                        help="""A JSON dictionary specifying bind mounts.
 
-                            If not set, some tests will mount the Kleaf
-                            repository to certain locations and re-run itself
-                            with the flag set.""")
+                            If not set, some tests will re-run itself
+                            in an unshare-d namespace with the flag set.""",
+                        default=MountSpec())
+    parser.add_argument("--link-spec",
+                        type=_deserialize_link_spec,
+                        help="""A JSON dictionary specifying symlinks.
+
+                            If not set, some tests will re-run itself
+                            with the flag set.""",
+                        default=LinkSpec())
     group = parser.add_argument_group("CI", "flags for ci.android.com")
     group.add_argument("--test_result_dir",
                        type=_require_absolute_path,
@@ -110,6 +122,69 @@ def _require_absolute_path(p: str) -> pathlib.Path:
     if not path.is_absolute():
         raise ValueError(f"{p} is not absolute")
     return path
+
+
+MountSpec = dict[pathlib.Path, pathlib.Path]
+
+
+def _serialize_mount_spec(val: MountSpec) -> str:
+    return json.dumps({str(key): str(value) for key, value in val.items()})
+
+
+def _deserialize_mount_spec(s: str) -> MountSpec:
+    return {pathlib.Path(key): pathlib.Path(value)
+            for key, value in json.loads(s).items()}
+
+
+@dataclasses.dataclass
+class Link:
+    # Value in repo manifest. Relative against repo root.
+    dest: pathlib.Path
+
+    # Unlike the value in repo manifest, this is relative against repo root
+    # not project path.
+    src: pathlib.Path
+
+    @classmethod
+    def from_element(cls, element: xml.dom.minidom.Element,
+                     project_path: pathlib.Path) -> "Link":
+        return cls(dest=pathlib.Path(element.getAttribute("dest")),
+                   src=project_path / element.getAttribute("src"))
+
+
+LinkSpec = list[Link]
+
+
+def _serialize_link_spec(links: LinkSpec) -> str:
+    return json.dumps([{"dest": str(link.dest), "src": str(link.src)}
+                       for link in links])
+
+
+def _deserialize_link_spec(s: str) -> LinkSpec:
+    return [Link(dest=pathlib.Path(obj["dest"]), src=pathlib.Path(obj["src"]))
+            for obj in json.loads(s)]
+
+
+@dataclasses.dataclass
+class RepoProject:
+    # Project path
+    path: pathlib.Path
+
+    # List of symlinks to create
+    links: list[Link] = dataclasses.field(default_factory=list)
+
+    # List of groups
+    groups: list[str] = dataclasses.field(default_factory=list)
+
+    @classmethod
+    def from_element(cls, element: xml.dom.minidom.Element) -> "RepoProject":
+        path = pathlib.Path(
+                element.getAttribute("path") or element.getAttribute("name"))
+        project = cls(path=path)
+        for link_element in element.getElementsByTagName("linkfile"):
+            project.links.append(Link.from_element(link_element, path))
+        project.groups = re.split(r",| ", element.getAttribute("groups"))
+        return project
 
 
 class Exec(object):
@@ -295,6 +370,112 @@ class KleafIntegrationTestBase(unittest.TestCase):
         """Returns the common package."""
         return "common"
 
+    def _mount(self, kleaf_repo: pathlib.Path):
+        """Mount according to --mount-spec"""
+        for from_path, to_path in arguments.mount_spec.items():
+            to_path.mkdir(parents=True, exist_ok=True)
+            Exec.check_call([shutil.which("mount"), "--bind", "-o", "ro",
+                            str(from_path), str(to_path)])
+            self.addCleanup(Exec.check_call,
+                            [shutil.which("umount"), str(to_path)])
+
+        for link in arguments.link_spec:
+            real_dest = kleaf_repo / link.dest
+            real_src = kleaf_repo / link.src
+            relative_src = self._force_relative_to(real_src, real_dest.parent)
+            real_dest.parent.mkdir(parents=True, exist_ok=True)
+            real_dest.symlink_to(relative_src)
+
+    @staticmethod
+    def _force_relative_to(path: pathlib.Path, other: pathlib.Path):
+        """Naive implementation of pathlib.Path.relative_to(walk_up)"""
+        if sys.version_info[0] == 3 and sys.version_info[1] >= 12:
+            return path.relative_to(other, walk_up=True)
+
+        path = path.resolve()
+        other = other.resolve()
+
+        if path.is_relative_to(other):
+            return path.relative_to(other)
+
+        path_parts = collections.deque(path.parts)
+        other_parts = collections.deque(other.parts)
+        while path_parts and other_parts and path_parts[0] == other_parts[0]:
+            path_parts.popleft()
+            other_parts.popleft()
+        parts = [".."] * len(other_parts) + list(path_parts)
+        return pathlib.Path(*parts)
+
+    @classmethod
+    def _get_repo_manifest(cls) -> xml.dom.minidom.Document:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--repo_manifest", type=_require_absolute_path)
+        known, _ = parser.parse_known_args(arguments.bazel_wrapper_args)
+        if known.repo_manifest:
+            with open(known.repo_manifest) as manifest_file:
+                return xml.dom.minidom.parse(manifest_file)
+
+        manifest_content = Exec.check_output(["repo", "manifest"])
+        return xml.dom.minidom.parseString(manifest_content)
+
+    @classmethod
+    def _get_projects(cls) -> list[RepoProject]:
+        manifest_element = cls._get_repo_manifest().documentElement
+        project_elements = manifest_element.getElementsByTagName("project")
+        return [RepoProject.from_element(element)
+                for element in project_elements]
+
+    def _get_project_mount_link_spec(self, kleaf_repo: pathlib.Path,
+                                     groups: list[str]) \
+        -> tuple[MountSpec, LinkSpec]:
+        """Returns MountSpec / LinkSpec for projects that matches any group.
+
+        Args:
+            groups: List of groups to match projects. Projects with the `groups`
+                attribute matching any of the given |groups| are included.
+                If empty, all projects are included.
+            kleaf_repo: The root of the mount point where projects will be
+                mounted below.
+        """
+
+        projects = self._get_projects()
+
+        relevant_projects = list[RepoProject]()
+        for project in projects:
+            if not groups or any(group in project.groups for group in groups):
+                relevant_projects.append(project)
+
+        real_kleaf_repo = pathlib.Path(".").resolve()
+        mount_spec = MountSpec()
+        link_spec = LinkSpec()
+        for project in relevant_projects:
+            mount_spec[real_kleaf_repo / project.path] = \
+                kleaf_repo / project.path
+            link_spec.extend(project.links)
+
+        return mount_spec, link_spec
+
+    def _unshare_mount_run(self, mount_spec: MountSpec, link_spec: list[Link]):
+        """Reruns the test in an unshare-d namespace with --mount-spec set."""
+        args = [shutil.which("unshare"), "--mount", "--map-root-user"]
+
+        # toybox unshare -R does not imply -U, so explicitly say so.
+        args.append("--user")
+
+        args.extend([shutil.which("bash"), "-c"])
+
+        test_args = [sys.executable, __file__]
+        test_args.extend(f"--bazel-arg={arg}" for arg in arguments.bazel_args)
+        test_args.extend(f"--bazel-wrapper-arg={arg}"
+                         for arg in arguments.bazel_wrapper_args)
+        test_args.append(f"--mount-spec={_serialize_mount_spec(mount_spec)}")
+        test_args.append(f"--link-spec={_serialize_link_spec(link_spec)}")
+        test_args.append(self.id().removeprefix("__main__."))
+        args.append(" ".join(shlex.quote(str(test_arg))
+                             for test_arg in test_args))
+
+        Exec.check_call(args)
+
 
 # NOTE: It requires a branch with ABI monitoring enabled.
 #   Include these using the flag --include-abi-tests
@@ -418,6 +599,26 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
         self.ddk_workspace = (pathlib.Path(__file__).resolve().parent /
                               "ddk_workspace_test")
 
+    @classmethod
+    def _get_projects(cls) -> list[RepoProject]:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--repo_manifest", type=_require_absolute_path)
+        known, _ = parser.parse_known_args(arguments.bazel_wrapper_args)
+        if known.repo_manifest:
+            with open(known.repo_manifest) as manifest_file:
+                return cls._get_projects_from_manifest(manifest_file)
+
+        manifest_content = Exec.check_output(["repo", "manifest"])
+        manifest_file = io.StringIO(manifest_content)
+        return cls._get_projects_from_manifest(manifest_file)
+
+    @staticmethod
+    def _get_projects_from_manifest(manifest_file: TextIO) -> list[RepoProject]:
+        dom = xml.dom.minidom.parse(manifest_file)
+        project_elements = dom.documentElement.getElementsByTagName("project")
+        return [RepoProject.from_element(element)
+                for element in project_elements]
+
     def test_ddk_workspace_below_kleaf_module(self):
         """Tests that DDK workspace is below @kleaf"""
         self._run_ddk_workspace_setup_test(self.real_kleaf_repo)
@@ -425,32 +626,41 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
     def test_kleaf_module_below_ddk_workspace(self):
         """Tests that @kelaf is below DDK workspace"""
         kleaf_repo = self.ddk_workspace / "external/kleaf"
-        this_test = self.id().removeprefix("__main__.")
-        if not arguments.mounted_kleaf_repo:
-            self._mount_and_run(kleaf_repo=kleaf_repo, test=this_test)
+        if not arguments.mount_spec:
+            mount_spec = {
+                self.real_kleaf_repo: kleaf_repo
+            }
+            self._unshare_mount_run(mount_spec=mount_spec, link_spec=LinkSpec())
             return
-        self._run_ddk_workspace_setup_test(arguments.mounted_kleaf_repo)
+        self._run_ddk_workspace_setup_test(kleaf_repo)
 
-    def _mount_and_run(self, kleaf_repo: pathlib.Path, test: str):
-        args = [shutil.which("unshare"), "--mount", "--map-root-user"]
+    def test_setup_with_prebuilts(self):
+        """Tests that init_ddk --prebuilts_dir & _ddk_headers_archive works."""
+        self._check_call("run", [f"//{self._common()}:kernel_aarch64_dist"])
 
-        # toybox unshare -R does not imply -U, so explicitly say so.
-        args.append("--user")
+        kleaf_repo = self.ddk_workspace / "external/kleaf"
 
-        args.extend([shutil.which("bash"), "-c"])
+        if not arguments.mount_spec:
+            mount_spec, link_spec = self._get_project_mount_link_spec(
+                kleaf_repo, ["ddk", "ddk-external"],
+            )
 
-        test_args = [sys.executable, __file__]
-        test_args.extend(f"--bazel-arg={arg}" for arg in arguments.bazel_args)
-        test_args.extend(f"--bazel-wrapper-arg={arg}"
-                         for arg in arguments.bazel_wrapper_args)
-        test_args.append(f"--mounted-kleaf-repo={kleaf_repo}")
-        test_args.append(test)
-        args.append(" ".join(shlex.quote(str(test_arg))
-                             for test_arg in test_args))
+            self._unshare_mount_run(mount_spec=mount_spec, link_spec=link_spec)
+            return
 
-        Exec.check_call(args)
+        real_prebuilts_dir = self.real_kleaf_repo / "out/kernel_aarch64/dist"
+        prebuilts_dir = self.ddk_workspace / "gki_prebuilts"
+        self._run_ddk_workspace_setup_test(
+            kleaf_repo,
+            prebuilts_dir=prebuilts_dir,
+            local=False,
+            url_fmt=f"file://{real_prebuilts_dir}/{{filename}}")
 
-    def _run_ddk_workspace_setup_test(self, kleaf_repo: pathlib.Path):
+    def _run_ddk_workspace_setup_test(self,
+                                      kleaf_repo: pathlib.Path,
+                                      prebuilts_dir: pathlib.Path | None = None,
+                                      local: bool = True,
+                                      url_fmt: str | None = None):
         # kleaf_repo relative to ddk_workspace
         kleaf_repo_rel = self._force_relative_to(
             kleaf_repo, self.ddk_workspace)
@@ -468,19 +678,21 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
         self.addCleanup(Exec.check_call, git_clean_args,
                         cwd=self.ddk_workspace)
 
-        if kleaf_repo != self.real_kleaf_repo:
-            Exec.check_call([shutil.which("mount"), "--bind", "-o", "ro",
-                             str(self.real_kleaf_repo), str(kleaf_repo)])
-            self.addCleanup(Exec.check_call,
-                            [shutil.which("umount"), str(kleaf_repo)])
+        self._mount(kleaf_repo)
 
-        self._check_call("run", [
+        args = [
             "//build/kernel:init_ddk",
             "--",
-            "--local",
             f"--kleaf_repo={kleaf_repo}",
             f"--ddk_workspace={self.ddk_workspace}",
-        ])
+        ]
+        if local:
+            args.append("--local")
+        if prebuilts_dir:
+            args.append(f"--prebuilts_dir={prebuilts_dir}")
+        if url_fmt:
+            args.append(f"--url_fmt={url_fmt}")
+        self._check_call("run", args)
         Exec.check_call([
             sys.executable,
             str(self.ddk_workspace / "extra_setup.py"),
@@ -489,29 +701,16 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
         ])
 
         self._check_call("clean", ["--expunge"], cwd=self.ddk_workspace)
-        self._check_call("test", ["//tests"], cwd=self.ddk_workspace)
+
+        args = []
+        # Switch base kernel when using prebuilts
+        if prebuilts_dir:
+            args.append("--//tests:kernel=@gki_prebuilts//kernel_aarch64")
+        args.append("//tests")
+        self._check_call("test", args, cwd=self.ddk_workspace)
 
         # Delete generated files
         self._check_call("clean", ["--expunge"], cwd=self.ddk_workspace)
-
-    @staticmethod
-    def _force_relative_to(path: pathlib.Path, other: pathlib.Path):
-        """Naive implementation of pathlib.Path.relative_to(walk_up)"""
-        if sys.version_info[0] == 3 and sys.version_info[1] >= 12:
-            return path.relative_to(other, walk_up=True)
-
-        path = path.resolve()
-        other = other.resolve()
-
-        if path.is_relative_to(other):
-            return path.relative_to(other)
-
-        if (len(path.parts) <= len(other.parts) and
-                other.parts[:len(path.parts)] == path.parts):
-            parts = [".."] * (len(other.parts) - len(path.parts))
-            return pathlib.Path(*parts)
-        raise ValueError(
-            f"Cannot calculate relative path from {path} to {other}")
 
 
 # Quick integration tests. Each test case should finish within 1 minute.
