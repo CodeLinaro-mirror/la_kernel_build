@@ -78,9 +78,6 @@ export MODULES_ARCHIVE=modules.tar.gz
 
 export TZ=UTC
 export LC_ALL=C
-# TODO(b/291918087): KERNEL_DIR is modified with
-#   KLEAF_REDECLARE_KERNEL_DIR_UNDER_DYNAMIC_KLEAF_REPO_WORKSPACE_ROOT, making
-#   the value here incorrect.
 if [ -z "${SOURCE_DATE_EPOCH}" ]; then
   if [[ -n "${KLEAF_SOURCE_DATE_EPOCHS}" ]]; then
     export SOURCE_DATE_EPOCH=$(extract_git_metadata "${KLEAF_SOURCE_DATE_EPOCHS}" "${KERNEL_DIR}" SOURCE_DATE_EPOCH)
@@ -119,16 +116,6 @@ KLEAF_INTERNAL_BUILDTOOLS_PREBUILT_BIN
 LLD_COMPILER_RT="-fuse-ld=lld --rtlib=compiler-rt"
 if [[ -n "${NDK_TRIPLE}" ]]; then
   NDK_DIR=${ROOT_DIR}/prebuilts/ndk-r26
-  if [[ ! -d "${NDK_DIR}" ]]; then
-    # Kleaf/Bazel will checkout the ndk to a different directory than
-    # build.sh.
-    NDK_DIR=${ROOT_DIR}/external/prebuilt_ndk
-    if [[ ! -d "${NDK_DIR}" ]]; then
-      echo "ERROR: NDK_TRIPLE set, but unable to find prebuilts/ndk." 1>&2
-      echo "Did you forget to checkout prebuilts/ndk?" 1>&2
-      exit 1
-    fi
-  fi
   USERCFLAGS="--target=${NDK_TRIPLE} "
   USERCFLAGS+="--sysroot=${NDK_DIR}/toolchains/llvm/prebuilt/linux-x86_64/sysroot "
   # Some kernel headers trigger -Wunused-function for unused static functions

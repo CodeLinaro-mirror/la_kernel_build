@@ -54,6 +54,12 @@ new_kleaf_local_repository(
     path = "prebuilts/ndk-r26",
 )
 
+new_kleaf_local_repository(
+    name = "dtc",
+    build_file = "msm-kernel/BUILD.dtc",
+    path = "external/dtc",
+)
+
 kernel_toolchain_ext = use_extension("//build/kernel/kleaf:kernel_toolchain_ext.bzl", "kernel_toolchain_ext")
 use_repo(kernel_toolchain_ext, "kernel_toolchain_info")
 use_repo(kernel_toolchain_ext, "kleaf_clang_toolchain")
@@ -85,12 +91,12 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_pkg",
-    version = "0.9.1",
+    version = "0.10.1",
 )
 
 bazel_dep(
     name = "rules_rust",
-    version = "0.39.0",
+    version = "0.40.0",
 
     # If RUSTC_VERSION is set in kernel_toolchain_ext, kernel_build depends
     # on rules_rust, so rules_rust is needed for at least GKI.

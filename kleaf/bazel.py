@@ -15,9 +15,9 @@
 import argparse
 import os
 import pathlib
+import re
 import shlex
 import shutil
-import subprocess
 import sys
 import textwrap
 from typing import Tuple, Optional
@@ -37,6 +37,7 @@ _QUERY_TARGETS_ARG = 'kind("kernel_build rule", //... except attr("tags", \
 _QUERY_ABI_TARGETS_ARG = 'kind("(update_source_file|abi_update) rule", //... except attr("tags", \
     "manual", //...) except //.source_date_epoch_dir/... except //out/...)'
 
+_REPO_BOUNDARY_FILES = ("MODULE.bazel", "REPO.bazel", "WORKSPACE.bazel", "WORKSPACE")
 
 def _require_absolute_path(p: str | pathlib.Path) -> pathlib.Path:
     p = pathlib.Path(p)
@@ -80,12 +81,7 @@ class BazelWrapper(KleafHelpPrinter):
 
         self.bazel_path = self.kleaf_repo_dir / _BAZEL_REL_PATH
 
-        # Root of the top level workspace (named "@"), where WORKSPACE
-        # is located. This is not necessarily
-        # equal to kleaf_repo_dir, especially when Kleaf tooling is in a subworkspace.
-        self.workspace_dir = pathlib.Path(subprocess.check_output(
-            [self.bazel_path, "info", "workspace"],
-            text=True).strip())
+        self.workspace_dir = self._get_workspace_dir()
 
         command_idx = None
         for idx, arg in enumerate(bazel_args):
@@ -111,6 +107,37 @@ class BazelWrapper(KleafHelpPrinter):
         self._parse_startup_options()
         self._parse_command_args()
         self._rebuild_kleaf_help_args()
+
+    @classmethod
+    def _get_workspace_dir(cls):
+        """Returns Root of the top level workspace (named "@")
+
+        where WORKSPACE is located. This is not necessarily equal to
+        kleaf_repo_dir, especially when Kleaf tooling is in a submodule.
+        """
+
+        # See Bazel's implementation at:
+        # https://github.com/bazelbuild/bazel/blob/master/src/main/cpp/workspace_layout.cc
+
+        possible_workspace = pathlib.Path.cwd()
+        while possible_workspace.parent != possible_workspace: # is not root directory
+            if cls._is_workspace(possible_workspace):
+                return possible_workspace
+            possible_workspace = possible_workspace.parent
+
+        sys.stderr.write(textwrap.dedent("""\
+            ERROR: Unable to determine root of repository. See
+                https://bazel.build/external/overview#repository
+            """))
+        sys.exit(1)
+
+    @staticmethod
+    def _is_workspace(possible_workspace: pathlib.Path):
+        for boundary_file in _REPO_BOUNDARY_FILES:
+            if (possible_workspace / boundary_file).is_file():
+                return True
+        return False
+
 
     def add_startup_option_to_parser(self, parser):
         group = parser.add_argument_group(
@@ -194,6 +221,9 @@ class BazelWrapper(KleafHelpPrinter):
         group.add_argument(
             "--make_jobs", metavar="JOBS", type=int, default=None,
             help="--jobs to Kbuild")
+        group.add_argument(
+            "--make_keep_going", action="store_true", default=False,
+            help="Add --keep_going to Kbuild")
         group.add_argument(
             "--cache_dir", metavar="PATH",
             type=_require_absolute_path,
@@ -279,6 +309,8 @@ class BazelWrapper(KleafHelpPrinter):
         if self.known_args.make_jobs is not None:
             self.env["KLEAF_MAKE_JOBS"] = str(self.known_args.make_jobs)
 
+        self.env["KLEAF_MAKE_KEEP_GOING"] = "true" if self.known_args.make_keep_going else "false"
+
         if self.known_args.repo_manifest is not None:
             self.env["KLEAF_REPO_MANIFEST"] = self.known_args.repo_manifest
 
@@ -295,6 +327,9 @@ class BazelWrapper(KleafHelpPrinter):
 
     def _handle_bazelrc(self):
         """Rewrite bazelrc files."""
+        if self.known_startup_options.help:
+            return
+
         self.gen_bazelrc_dir = self.absolute_out_dir / "bazel/bazelrc"
         os.makedirs(self.gen_bazelrc_dir, exist_ok=True)
 
@@ -339,10 +374,9 @@ class BazelWrapper(KleafHelpPrinter):
                 build --//build/kernel/kleaf:cache_dir={shlex.quote(str(self.known_args.cache_dir))}
             """))
 
-        if not self.known_startup_options.help:
-            self.transformed_startup_options += self._transform_bazelrc_files([
-                cache_dir_bazelrc,
-            ])
+        self.transformed_startup_options += self._transform_bazelrc_files([
+            cache_dir_bazelrc,
+        ])
 
         self.transformed_startup_options += self._transform_bazelrc_files([
             # Toolchains and platforms
@@ -513,7 +547,6 @@ class BazelWrapper(KleafHelpPrinter):
 
         if run_as_subprocess:
             import asyncio
-            import re
             asyncio.run(run(final_args, self.env, filter_regex, epilog_coro))
         else:
             os.execve(path=self.bazel_path, argv=final_args, env=self.env)
@@ -528,7 +561,6 @@ async def output_filter(input_stream, output_stream, filter_regex):
 
     If filter_regex is None, don't filter lines.
     """
-    import re
     while not input_stream.at_eof():
         output = await input_stream.readline()
         if filter_regex:

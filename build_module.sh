@@ -268,7 +268,7 @@ for EXT_MOD in ${EXT_MODULES}; do
     pkg_path="$(dirname "$pkg_path")"
 
     # If we see a WORKSPACE file, we've gone too far
-    if [ -f "${pkg_path}/WORKSPACE" ]; then
+    if [ -f "${pkg_path}/WORKSPACE.bzlmod" ]; then
       echo "error - no Bazel package associated with $module_path"
       pkg_path=""
       break
