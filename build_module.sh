@@ -225,7 +225,11 @@ if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
   cp ${KERNEL_KIT}/.config ${OUT_DIR}/
   (
     cd "${KERNEL_DIR}"
-    KCONFIG_NOSILENTUPDATE=1 make O="${OUT_DIR}" "${TOOL_ARGS[@]}" ${MAKE_ARGS} modules_prepare
+    make O="${OUT_DIR}" "${TOOL_ARGS[@]}" ${MAKE_ARGS} modules_prepare
+    if ! d=$(diff -Naurp ${KERNEL_KIT}/.config ${OUT_DIR}/.config); then
+        echo "CONFIG diff between ${KERNEL_KIT}/.config ${OUT_DIR}/.config"
+        echo $d
+    fi
   )
   set +x
 fi
@@ -268,7 +272,9 @@ for EXT_MOD in ${EXT_MODULES}; do
     pkg_path="$(dirname "$pkg_path")"
 
     # If we see a WORKSPACE file, we've gone too far
-    if [ -f "${pkg_path}/WORKSPACE.bzlmod" ]; then
+    if [ -f "${pkg_path}/WORKSPACE.bzlmod" ] \
+       && [ ! $EXT_MOD =~ devicetree ]
+    then
       echo "error - no Bazel package associated with $module_path"
       pkg_path=""
       break
