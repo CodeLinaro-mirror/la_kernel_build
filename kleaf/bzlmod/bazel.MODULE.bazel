@@ -43,6 +43,18 @@ new_kleaf_local_repository(
 )
 
 new_kleaf_local_repository(
+    name = "toybox",
+    build_file = "build/kernel/kleaf/toybox.BUILD",
+    path = "external/toybox",
+)
+
+new_kleaf_local_repository(
+    name = "zlib",
+    build_file = "build/kernel/kleaf/zlib.BUILD",
+    path = "external/zlib",
+)
+
+new_kleaf_local_repository(
     name = "zopfli",
     build_file = "build/kernel/kleaf/zopfli.BUILD",
     path = "external/zopfli",
@@ -83,7 +95,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "platforms",
-    version = "0.0.8",
+    version = "0.0.10",
 )
 bazel_dep(
     name = "rules_cc",
@@ -92,31 +104,6 @@ bazel_dep(
 bazel_dep(
     name = "rules_pkg",
     version = "0.10.1",
-)
-
-bazel_dep(
-    name = "rules_rust",
-    version = "0.40.0",
-
-    # If RUSTC_VERSION is set in kernel_toolchain_ext, kernel_build depends
-    # on rules_rust, so rules_rust is needed for at least GKI.
-    # However, if @kleaf is used as a dependent module in a DDKv2 set up and
-    # drivers are building against prebuilts, kernel_build might not be
-    # involved, and rules_rust might not be needed. If a DDKv2 driver is
-    # building against a core kernel built from source, it needs to have
-    # a direct dependency against rules_rust and call rust.toolchain() as well.
-    dev_dependency = True,
-)
-rust = use_extension(
-    "@rules_rust//rust:extensions.bzl",
-    "rust",
-    # See bazel_dep(name = "rules_rust")
-    dev_dependency = True,
-)
-rust.toolchain(
-    edition = "2021",
-    # If in a future we need to specify a version, keep it in sync with //prebuilts/rust/linux-x86/
-    # versions = ["1.70.2"],
 )
 
 bazel_dep(
@@ -169,9 +156,4 @@ local_path_override(
 local_path_override(
     module_name = "rules_python",
     path = "external/bazelbuild-rules_python",
-)
-
-local_path_override(
-    module_name = "rules_rust",
-    path = "external/bazelbuild-rules_rust",
 )

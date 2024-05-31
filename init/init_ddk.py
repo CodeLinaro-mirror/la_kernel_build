@@ -17,6 +17,7 @@
 """Configures the project layout to build DDK modules."""
 
 import argparse
+import concurrent.futures
 import dataclasses
 import json
 import logging
@@ -24,9 +25,9 @@ import pathlib
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
-import textwrap
-import urllib
+import urllib.parse
 
 _TOOLS_BAZEL = "tools/bazel"
 _DEVICE_BAZELRC = "device.bazelrc"
@@ -50,7 +51,6 @@ kernel_prebuilt_ext = use_extension(
 )
 kernel_prebuilt_ext.declare_kernel_prebuilts(
     name = "gki_prebuilts",
-    download_configs = {download_configs},
     local_artifact_path = "{prebuilts_dir_relative}",
 )
 use_repo(kernel_prebuilt_ext, "gki_prebuilts")
@@ -74,6 +74,7 @@ class KleafProjectSetter:
     url_fmt: str | None
 
     def _symlink_tools_bazel(self):
+        """Creates the symlink tools/bazel."""
         if not self.ddk_workspace or not self.kleaf_repo:
             return
         # Calculate the paths.
@@ -85,7 +86,7 @@ class KleafProjectSetter:
         tools_bazel.symlink_to(kleaf_tools_bazel)
 
     @staticmethod
-    def _update_file(path: pathlib.Path | str, update: str):
+    def _update_file(path: pathlib.Path, update: str):
         """Updates the content of a section between markers in a file."""
         add_content: bool = False
         skip_line: bool = False
@@ -121,6 +122,10 @@ class KleafProjectSetter:
 
     def _try_rel_workspace(self, path: pathlib.Path):
         """Tries to convert |path| to be relative to ddk_workspace."""
+        if not self.ddk_workspace:
+            raise KleafProjectSetterError(
+                "ERROR: _try_rel_workspace called without --ddk_workspace set!"
+            )
         try:
             return path.relative_to(self.ddk_workspace)
         except ValueError:
@@ -132,11 +137,30 @@ class KleafProjectSetter:
             )
             return path
 
-    def _read_download_configs(self) -> str:
-        download_configs = self.prebuilts_dir / "download_configs.json"
-        with open(download_configs, "r", encoding="utf-8") as config:
-            # Compress the representation by removing empty spaces to save some space.
-            return repr(json.dumps(json.load(config), separators=(",", ":")))
+    def _get_local_path_overrides(self):
+        """Naive algorithm to extract local_path_override()'s from local @kleaf."""
+        path_attr_prefix = 'path = "'
+        section = []
+        overrides = []
+        module_bazel = self.kleaf_repo / _MODULE_BAZEL_FILE
+        # Modify path so it is relative to the current DDK workspace.
+        kleaf_repo = self._try_rel_workspace(self.kleaf_repo)
+        with open(module_bazel, "r", encoding="utf-8") as src:
+            for line in src:
+                if line.startswith("local_path_override("):
+                    section.append(line)
+                    continue
+                if not section:
+                    continue
+                elif line.lstrip().startswith(path_attr_prefix):
+                    line = line.strip().removeprefix(path_attr_prefix)
+                    line = line.removesuffix('",')
+                    line = f'    path = "{kleaf_repo / line}",\n'
+                section.append(line)
+                if line.strip() == ")":
+                    overrides.append("".join(section))
+                    section.clear()
+        return "".join(overrides)
 
     def _generate_module_bazel(self):
         """Configures the dependencies for the DDK workspace."""
@@ -148,40 +172,53 @@ class KleafProjectSetter:
             module_bazel_content += _KLEAF_DEPENDENCY_TEMPLATE.format(
                 kleaf_repo_relative=self._try_rel_workspace(self.kleaf_repo),
             )
+            module_bazel_content += self._get_local_path_overrides()
+            # b/338440785 Due to an issue in Bazel, rules_cc seems to be
+            #  implicitly added in a fallback WORKSPACE.bzlmod file, hence
+            #  forcing an empty one here.
+            workspace_bzlmod = self.ddk_workspace / "WORKSPACE.bzlmod"
+            workspace_bzlmod.touch(exist_ok=True)
         if self.prebuilts_dir:
             module_bazel_content += "\n"
             module_bazel_content += _LOCAL_PREBUILTS_CONTENT_TEMPLATE.format(
-                # TODO: b/328770706 - Use download_configs_file when available.
-                download_configs=self._read_download_configs(),
                 # The prebuilts directory must be relative to the DDK workspace.
                 prebuilts_dir_relative=self._try_rel_workspace(
                     self.prebuilts_dir
                 ),
             )
-        if module_bazel_content:
-            self._update_file(module_bazel, module_bazel_content)
-        else:
+        if not module_bazel_content:
             logging.info("Nothing to update in %s", module_bazel)
+        self._update_file(module_bazel, module_bazel_content)
 
     def _generate_bazelrc(self):
+        """Creates a Bazel configuration file with the minimum setup required."""
         if not self.ddk_workspace or not self.kleaf_repo:
             return
         bazelrc = self.ddk_workspace / _DEVICE_BAZELRC
 
         kleaf_repo = self._try_rel_workspace(self.kleaf_repo)
         if not kleaf_repo.is_absolute():
-            kleaf_repo = (pathlib.Path("%workspace%") / kleaf_repo)
+            kleaf_repo = pathlib.Path("%workspace%") / kleaf_repo
+
+        bazelrc_content = []
+        bazelrc_content.append((
+            "common"
+            f" --registry=file://{kleaf_repo}/external/bazelbuild-bazel-central-registry"
+        ))
+        # Explicitly disable internet usage.
+        bazelrc_content.append("common --config=no_internet")
 
         self._update_file(
             bazelrc,
-            textwrap.dedent(f"""\
-            common --config=internet
-            common --registry=file://{kleaf_repo}/external/bazelbuild-bazel-central-registry
-            """),
+            "\n".join(bazelrc_content),
         )
 
-    def _get_url(self, remote_filename: str) -> str:
+    def _get_url(self, remote_filename: str) -> str | None:
         """Returns a valid url when it can be formed with target and id."""
+        if not self.url_fmt:
+            raise KleafProjectSetterError(
+                "ERROR: _get_url called without url_fmt set!"
+            )
         url = self.url_fmt.format(
             build_id=self.build_id,
             build_target=self.build_target,
@@ -196,65 +233,177 @@ class KleafProjectSetter:
             return None
         return url
 
-    def _download(self, remote_filename: str, out_file_name: str):
+    def _can_download_artifacts(self):
+        """Validates that download are possible within the current context."""
         if not self.url_fmt:
-            logging.error(
-                "Unable to download file %s because --url_fmt was not set.",
-                remote_filename,
-            )
-            return
+            return False
+        # Check if build_id is missing and url_fmt has an anchor depending on it.
+        if self._get_url("") is None:
+            return False
+        return True
+
+    def _download(
+        self,
+        remote_filename: str,
+        out_file_name: pathlib.Path,
+        mandatory: bool = True,
+    ) -> None:
+        """Given the url_fmt, build_id and build_target downloads a remote file.
+
+        Args:
+            remote_filename: File name for the file, it can contain anchors for,
+              build_id, target and filename.
+            out_file_name: Destination place for the download.
+            mandatory: When set to true, the download fails when the file could
+              not be downloaded.
+        """
         url = self._get_url(remote_filename)
         if not url:
-            logging.error(
-                "Unable to download %s file because --build_id is missing.",
-                remote_filename,
+            raise KleafProjectSetterError(
+                f"ERROR: Unable to download {remote_filename}: can't infer URL"
             )
-            return
         # Workaround: Rely on host keychain to download files.
         # This is needed otheriwese downloads fail when running this script
         #   using the hermetic Python toolchain.
-        subprocess.check_call(
+        subprocess.run(
             [
                 "python3",
                 pathlib.Path(__file__).parent / "init_download.py",
                 url,
                 out_file_name,
             ],
+            stderr=subprocess.STDOUT if mandatory else subprocess.DEVNULL,
+            check=mandatory,
         )
 
-    def _handle_ddk_workspace(self):
+    def _infer_download_list(self) -> dict[str, dict]:
+        """Infers the list of files to be downloaded using download_configs.json."""
+        if not self.prebuilts_dir:
+            raise KleafProjectSetterError(
+                "ERROR: _infer_download_list called without --prebuilts_dir!"
+            )
+        download_configs = self.prebuilts_dir / "download_configs.json"
+        with open(download_configs, "w+", encoding="utf-8") as config:
+            self._download("download_configs.json", pathlib.Path(config.name))
+            return json.load(config)
+
+    def _download_prebuilts(self) -> None:
+        """Downloads prebuilts from a given build_id when provided."""
+        if not self.prebuilts_dir:
+            raise KleafProjectSetterError(
+                "ERROR: _download_prebuilts called without --prebuilts_dir!"
+            )
+        logging.info("Downloading prebuilts into %s", self.prebuilts_dir)
+        files_dict = self._infer_download_list()
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = []
+            for file, config in files_dict.items():
+                dst = self.prebuilts_dir / file
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                futures.append(
+                    executor.submit(
+                        self._download, file, dst, config["mandatory"]
+                    )
+                )
+            for complete_ret in concurrent.futures.as_completed(futures):
+                complete_ret.result()  # Raise exception if any
+
+    def _handle_ddk_workspace(self) -> None:
         if not self.ddk_workspace:
             return
         self.ddk_workspace.mkdir(parents=True, exist_ok=True)
 
-    def _handle_kleaf_repo(self):
+    def _handle_kleaf_repo(self) -> None:
         if not self.kleaf_repo:
             return
         self.kleaf_repo.mkdir(parents=True, exist_ok=True)
         # TODO: b/328770706 - According to the needs, syncing git repos logic should go here.
 
-    def _handle_prebuilts(self):
-        if not self.ddk_workspace or not self.prebuilts_dir:
+        self._populate_kleaf_repo_extra_files()
+
+    def _handle_prebuilts(self) -> None:
+        if not self.prebuilts_dir:
             return
         self.prebuilts_dir.mkdir(parents=True, exist_ok=True)
-        # TODO: b/328770706 - When build_id is given dowloand artifacts here.
+        if self._can_download_artifacts():
+            self._download_prebuilts()
 
-    def _run(self):
+    def _populate_kleaf_repo_extra_files(self) -> None:
+        """Populates kleaf_repo by adding extra files"""
+        if self.local:
+            logging.info("Skipped populating kleaf_repo with --local.")
+            # --local assumes the kernel source tree is complete.
+            return
+        if not self.kleaf_repo:
+            logging.info(
+                "Skipped populating --kleaf_repo because it is unspecified"
+            )
+            return
+        if not self.prebuilts_dir:
+            logging.info(
+                "No prebuilts specified, skip populating %s", self.kleaf_repo
+            )
+            return
+        self._extract_headers_archive(self.prebuilts_dir, self.kleaf_repo)
+
+        build_config_constants = self.prebuilts_dir / "build.config.constants"
+        if not build_config_constants.is_file():
+            logging.warning(
+                "%s is not a file, skip copying", build_config_constants
+            )
+            return
+        shutil.copy(
+            build_config_constants,
+            self.kleaf_repo / "common/build.config.constants",
+        )
+        if not (self.kleaf_repo / "common/BUILD.bazel").is_file():
+            (self.kleaf_repo / "common/BUILD.bazel").write_text("")
+
+    @staticmethod
+    def _extract_headers_archive(
+        prebuilts_dir: pathlib.Path, kleaf_repo: pathlib.Path
+    ):
+        """Extracts DDK headers archive from prebuilts_dir into kleaf_repo"""
+        # TODO: This should be target-specific. The name of the output is
+        # currently (2024-05-16) defined by common/BUILD.bazel, but it may
+        # change in the future.
+        header_archives = list(
+            prebuilts_dir.glob("*_ddk_headers_archive.tar.gz")
+        )
+        if not header_archives:
+            logging.warning(
+                "No _ddk_headers_archive.tar.gz found in %s, "
+                "skipping header extraction.",
+                prebuilts_dir,
+            )
+            return
+        if len(header_archives) > 1:
+            raise KleafProjectSetterError(
+                "Multiple _ddk_headers_archive.tar.gz found in "
+                f"{prebuilts_dir}: {header_archives}"
+            )
+        logging.info(
+            "Extracting header archive %s to %s", header_archives[0], kleaf_repo
+        )
+        with tarfile.open(header_archives[0]) as tar:
+            tar.extractall(kleaf_repo)
+
+    def _run(self) -> None:
         self._symlink_tools_bazel()
         self._generate_module_bazel()
         self._generate_bazelrc()
 
-    def run(self):
+    def run(self) -> None:
         self._handle_ddk_workspace()
-        self._handle_kleaf_repo()
         self._handle_prebuilts()
+        self._handle_kleaf_repo()
         self._run()
 
 
 if __name__ == "__main__":
 
-    def abs_path(path: str) -> pathlib.Path | None:
-        path = pathlib.Path(path)
+    def abs_path(path_string: str) -> pathlib.Path | None:
+        path = pathlib.Path(path_string)
         if not path.is_absolute():
             raise ValueError(f"{path} is not an absolute path.")
         return path
@@ -308,7 +457,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO,
                         format="%(levelname)s: %(message)s")
-
+    # Validate pre-condition.
+    if args.local and not args.kleaf_repo:
+        parser.error("--local requires --kleaf_repo.")
     try:
         KleafProjectSetter(**vars(args)).run()
     except KleafProjectSetterError as e:
