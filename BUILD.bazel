@@ -199,6 +199,13 @@ hermetic_tools(
             ":toybox_find": "find",
         },
     }) | select({
+        "//build/kernel/kleaf:toolchain_from_sources_is_true": {
+            "@lz4": "lz4",
+        },
+        "//conditions:default": {
+            "//prebuilts/kernel-build-tools:linux-x86/bin/lz4": "lz4",
+        },
+    }) | select({
         "//build/kernel/kleaf:gzip_is_pigz_is_true": {
             "@pigz": "gzip",
         },
