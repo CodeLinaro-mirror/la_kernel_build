@@ -53,14 +53,27 @@ function rel_path2() {
 # $1 directory of kernel modules ($1/lib/modules/x.y)
 # $2 flags to pass to depmod
 # $3 kernel version
+# $4 Optional: File with list of modules to run depmod on.
+#              If left empty, depmod will run on all modules
+#              under $1/lib/modules/x.y
 function run_depmod() {
   (
     local ramdisk_dir=$1
     local depmod_stdout
     local depmod_stderr=$(mktemp)
+    local version=$3
+    local modules_list_file=$4
+    local modules_list=""
+
+    if [[ -n "${modules_list_file}" ]]; then
+      while read -r line; do
+        # depmod expects absolute paths for module files
+        modules_list+="${ramdisk_dir}/lib/modules/${version}/${line} "
+      done <${modules_list_file}
+    fi
 
     cd ${ramdisk_dir}
-    if ! depmod_stdout="$(depmod $2 -F ${DIST_DIR}/System.map -b . $3 \
+    if ! depmod_stdout="$(depmod $2 -F ${DIST_DIR}/System.map -b . ${version} ${modules_list} \
         2>${depmod_stderr})"; then
       echo "$depmod_stdout"
       cat ${depmod_stderr} >&2
@@ -78,12 +91,60 @@ function run_depmod() {
   )
 }
 
+# $1 MODULES_LIST <File that contains the list of modules that need to be
+#                   loaded during first-stage init.>
+# $2 ADDITIONAL_MODULES_LIST <File that contains the list of additional modules
+#                           that need to be loaded from the initramfs.>
+# $3 MODULES_ORDER <File that contains the list of all modules in the order in which
+#                   they appear in Makefiles.>
+# $4 MODULES_OUTPUT_FILENAME <The name of the output modules.order file>
+function create_additional_modules_order() {
+  local modules_list_file=$1
+  local additional_modules_file=$2
+  local modules_order_file=$3
+  local modules_out_filename=$4
+  local tmp_all_modules_list_file
+
+  if [[ -f "${ROOT_DIR}/${additional_modules_file}" ]]; then
+    additional_modules_file="${ROOT_DIR}/${additional_modules_file}"
+  elif [[ "${additional_modules_file}" != /* ]]; then
+    echo "modules recovery list must be an absolute path or relative to ${ROOT_DIR}: ${additional_modules_file}" >&2
+    exit 1
+  elif [[ ! -f "${additional_modules_file}" ]]; then
+    echo "Failed to find modules list: ${additional_modules_file}" >&2
+    exit 1
+  fi
+
+  tmp_all_modules_list_file=$(mktemp)
+
+  cp ${modules_list_file} ${tmp_all_modules_list_file}
+  # Append to the first stage init modules
+  grep -v "^\#" ${additional_modules_file} >> ${tmp_all_modules_list_file}
+  grep -w -f ${tmp_all_modules_list_file} ${modules_order_file} > ${modules_out_filename}
+
+  rm ${tmp_all_modules_list_file}
+}
+
 # $1 MODULES_LIST, <File contains the list of modules that should go in the ramdisk>
 # $2 MODULES_STAGING_DIR    <The directory to look for all the compiled modules>
 # $3 IMAGE_STAGING_DIR  <The destination directory in which MODULES_LIST is
 #                        expected, and it's corresponding modules.* files>
 # $4 MODULES_BLOCKLIST, <File contains the list of modules to prevent from loading>
-# $5 flags to pass to depmod
+# $5 MODULES_RECOVERY_LIST <File contains the list of modules that should go in
+#                           the ramdisk but should only be loaded when booting
+#                           into recovery.
+#
+#                           This parameter is optional, and if not used, should
+#                           be passed as an empty string to ensure that the depmod
+#                           flags are assigned correctly.>
+# $6 MODULES_CHARGER_LIST <File contains the list of modules that should go in
+#                          the ramdisk but should only be loaded when booting
+#                          into charger mode.
+#
+#                          This parameter is optional, and if not used, should
+#                          be passed as an empty string to ensure that the
+#                          depmod flags are assigned correctly.>
+# $7 flags to pass to depmod
 function create_modules_staging() {
   local modules_list_file=$1
   local src_dir=$(echo $2/lib/modules/*)
@@ -91,8 +152,10 @@ function create_modules_staging() {
   local dest_dir=$3/lib/modules/${version}
   local dest_stage=$3
   local modules_blocklist_file=$4
-  local depmod_flags=$5
-  local list_order=$6
+  local modules_recoverylist_file=$5
+  local modules_chargerlist_file=$6
+  local depmod_flags=$7
+  local list_order=$8
 
   rm -rf ${dest_dir}
   mkdir -p ${dest_dir}/kernel
@@ -172,6 +235,14 @@ function create_modules_staging() {
     else
       ! grep -w -f ${modules_list_filter} ${old_modules_list} > ${dest_dir}/modules.order
     fi
+    if [[ -n "${modules_recoverylist_file}" ]]; then
+      create_additional_modules_order "${modules_list_filter}" "${modules_recoverylist_file}" \
+        "${old_modules_list}" "${dest_dir}/modules.order.recovery"
+    fi
+    if [[ -n "${modules_chargerlist_file}" ]]; then
+      create_additional_modules_order "${modules_list_filter}" "${modules_chargerlist_file}" \
+        "${old_modules_list}" "${dest_dir}/modules.order.charger"
+    fi
     rm -f ${modules_list_filter} ${old_modules_list}
   fi
 
@@ -213,10 +284,26 @@ function create_modules_staging() {
         find * -type f -name "*.ko" | grep -f modules.name.remove - | xargs -r rm
         rm -rf modules.name.full modules.name.need modules.name.remove
       else
-      find * -type f -name "*.ko" | (grep -v -w -f modules.order -f $used_blocklist_modules - || true) | xargs -r rm
-     fi
+        local grep_flags="-v -w -f modules.order -f ${used_blocklist_modules} "
+        [[ -f modules.order.recovery ]] && grep_flags+="-f modules.order.recovery "
+        [[ -f modules.order.charger ]] && grep_flags+="-f modules.order.charger "
+        find * -type f -name "*.ko" | (grep ${grep_flags} - || true) | xargs -r rm
+      fi
     )
     rm $used_blocklist_modules
+  fi
+
+  # Run depmod to ensure that dependencies between all modules loaded during
+  # first stage init when booting into any other mode besides normal boot can be
+  # satisfied.
+  if [[ -f ${dest_dir}/modules.order.recovery ]]; then
+    run_depmod ${dest_stage} "${depmod_flags}" "${version}" "${dest_dir}/modules.order.recovery"
+    cp ${dest_dir}/modules.order.recovery ${dest_dir}/modules.load.recovery
+  fi
+
+  if [[ -f ${dest_dir}/modules.order.charger ]]; then
+    run_depmod ${dest_stage} "${depmod_flags}" "${version}" "${dest_dir}/modules.order.charger"
+    cp ${dest_dir}/modules.order.charger ${dest_dir}/modules.load.charger
   fi
 
   # Re-run depmod to detect any dependencies between in-kernel and external
@@ -230,8 +317,12 @@ function build_system_dlkm() {
   echo " Creating system_dlkm image"
 
   rm -rf ${SYSTEM_DLKM_STAGING_DIR}
+  # MODULES_[RECOVERY_LIST|CHARGER]_LIST should not influence system_dlkm, as
+  # GKI modules are not loaded when booting into either recovery or charger
+  # modes, so do not consider them, and pass empty strings instead.
   create_modules_staging "${SYSTEM_DLKM_MODULES_LIST:-${MODULES_LIST}}" "${MODULES_STAGING_DIR}" \
-    ${SYSTEM_DLKM_STAGING_DIR} "${SYSTEM_DLKM_MODULES_BLOCKLIST:-${MODULES_BLOCKLIST}}" "-e"
+    ${SYSTEM_DLKM_STAGING_DIR} "${SYSTEM_DLKM_MODULES_BLOCKLIST:-${MODULES_BLOCKLIST}}" \
+    "" "" "-e"
 
   local system_dlkm_root_dir=$(echo ${SYSTEM_DLKM_STAGING_DIR}/lib/modules/*)
   cp ${system_dlkm_root_dir}/modules.load ${DIST_DIR}/system_dlkm.modules.load
@@ -330,6 +421,11 @@ function build_vendor_dlkm() {
   fi
   build_image "${VENDOR_DLKM_STAGING_DIR}" "${vendor_dlkm_props_file}" \
     "${DIST_DIR}/vendor_dlkm.img" /dev/null
+
+  avbtool add_hashtree_footer \
+    --partition_name vendor_dlkm \
+    --hash_algorithm sha256 \
+    --image "${DIST_DIR}/vendor_dlkm.img"
 }
 
 function check_mkbootimg_path() {
@@ -546,12 +642,17 @@ function build_boot_images() {
           AVB_BOOT_PARTITION_NAME=${BOOT_IMAGE_FILENAME%%.*}
         fi
 
-        avbtool add_hash_footer \
-            --partition_name ${AVB_BOOT_PARTITION_NAME} \
-            --partition_size ${AVB_BOOT_PARTITION_SIZE} \
-            --image "${DIST_DIR}/${BOOT_IMAGE_FILENAME}" \
-            --algorithm ${AVB_BOOT_ALGORITHM} \
-            --key ${AVB_BOOT_KEY}
+        avb_sign_args=("add_hash_footer")
+        avb_sign_args+=("--partition_name" "${AVB_BOOT_PARTITION_NAME}")
+        avb_sign_args+=("--partition_size" "${AVB_BOOT_PARTITION_SIZE}")
+        avb_sign_args+=("--image" "${DIST_DIR}/${BOOT_IMAGE_FILENAME}")
+        avb_sign_args+=("--algorithm" "${AVB_BOOT_ALGORITHM}")
+        avb_sign_args+=("--key" "${AVB_BOOT_KEY}")
+
+        for prop in "${AVB_SIGN_BOOT_IMG_PROP[@]}"; do
+          avb_sign_args+=("--prop" "${prop}")
+        done
+        avbtool "${avb_sign_args[@]}"
       else
         echo "Missing the AVB_* flags. Failed to sign the boot image" 1>&2
         exit 1
@@ -599,30 +700,44 @@ function gki_get_boot_img_size() {
   echo "${!boot_size_var}"
 }
 
-# gki_add_avb_footer <image> <partition_size>
+# gki_add_avb_footer <image> <partition_size> <security_patch_level>
 function gki_add_avb_footer() {
+  local spl_date="$3"
+  local additional_props=""
+  if [ -n "${spl_date}" ]; then
+    additional_props="--prop com.android.build.boot.security_patch:${spl_date}"
+  fi
+
   avbtool add_hash_footer --image "$1" \
-    --partition_name boot --partition_size "$2"
+    --partition_name boot --partition_size "$2" \
+    ${additional_props}
 }
 
-# gki_dry_run_certify_bootimg <boot_image> <gki_artifacts_info_file>
+# gki_dry_run_certify_bootimg <boot_image> <gki_artifacts_info_file> <security_patch_level>
 # The certify_bootimg script will be executed on a server over a GKI
 # boot.img during the official certification process, which embeds
 # a GKI certificate into the boot.img. The certificate is for Android
 # VTS to verify that a GKI boot.img is authentic.
 # Dry running the process here so we can catch related issues early.
 function gki_dry_run_certify_bootimg() {
+  local spl_date="$3"
+  local additional_props=()
+  if [ -n "${spl_date}" ]; then
+    additional_props+=("--extra_footer_args" \
+      "--prop com.android.build.boot.security_patch:${spl_date}")
+  fi
+
   certify_bootimg --boot_img "$1" \
     --algorithm SHA256_RSA4096 \
     --key tools/mkbootimg/gki/testdata/testkey_rsa4096.pem \
     --gki_info "$2" \
-    --output "$1"
+    --output "$1" \
+    "${additional_props[@]}"
 }
 
 # build_gki_artifacts_info <output_gki_artifacts_info_file>
 function build_gki_artifacts_info() {
-  local artifacts_info="certify_bootimg_extra_args=--prop ARCH:${ARCH} \
---prop BRANCH:${BRANCH}"
+  local artifacts_info="certify_bootimg_extra_args=--prop ARCH:${ARCH} --prop BRANCH:${BRANCH}"
 
   if [ -n "${BUILD_NUMBER}" ]; then
     artifacts_info="${artifacts_info} --prop BUILD_NUMBER:${BUILD_NUMBER}"
@@ -643,6 +758,23 @@ function build_gki_artifacts_info() {
 # kernel images are optional, e.g., ${DIST_DIR}/Image.gz.
 function build_gki_boot_images() {
   local uncompressed_kernel_path=$1
+  # Pick a SPL date far enough in the future so that you can flash
+  # development GKI kernels on an unlocked device without wiping the
+  # userdata. This is for development purposes only and should be
+  # overwritten by the Android platform build to include an accurate SPL.
+  # Note, the certified GKI release builds will not include the SPL
+  # property.
+  local spl_month=$((($(date +'%m') + 3) % 12))
+  local spl_year="$(date +'%Y')"
+  if [ $((${spl_month} % 3)) -gt 0 ]; then
+    # Round up to the next quarterly platform release (QPR) month
+    spl_month=$((${spl_month} + 3 - (${spl_month} % 3)))
+  fi
+  if [ "${spl_month}" -lt "$(date +'%m')" ]; then
+    # rollover to the next year
+    spl_year="$((${spl_year} + 1))"
+  fi
+  local spl_date=$(printf "%d-%02d-05\n" ${spl_year} ${spl_month})
 
   if ! [ -f "${uncompressed_kernel_path}" ]; then
     echo "ERROR: '${uncompressed_kernel_path}' doesn't exist" >&2
@@ -679,9 +811,9 @@ function build_gki_boot_images() {
     "${MKBOOTIMG_PATH}" "${GKI_MKBOOTIMG_ARGS[@]}"
 
     gki_add_avb_footer "${boot_image_path}" \
-      "$(gki_get_boot_img_size "${compression}")"
+      "$(gki_get_boot_img_size "${compression}")" "${spl_date}"
     gki_dry_run_certify_bootimg "${boot_image_path}" \
-      "${GKI_ARTIFACTS_INFO_FILE}"
+      "${GKI_ARTIFACTS_INFO_FILE}" "${spl_date}"
     images_to_pack+=("${boot_image}")
   done
 
