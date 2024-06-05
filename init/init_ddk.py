@@ -22,9 +22,11 @@ import json
 import logging
 import pathlib
 import shutil
+import subprocess
 import sys
 import tempfile
 import textwrap
+import urllib
 
 _TOOLS_BAZEL = "tools/bazel"
 _DEVICE_BAZELRC = "device.bazelrc"
@@ -37,7 +39,7 @@ _KLEAF_DEPENDENCY_TEMPLATE = """\
 bazel_dep(name = "kleaf")
 local_path_override(
     module_name = "kleaf",
-    path = "{kleaf_repo}",
+    path = "{kleaf_repo_relative}",
 )
 """
 
@@ -115,7 +117,7 @@ class KleafProjectSetter:
                 output_file.write(_FILE_MARKER_BEGIN)
                 output_file.write(update + "\n")
                 output_file.write(_FILE_MARKER_END)
-            shutil.move(output_file.name, path)
+        shutil.move(output_file.name, path)
 
     def _try_rel_workspace(self, path: pathlib.Path):
         """Tries to convert |path| to be relative to ddk_workspace."""
@@ -144,7 +146,7 @@ class KleafProjectSetter:
         module_bazel_content = ""
         if self.kleaf_repo:
             module_bazel_content += _KLEAF_DEPENDENCY_TEMPLATE.format(
-                kleaf_repo=self.kleaf_repo,
+                kleaf_repo_relative=self._try_rel_workspace(self.kleaf_repo),
             )
         if self.prebuilts_dir:
             module_bazel_content += "\n"
@@ -165,12 +167,59 @@ class KleafProjectSetter:
         if not self.ddk_workspace or not self.kleaf_repo:
             return
         bazelrc = self.ddk_workspace / _DEVICE_BAZELRC
+
+        kleaf_repo = self._try_rel_workspace(self.kleaf_repo)
+        if not kleaf_repo.is_absolute():
+            kleaf_repo = (pathlib.Path("%workspace%") / kleaf_repo)
+
         self._update_file(
             bazelrc,
             textwrap.dedent(f"""\
             common --config=internet
-            common --registry=file:{self.kleaf_repo}/external/bazelbuild-bazel-central-registry
+            common --registry=file://{kleaf_repo}/external/bazelbuild-bazel-central-registry
             """),
+        )
+
+    def _get_url(self, remote_filename: str) -> str:
+        """Returns a valid url when it can be formed with target and id."""
+        url = self.url_fmt.format(
+            build_id=self.build_id,
+            build_target=self.build_target,
+            filename=urllib.parse.quote(remote_filename, safe=""),  # / -> %2F
+        )
+        url_with_fake_id = self.url_fmt.format(
+            build_id="__FAKE_BUILD_NUMBER_PLACEHOLDER__",
+            build_target=self.build_target,
+            filename=urllib.parse.quote(remote_filename, safe=""),  # / -> %2F
+        )
+        if not self.build_id and url != url_with_fake_id:
+            return None
+        return url
+
+    def _download(self, remote_filename: str, out_file_name: str):
+        if not self.url_fmt:
+            logging.error(
+                "Unable to download file %s because --url_fmt was not set.",
+                remote_filename,
+            )
+            return
+        url = self._get_url(remote_filename)
+        if not url:
+            logging.error(
+                "Unable to download %s file because --build_id is missing.",
+                remote_filename,
+            )
+            return
+        # Workaround: Rely on host keychain to download files.
+        # This is needed otheriwese downloads fail when running this script
+        #   using the hermetic Python toolchain.
+        subprocess.check_call(
+            [
+                "python3",
+                pathlib.Path(__file__).parent / "init_download.py",
+                url,
+                out_file_name,
+            ],
         )
 
     def _handle_ddk_workspace(self):
@@ -217,6 +266,7 @@ if __name__ == "__main__":
         "--build_id",
         type=str,
         help="the build id to download the build for, e.g. 6148204",
+        default=None,
     )
     parser.add_argument(
         "--build_target",
