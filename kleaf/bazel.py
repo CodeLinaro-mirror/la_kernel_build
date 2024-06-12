@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import argparse
+import dataclasses
 import os
 import pathlib
 import re
@@ -20,7 +21,7 @@ import shlex
 import shutil
 import sys
 import textwrap
-from typing import Tuple, Optional
+from typing import BinaryIO, Generator, Tuple, Optional
 
 from kleaf_help import KleafHelpPrinter, FLAGS_BAZEL_RC
 
@@ -39,11 +40,83 @@ _QUERY_ABI_TARGETS_ARG = 'kind("(update_source_file|abi_update) rule", //... exc
 
 _REPO_BOUNDARY_FILES = ("MODULE.bazel", "REPO.bazel", "WORKSPACE.bazel", "WORKSPACE")
 
+
+@dataclasses.dataclass
+class BazelWrapperException(Exception):
+    """A generic Bazel-wrapper error."""
+
+    # error message
+    message: str = ""
+
+    # exit code of the program.
+    # Default is 1, "Build failed". See https://bazel.build/run/scripts
+    code: int = 1
+
+    def __post_init__(self):
+        super().__init__(self, self.message)
+
+
+class BazelSubprocessException(BazelWrapperException):
+    """The internal `bazel` call fails."""
+
+    def __init__(self, code: int):
+        super().__init__(code=code)
+
+
+class UnexpectedOutputLinesException(BazelWrapperException):
+    """Unexpected output lines are found in stdout / stderr."""
+
+    def __init__(self, message: str):
+        super().__init__(message=message)
+
+
+class MultipleBazelWrapperException(BazelWrapperException):
+    """Wraps multiple BazelWrapperException into one."""
+
+    def __init__(self, errors: list[BazelWrapperException]):
+        """Wraps multiple BazelWrapperException into one.
+
+        Args:
+            errors: a list of BazelWrapperException objects.
+                Must not be empty.
+        """
+        assert errors
+
+        # Drop "unexpected lines" if exit code is non-zero.
+        bad_exit_code = any(isinstance(error, BazelSubprocessException)
+                            for error in errors)
+        unexpected_lines = any(isinstance(error, UnexpectedOutputLinesException)
+                               for error in errors)
+        if bad_exit_code and unexpected_lines:
+            errors = [error for error in errors
+                      if not isinstance(error, UnexpectedOutputLinesException)]
+
+        super().__init__(
+            message="\n".join(error.message for error in errors),
+            code=errors[0].code
+        )
+
+
 def _require_absolute_path(p: str | pathlib.Path) -> pathlib.Path:
     p = pathlib.Path(p)
     if not p.is_absolute():
         raise argparse.ArgumentTypeError("need to specify an absolute path")
     return p
+
+
+def _check_repo_manifest(value: str) \
+        -> tuple[pathlib.Path | None, pathlib.Path | None]:
+    tokens = value.split(":")
+    match len(tokens):
+        case 0: return (None, None)
+        case 1: return (None, _require_absolute_path(value))
+        case 2:
+            repo_root, repo_manifest = tokens
+            return (_require_absolute_path(repo_root),
+                    _require_absolute_path(repo_manifest))
+    raise argparse.ArgumentTypeError(
+        "Must be <REPO_MANIFEST> or <REPO_ROOT>:<REPO_MANIFEST>"
+    )
 
 
 def _partition(lst: list[str], index: Optional[int]) \
@@ -106,6 +179,7 @@ class BazelWrapper(KleafHelpPrinter):
 
         self._parse_startup_options()
         self._parse_command_args()
+        self._add_extra_startup_options()
         self._rebuild_kleaf_help_args()
 
     @classmethod
@@ -157,6 +231,15 @@ class BazelWrapper(KleafHelpPrinter):
             help="Passthrough flag to bazel if specified",
         )
         group.add_argument(
+            "--stdout_stderr_regex_allowlist",
+            metavar="PATH",
+            type=_require_absolute_path,
+            help=textwrap.dedent("""\
+                If set, enforces that stdout / stderr only contains lines
+                allowed by the list of regular expressions in the file.
+                Lines prefixed with # are ignored."""
+            ))
+        group.add_argument(
             "-h", "--help", action="store_true",
             help="show this help message and exit"
         )
@@ -173,8 +256,8 @@ class BazelWrapper(KleafHelpPrinter):
         parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
         self.add_startup_option_to_parser(parser)
 
-        self.known_startup_options, user_startup_options = parser.parse_known_args(
-            self.startup_options)
+        self.known_startup_options, self.user_startup_options = \
+            parser.parse_known_args(self.startup_options)
 
         self.absolute_out_dir = self.known_startup_options.output_root
         self.absolute_user_root = self.known_startup_options.output_user_root or \
@@ -191,11 +274,7 @@ class BazelWrapper(KleafHelpPrinter):
                 f"--host_jvm_args=-Djava.io.tmpdir={javatmp}",
             ]
 
-        self.transformed_startup_options += user_startup_options
-
-        if not self.known_startup_options.help:
-            self.transformed_startup_options.append(
-                f"--output_user_root={self.absolute_user_root}")
+        # See _add_extra_startup_options for extra startup options
 
     def add_command_args_to_parser(self, parser):
         absolute_cache_dir = self.absolute_out_dir / "cache"
@@ -230,10 +309,18 @@ class BazelWrapper(KleafHelpPrinter):
             default=absolute_cache_dir,
             help="Cache directory for --config=local.")
         group.add_argument(
-            "--repo_manifest", metavar="<manifest.xml>",
-            help="""Absolute path to repo manifest file, generated with """
-                 """`repo manifest -r`.""",
-            type=_require_absolute_path,
+            "--repo_manifest", metavar="<repo_root>:<manifest.xml>",
+            help=textwrap.dedent("""\
+                One of the following:
+                - <REPO_MANIFEST>, an absolute path to the repo manifest file,
+                    generated with `repo manifest -r`. In this case REPO_ROOT is
+                    assumed to be the workspace root. This usage is deprecated
+                    and may be removed in the future.
+                - <REPO_ROOT>:<REPO_MANIFEST>, where REPO_ROOT is the absolute
+                    path to the repo root where `repo manifest -r` was executed.
+                """),
+            type=_check_repo_manifest,
+            default=(None, None),
         )
         group.add_argument(
             "--ignore_missing_projects",
@@ -311,8 +398,13 @@ class BazelWrapper(KleafHelpPrinter):
 
         self.env["KLEAF_MAKE_KEEP_GOING"] = "true" if self.known_args.make_keep_going else "false"
 
-        if self.known_args.repo_manifest is not None:
-            self.env["KLEAF_REPO_MANIFEST"] = self.known_args.repo_manifest
+        repo_root, repo_manifest = self.known_args.repo_manifest
+        if repo_root is None:
+            repo_root = self.workspace_dir
+        if repo_manifest is not None:
+            self.env["KLEAF_REPO_MANIFEST"] = f"{repo_root}:{repo_manifest}"
+        else:
+            self.env["KLEAF_REPO_MANIFEST"] = f"{repo_root}:"
 
         if self.known_args.ignore_missing_projects:
             self.env["KLEAF_IGNORE_MISSING_PROJECTS"] = "true"
@@ -323,7 +415,15 @@ class BazelWrapper(KleafHelpPrinter):
         if self.known_args.user_clang_toolchain is not None:
             self.env["KLEAF_USER_CLANG_TOOLCHAIN_PATH"] = self.known_args.user_clang_toolchain
 
+    def _add_extra_startup_options(self):
+        """Adds extra startup options after command args are parsed."""
         self._handle_bazelrc()
+
+        self.transformed_startup_options += self.user_startup_options
+
+        if not self.known_startup_options.help:
+            self.transformed_startup_options.append(
+                f"--output_user_root={self.absolute_user_root}")
 
     def _handle_bazelrc(self):
         """Rewrite bazelrc files."""
@@ -341,6 +441,7 @@ class BazelWrapper(KleafHelpPrinter):
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/local.bazelrc",
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/fast.bazelrc",
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/rbe.bazelrc",
+            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/silent.bazelrc",
         ])
 
         self.transformed_startup_options += self._transform_bazelrc_files([
@@ -386,6 +487,9 @@ class BazelWrapper(KleafHelpPrinter):
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/network.bazelrc",
             # Experimental bzlmod support
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/bzlmod.bazelrc",
+
+            # Canary goes to the end because it uses flags / configs from elsewhere.
+            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/canary.bazelrc",
 
             self.kleaf_repo_dir / "build/kernel/kleaf/common.bazelrc",
         ])
@@ -519,28 +623,49 @@ class BazelWrapper(KleafHelpPrinter):
             print("Kleaf ABI update available targets:")
             self.transformed_command_args.append(_QUERY_ABI_TARGETS_ARG)
 
-    def run(self):
+    def run(self) -> int:
+        """Runs the wrapper.
+
+        Returns:
+            exit code"""
         final_args = self._build_final_args()
 
         if self.known_startup_options.help or self.command == "help":
             self._print_help()
 
-        if self._should_run_as_subprocess():
-            import asyncio
+        if not self._should_run_as_subprocess():
+            os.execve(path=self.bazel_path, argv=final_args, env=self.env)
+            assert False, "os.execve should not return"
+
+        output_mutator = OutputMutator(
+            filter_regex=self._get_output_filter_regex(),
+            regex_allowlist_path=
+                self.known_startup_options.stdout_stderr_regex_allowlist,
+        )
+
+        import asyncio
+        try:
             asyncio.run(run(
                 command=final_args,
                 env=self.env,
-                filter_regex=self._get_output_filter_regex(),
+                output_mutator=output_mutator,
                 epilog_coroutine=self._get_epilog_coroutine(),
             ))
-        else:
-            os.execve(path=self.bazel_path, argv=final_args, env=self.env)
+        except BazelWrapperException as exception:
+            if exception.message:
+                print(exception.message, file=sys.stderr)
+            return exception.code
+
+        return 0
+
 
     def _should_run_as_subprocess(self):
         """Returns whether to run bazel command as subprocess"""
         return any([
             self.known_args.strip_execroot,
             self.command == "clean",
+            (self.known_startup_options.stdout_stderr_regex_allowlist
+                is not None),
         ])
 
     def _get_output_filter_regex(self):
@@ -565,23 +690,86 @@ class BazelWrapper(KleafHelpPrinter):
         shutil.rmtree(self.gen_bazelrc_dir, ignore_errors=True)
 
 
-async def output_filter(input_stream, output_stream, filter_regex):
-    """Pipes input to output, optionally filtering lines with given filter_regex.
+class OutputMutator:
+    """Helper class to filter and mutate an output stream."""
+    def __init__(
+            self,
+            filter_regex: re.Pattern | None,
+            regex_allowlist_path: pathlib.Path | None,
+        ):
+        self._regex_allowlist_path = regex_allowlist_path
+        self._regex_allowlist = []
+        self._filter_regex = filter_regex
 
-    If filter_regex is None, don't filter lines.
-    """
-    while not input_stream.at_eof():
-        output = await input_stream.readline()
-        if filter_regex:
-            output = re.sub(filter_regex, "", output.decode()).encode()
-        output_stream.buffer.write(output)
-        output_stream.flush()
+        if regex_allowlist_path:
+            with open(regex_allowlist_path, encoding="utf-8") as file:
+                self._regex_allowlist = list(self._parse_regex_lines(file))
+
+    def _parse_regex_lines(self, lines) -> \
+            Generator[re.Pattern, None, None]:
+        """Parses lines from stdout_stderr_regex_allowlist file."""
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("#"):
+                continue
+            yield re.compile(line)
+
+    async def mutate_stream(
+        self,
+        input_stream: BinaryIO,
+        output_stream: BinaryIO,
+        stream_name: str,
+    ):
+        """Pipes input to output, optionally mutating lines.
+
+        If filter_regex is None, don't filter lines.
+
+        If regex_allowlist is not empty, require each line to be matching at
+            least one regex in regex_allowlist.
+        """
+        unexpected_line_count = 0
+        first_unexpected_line = None
+
+        while not input_stream.at_eof():
+            output = await input_stream.readline()
+            if self._filter_regex or self._regex_allowlist:
+                output_decoded = output.decode()
+                if self._filter_regex:
+                    output_decoded = re.sub(
+                        self._filter_regex, "", output_decoded)
+                if self._regex_allowlist:
+                    if not any(regex.match(output_decoded)
+                               for regex in self._regex_allowlist):
+                        unexpected_line_count += 1
+                        if first_unexpected_line is None:
+                            first_unexpected_line = output_decoded
+                output = output_decoded.encode()
+            output_stream.buffer.write(output)
+            output_stream.flush()
+
+        if unexpected_line_count:
+            raise UnexpectedOutputLinesException(textwrap.dedent(f"""\
+                ERROR: Found {unexpected_line_count} unexpected lines \
+in {stream_name}, the first one is:
+                    {textwrap.shorten(first_unexpected_line, 76)}
+                If you believe this is a legitimate output, add it to the \
+allowlist:
+                    {self._regex_allowlist_path}"""))
 
 
-async def run(command, env, filter_regex, epilog_coroutine):
+async def _wait_for_subprocess(process):
+    """Wraps process.wait() and raises if exit code is non-zero."""
+    return_code = await process.wait()
+    if return_code != 0:
+        raise BazelSubprocessException(code=return_code)
+
+
+async def run(command, env, epilog_coroutine, output_mutator):
     """Runs command with env asynchronously.
 
-    Outputs are filtered with filter_regex if it is not None.
+    Outputs are mutated with output_mutator.
 
     At the end, run the coroutine epilog_coroutine if it is not None.
     """
@@ -593,15 +781,38 @@ async def run(command, env, filter_regex, epilog_coroutine):
         env=env,
     )
 
-    await asyncio.gather(
-        output_filter(process.stderr, sys.stderr, filter_regex),
-        output_filter(process.stdout, sys.stdout, filter_regex),
-    )
-    await process.wait()
-    if epilog_coroutine:
-        await epilog_coroutine
+    stderr_coroutine = output_mutator.mutate_stream(
+            input_stream=process.stderr,
+            output_stream=sys.stderr,
+            stream_name="stderr")
+    stdout_coroutine = output_mutator.mutate_stream(
+            input_stream=process.stdout,
+            output_stream=sys.stdout,
+            stream_name="stdout")
 
+    # Wait for the process and stdout/stderr filters concurrently.
+    coroutines = [
+        stderr_coroutine,
+        stdout_coroutine,
+        _wait_for_subprocess(process),
+    ]
+    tasks = [asyncio.Task(coroutine) for coroutine in coroutines]
+    done, _ = await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
+    exceptions = [task.exception() for task in done if task.exception()]
+
+    # epilog_coroutine needs to run after process finishes, so it cannot
+    # be in the coroutines list.
+    if epilog_coroutine:
+        try:
+            await epilog_coroutine
+        except BazelWrapperException as exception:
+            exceptions.append(exception)
+
+    match len(exceptions):
+        case 0: pass
+        case 1: raise exceptions[0]
+        case _: raise MultipleBazelWrapperException(exceptions)
 
 if __name__ == "__main__":
-    BazelWrapper(kleaf_repo_dir=pathlib.Path(sys.argv[1]),
-                 bazel_args=sys.argv[2:], env=os.environ).run()
+    sys.exit(BazelWrapper(kleaf_repo_dir=pathlib.Path(sys.argv[1]),
+                          bazel_args=sys.argv[2:], env=os.environ).run())
