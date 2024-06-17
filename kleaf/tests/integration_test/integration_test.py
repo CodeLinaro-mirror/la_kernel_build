@@ -413,21 +413,37 @@ class KleafIntegrationTestBase(unittest.TestCase):
         parts = [".."] * len(other_parts) + list(path_parts)
         return pathlib.Path(*parts)
 
-    @classmethod
-    def _get_repo_manifest(cls) -> xml.dom.minidom.Document:
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--repo_manifest", type=_require_absolute_path)
-        known, _ = parser.parse_known_args(arguments.bazel_wrapper_args)
-        if known.repo_manifest:
-            with open(known.repo_manifest) as manifest_file:
-                return xml.dom.minidom.parse(manifest_file)
+    def _check_repo_manifest(self, value: str) \
+            -> tuple[pathlib.Path | None, pathlib.Path | None]:
+        tokens = value.split(":")
+        match len(tokens):
+            case 0: return (None, None)
+            case 1:
+                return (pathlib.Path(".").resolve(),
+                        _require_absolute_path(value))
+            case 2:
+                repo_root, repo_manifest = tokens
+                return (_require_absolute_path(repo_root),
+                        _require_absolute_path(repo_manifest))
+        raise argparse.ArgumentTypeError(
+            "Must be <REPO_MANIFEST> or <REPO_ROOT>:<REPO_MANIFEST>"
+        )
 
+    def _get_repo_manifest(self) -> xml.dom.minidom.Document:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--repo_manifest",
+                            type=self._check_repo_manifest,
+                            default=(None, None))
+        known, _ = parser.parse_known_args(arguments.bazel_wrapper_args)
+        _, repo_manifest = known.repo_manifest
+        if repo_manifest:
+            with open(repo_manifest) as file:
+                return xml.dom.minidom.parse(file)
         manifest_content = Exec.check_output(["repo", "manifest"])
         return xml.dom.minidom.parseString(manifest_content)
 
-    @classmethod
-    def _get_projects(cls) -> list[RepoProject]:
-        manifest_element = cls._get_repo_manifest().documentElement
+    def _get_projects(self) -> list[RepoProject]:
+        manifest_element = self._get_repo_manifest().documentElement
         project_elements = manifest_element.getElementsByTagName("project")
         return [RepoProject.from_element(element)
                 for element in project_elements]
@@ -605,26 +621,6 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
         self.real_kleaf_repo = pathlib.Path(".").resolve()
         self.ddk_workspace = (pathlib.Path(__file__).resolve().parent /
                               "ddk_workspace_test")
-
-    @classmethod
-    def _get_projects(cls) -> list[RepoProject]:
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--repo_manifest", type=_require_absolute_path)
-        known, _ = parser.parse_known_args(arguments.bazel_wrapper_args)
-        if known.repo_manifest:
-            with open(known.repo_manifest) as manifest_file:
-                return cls._get_projects_from_manifest(manifest_file)
-
-        manifest_content = Exec.check_output(["repo", "manifest"])
-        manifest_file = io.StringIO(manifest_content)
-        return cls._get_projects_from_manifest(manifest_file)
-
-    @staticmethod
-    def _get_projects_from_manifest(manifest_file: TextIO) -> list[RepoProject]:
-        dom = xml.dom.minidom.parse(manifest_file)
-        project_elements = dom.documentElement.getElementsByTagName("project")
-        return [RepoProject.from_element(element)
-                for element in project_elements]
 
     def test_ddk_workspace_below_kleaf_module(self):
         """Tests that DDK workspace is below @kleaf"""
@@ -1071,10 +1067,13 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
                            lambda x: re.search(extraversion_pattern, x),
                            ["EXTRAVERSION ="])
 
-    def _get_vmlinux_scmversion(self, workspace_root=pathlib.Path(".")):
+    def _get_vmlinux_scmversion(self, workspace_root=pathlib.Path("."),
+                                package : str | pathlib.Path | None = None):
+        if not package:
+            package = self._common()
         strings_output = Exec.check_output([
             self.strings,
-            str(workspace_root / f"bazel-bin/{self._common()}/kernel_aarch64/vmlinux")
+            str(workspace_root / f"bazel-bin/{package}/kernel_aarch64/vmlinux")
         ])
         ret = []
         for line in strings_output.splitlines():
@@ -1113,7 +1112,7 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
             ],
             env=ScmversionIntegrationTest._env_without_build_number())
         for scmversion in self._get_vmlinux_scmversion():
-            self.assertEqual("-rc999-mainline-maybe-dirty", scmversion)
+            self.assertEqual("-rc999-mainline-maybe-dirty-4k", scmversion)
 
     def test_mainline_stamp(self):
         self._setup_mainline()
@@ -1126,7 +1125,7 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
             ],
             env=ScmversionIntegrationTest._env_without_build_number())
         scmversion_pat = re.compile(
-            r"^-rc999-mainline(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?$")
+            r"^-rc999-mainline(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?(-4k)?$")
         for scmversion in self._get_vmlinux_scmversion():
             self.assertRegexpMatches(scmversion, scmversion_pat)
 
@@ -1141,7 +1140,7 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
             ],
             env=ScmversionIntegrationTest._env_with_build_number("123456"))
         scmversion_pat = re.compile(
-            r"^-rc999-mainline(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?-ab123456$"
+            r"^-rc999-mainline(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?-ab123456(-4k)?$"
         )
         for scmversion in self._get_vmlinux_scmversion():
             self.assertRegexpMatches(scmversion, scmversion_pat)
@@ -1237,8 +1236,34 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
         )
 
         scmversion_pat = re.compile(
-            r"^-rc999-mainline(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?$")
+            r"^-rc999-mainline(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?(-4k)?$")
         for scmversion in self._get_vmlinux_scmversion(workspace_root):
+            self.assertRegexpMatches(scmversion, scmversion_pat)
+
+    def test_stamp_if_kernel_dir_is_symlink(self):
+        """Tests that --stamp works if KERNEL_DIR is a symlink."""
+        self._setup_mainline()
+
+        new_kernel_dir = pathlib.Path("test_symlink")
+        with open(self.build_config_gki_aarch64_path, "a") as f:
+            f.write(f"KERNEL_DIR={new_kernel_dir}\n")
+
+        if not new_kernel_dir.is_symlink():
+            new_kernel_dir.symlink_to(self._common(), True)
+        self.addCleanup(new_kernel_dir.unlink)
+
+        self._check_call(
+            "build",
+            _FASTEST + [
+                "--config=stamp",
+                "--config=local",
+                f"//{new_kernel_dir}:kernel_aarch64",
+                f"--extra_git_project={new_kernel_dir}"
+            ],
+            env=ScmversionIntegrationTest._env_without_build_number())
+        scmversion_pat = re.compile(
+            r"^-rc999-mainline(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?(-4k)?$")
+        for scmversion in self._get_vmlinux_scmversion(package=new_kernel_dir):
             self.assertRegexpMatches(scmversion, scmversion_pat)
 
 

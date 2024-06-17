@@ -173,11 +173,16 @@ class KleafProjectSetter:
                 kleaf_repo_relative=self._try_rel_workspace(self.kleaf_repo),
             )
             module_bazel_content += self._get_local_path_overrides()
-            # b/338440785 Due to an issue in Bazel, rules_cc seems to be
-            #  implicitly added in a fallback WORKSPACE.bzlmod file, hence
-            #  forcing an empty one here.
-            workspace_bzlmod = self.ddk_workspace / "WORKSPACE.bzlmod"
-            workspace_bzlmod.touch(exist_ok=True)
+
+            # https://github.com/bazelbuild/bazel/issues/22579
+            # @@rules_cc is implicitly added in a fallback
+            # WORKSPACE file if the file doesn't exist.
+            # Work around the issue by adding an empty file.
+            if (not (self.ddk_workspace / "WORKSPACE").is_file() and
+                not (self.ddk_workspace / "WORKSPACE.bazel").is_file() and
+                not (self.ddk_workspace / "WORKSPACE.bzlmod").is_file()):
+                (self.ddk_workspace / "WORKSPACE.bzlmod").touch()
+
         if self.prebuilts_dir:
             module_bazel_content += "\n"
             module_bazel_content += _LOCAL_PREBUILTS_CONTENT_TEMPLATE.format(
@@ -297,13 +302,15 @@ class KleafProjectSetter:
         files_dict = self._infer_download_list()
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = []
-            for file, config in files_dict.items():
-                dst = self.prebuilts_dir / file
+            for local_filename, config in files_dict.items():
+                remote_filename = config["remote_filename_fmt"].format(
+                    build_number = self.build_id,
+                )
+                dst = self.prebuilts_dir / local_filename
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 futures.append(
-                    executor.submit(
-                        self._download, file, dst, config["mandatory"]
-                    )
+                    executor.submit(self._download, remote_filename, dst,
+                                    config["mandatory"])
                 )
             for complete_ret in concurrent.futures.as_completed(futures):
                 complete_ret.result()  # Raise exception if any
