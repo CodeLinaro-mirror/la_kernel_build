@@ -156,6 +156,12 @@ WARNING: define_kleaf_workspace() should be called with common_kernel_package={}
     )
 
     new_kleaf_local_repository(
+        name = "zlib",
+        path = "external/zlib",
+        build_file = "build/kernel/kleaf/zlib.BUILD",
+    )
+
+    new_kleaf_local_repository(
         name = "zopfli",
         path = "external/zopfli",
         build_file = "build/kernel/kleaf/zopfli.BUILD",
@@ -180,7 +186,6 @@ WARNING: define_kleaf_workspace() should be called with common_kernel_package={}
             name = value["repo_name"],
             apparent_name = value["repo_name"],
             artifact_url_fmt = artifact_url_fmt,
-            download_configs = json.encode(value["download_configs"]),
             target = target,
         )
 
