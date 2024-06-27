@@ -344,6 +344,22 @@ py_binary(
     deps = [":symbol_extraction"],
 )
 
+# Tools visible to all packages.
+py_binary(
+    name = "dependency_graph_extractor",
+    srcs = ["abi/dependency_graph_extractor.py"],
+    main = "abi/dependency_graph_extractor.py",
+    visibility = ["//visibility:public"],
+    deps = [":symbol_extraction"],
+)
+
+py_binary(
+    name = "dependency_graph_drawer",
+    srcs = ["abi/dependency_graph_drawer.py"],
+    main = "abi/dependency_graph_drawer.py",
+    visibility = ["//visibility:public"],
+)
+
 # Tools visible to all packages that uses kernel_abi.
 # Implementation detail of kernel_abi; do not use directly.
 py_binary(
@@ -375,11 +391,12 @@ py_test(
     ],
 )
 
+# Target for distribution.
 filegroup(
     name = "init_ddk_zip",
     srcs = [":init_ddk"],
     output_group = "python_zip_file",
-    visibility = ["//visibility:private"],
+    visibility = ["//visibility:public"],
 )
 
 _GKI_CERTIFICATION_BINARIES_PREFIX = "//prebuilts/kernel-build-tools:linux-x86/bin/"
@@ -394,7 +411,7 @@ hermetic_genrule(
     srcs = [_GKI_CERTIFICATION_BINARIES_PREFIX + tool for tool in _GKI_CERTIFICATION_BINARIES],
     outs = ["gki_certification_tools.tar.gz"],
     cmd = """
-        tar -czhf $@ \\
+        tar --mode=u=rwx,go=rx -czhf $@ \\
             -C $$(dirname $$(dirname $(location {prefix}{first}))) \\
             {files}
     """.format(
