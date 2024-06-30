@@ -120,7 +120,7 @@ class KleafProjectSetterTest(parameterized.TestCase):
                     prebuilts_dir=prebuilts_dir,
                     url_fmt=None,
                     superproject_tool="repo",
-                    sync="false",
+                    sync=False,
                 ).run()
             except:  # pylint: disable=bare-except
                 pass
@@ -144,7 +144,7 @@ class KleafProjectSetterTest(parameterized.TestCase):
                     prebuilts_dir=None,
                     url_fmt=None,
                     superproject_tool="repo",
-                    sync="false",
+                    sync=False,
                 ).run()
             except BaseException as e:  # pylint: disable=bare-except
                 logging.error(e)
@@ -172,7 +172,7 @@ class KleafProjectSetterTest(parameterized.TestCase):
                 prebuilts_dir=prebuilts_dir,
                 url_fmt=None,
                 superproject_tool="repo",
-                sync="false",
+                sync=False,
             ).run()
         except:  # pylint: disable=bare-except
             pass
@@ -221,7 +221,7 @@ class KleafProjectSetterTest(parameterized.TestCase):
                 prebuilts_dir=None,
                 url_fmt=url_fmt,
                 superproject_tool="repo",
-                sync="false",
+                sync=False,
             )._download(
                 remote_filename="remote_file",
                 out_file_name=out_file,
@@ -256,7 +256,7 @@ class KleafProjectSetterTest(parameterized.TestCase):
                     prebuilts_dir=prebuilts_dir,
                     url_fmt=url_fmt,
                     superproject_tool="repo",
-                    sync="false",
+                    sync=False,
                 ).run()
 
     @parameterized.named_parameters(
@@ -303,7 +303,7 @@ local_path_override(
                 prebuilts_dir=None,
                 url_fmt=None,
                 superproject_tool="repo",
-                sync="false",
+                sync=False,
             )._get_local_path_overrides()
             self.assertEqual(got_content, wanted_content)
 
@@ -347,11 +347,11 @@ local_path_override(
                 prebuilts_dir=ddk_workspace / "prebuilts_dir",
                 url_fmt=f"file://{str(remote_prebuilts_dir)}/{{filename}}",
                 superproject_tool="repo",
-                sync="false",
+                sync=False,
             ).run()
 
             with xml.dom.minidom.parse(
-                str(ddk_workspace / ".repo/manifests/kleaf.xml")) as dom:
+                    str(ddk_workspace / ".repo/manifests/kleaf.xml")) as dom:
 
                 root: xml.dom.minidom.Element = dom.documentElement
                 self.assertFalse(root.getElementsByTagName("superproject"))
@@ -359,19 +359,35 @@ local_path_override(
                 self.assertTrue(root.getElementsByTagName("remote"))
 
                 projects = root.getElementsByTagName("project")
-                project_paths = [
-                    project.getAttribute("path") for project in projects
-                ]
+                project_paths = []
+                links = {}
+                for project in projects:
+                    project_path = pathlib.Path(project.getAttribute("path")
+                                                or project.getAttribute("name"))
+                    project_paths.append(project_path)
+                    for link in project.getElementsByTagName("linkfile"):
+                        src = project_path / link.getAttribute("src")
+                        dest = pathlib.Path(link.getAttribute("dest"))
+                        links[dest] = src
+
+                # Check <project> paths are fixed
                 self.assertCountEqual(
                     project_paths, [
-                        "external/kleaf/build/kernel",
+                        pathlib.Path("external/kleaf/build/kernel"),
                         # TODO(b/291918721): should sync to
                         #  external/bazel-skylib directly below repo root
-                        "external/kleaf/external/bazel-skylib",
+                        pathlib.Path("external/kleaf/external/bazel-skylib"),
                     ])
 
+                # Check <linkfile> is fixed
+                # pylint: disable=line-too-long
+                self.assertEqual(links, {
+                    pathlib.Path("external/kleaf/tools/bazel"): pathlib.Path("external/kleaf/build/kernel/kleaf/bazel.sh"),
+                    pathlib.Path("external/kleaf/MODULE.bazel"): pathlib.Path("external/kleaf/build/kernel/kleaf/bzlmod/bazel.MODULE.bazel")
+                })
+
             with xml.dom.minidom.parse(
-                str(ddk_workspace / ".repo/manifests/default.xml")) as dom:
+                    str(ddk_workspace / ".repo/manifests/default.xml")) as dom:
                 root: xml.dom.minidom.Element = dom.documentElement
                 includes = root.getElementsByTagName("include")
                 include_names = [

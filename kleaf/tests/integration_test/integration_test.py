@@ -249,18 +249,9 @@ class KleafIntegrationTestBase(unittest.TestCase):
             subprocess_args.append(f"--bazelrc={self._bazel_rc.name}")
         subprocess_args.append(command)
 
-        if "--" in command_args:
-            idx = command_args.index("--")
-            bazel_command_args = command_args[:idx]
-            script_args = command_args[idx:]
-        else:
-            bazel_command_args = command_args
-            script_args = []
-
-        subprocess_args.extend(bazel_command_args)
         if use_wrapper_args:
             subprocess_args.extend(arguments.bazel_wrapper_args)
-        subprocess_args.extend(script_args)
+        subprocess_args.extend(command_args)
 
         # kwargs has known arguments filtered out.
         return subprocess_args, kwargs
@@ -715,7 +706,7 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
             build_id=build_id,
             # build bots have no repo, so we cannot check if `repo sync`
             # actually works. Skip sync and rely on the mount point.
-            sync="false")
+            sync=False)
 
     def _run_ddk_workspace_setup_test(self,
                                       kleaf_repo: pathlib.Path,
@@ -724,7 +715,7 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
                                       local: bool = True,
                                       url_fmt: str | None = None,
                                       build_id: str | None = None,
-                                      sync: str | None = None):
+                                      sync: bool | None = None):
         # kleaf_repo relative to ddk_workspace
         kleaf_repo_rel = self._force_relative_to(
             kleaf_repo, ddk_workspace)
@@ -765,8 +756,8 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
             args.append(f"--url_fmt={url_fmt}")
         if build_id:
             args.append(f"--build_id={build_id}")
-        if sync:
-            args.append(f"--sync={sync}")
+        if sync is not None:
+            args.append("--sync" if sync else "--nosync")
         self._check_call("run", args)
         Exec.check_call([
             sys.executable,
