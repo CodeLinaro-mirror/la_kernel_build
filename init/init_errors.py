@@ -1,6 +1,4 @@
-#!/bin/bash
-
-# Copyright (C) 2022 The Android Open Source Project
+# Copyright (C) 2024 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,17 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Example usage:
-#   export ROOT_DIR=$(./gettop.sh)
+"""Error classes."""
 
-# This script is located at ${ROOT_DIR}/build/{kernel/,}gettop.sh.
-# TODO(b/204425264): remove hack once we cut over to build/kernel/ for branches
-
-# This is either ${ROOT_DIR}/build or ${ROOT_DIR}/build/kernel
-parent_dir=$(dirname $(readlink -f $0))
-
-if [[ $(basename ${parent_dir}) == "kernel" ]]; then
-  echo $(dirname $(dirname ${parent_dir}))
-else
-  echo $(dirname ${parent_dir})
-fi
+class KleafProjectSetterError(RuntimeError):
+    pass

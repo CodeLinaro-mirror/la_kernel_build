@@ -63,6 +63,7 @@ bzl_library(
         "declare_host_tools.bzl",
         "declare_kernel_prebuilts.bzl",
         "declare_toolchain_constants.bzl",
+        "default_host_tools.scl",
         "file.bzl",
         "file_selector.bzl",
         "gki_artifacts.bzl",
@@ -170,12 +171,13 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
+# If true, GKI runtime module protection is disabled.
 config_setting(
     name = "force_disable_trim_is_true",
     flag_values = {
         ":force_disable_trim": "1",
     },
-    # All kernel_* from different packages can see this
+    # All kernel_* from different packages can see this.
     visibility = ["//visibility:public"],
 )
 
@@ -400,6 +402,12 @@ sh_binary(
     ],
     # All checkpatch rules from any package can see this
     visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "default_host_tools",
+    srcs = ["default_host_tools.py"],
+    visibility = ["//build/kernel/kleaf:__pkg__"],
 )
 
 kernel_platform_toolchain(
