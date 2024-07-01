@@ -279,8 +279,13 @@ for EXT_MOD in ${EXT_MODULES}; do
     fi
   done
 
-  # Get kernel target from file which exported from prepare_vendor.sh
-  btgt=$(head -n 1 "${KERNEL_KIT}"/kernel_target)
+  if [ "$TARGET_BOARD_PLATFORM" = "msmnile" ]; then
+     btgt="gen3auto"
+  elif [ "$TARGET_BOARD_PLATFORM" = "sm6150" ]; then
+     btgt="sdmsteppeauto"
+  else
+     btgt="$TARGET_BOARD_PLATFORM"
+  fi
 
   filter_regex="${btgt/_/-}_${VARIANT/_/-}_${SUBTARGET_REGEX:-.*}_dist$"
 

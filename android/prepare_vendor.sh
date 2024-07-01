@@ -140,9 +140,6 @@ case "${KERNEL_TARGET}" in
     ;;
 esac
 
-# Export target kernel to file
-echo "$KERNEL_TARGET" > "${ANDROID_KERNEL_OUT}"/kernel_target
-
 ################################################################################
 # Configure LTO
 if [ -n "$LTO" ]; then
