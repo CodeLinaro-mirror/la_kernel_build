@@ -435,22 +435,23 @@ if [ -n "${ANDROID_PRODUCT_OUT}" ] && [ -n "${ANDROID_BUILD_TOP}" ]; then
   echo
   echo "  cleaning up kernel_platform tree for Android"
 
+  set -x
   # When --sandbox_debug is passed as arg to Bazel, inaccessibleHelperDir gets
   # created with limited perms. Because of which find command fails and leads
   # to build failure in vendor builds. Update the perms to make sure find cmd
   # goes through w/o any issues.
   if [ -d "${ANDROID_BUILD_TOP}/bazel-cache" ]; then
     chmod -R 0755 "${ANDROID_BUILD_TOP}/bazel-cache"
+    find "${ANDROID_BUILD_TOP}/bazel-cache" \( -name Android.mk -o -name Android.bp \) \
+      -a -not -path "${ROOT_DIR}"/msm-kernel/Android.bp -delete
   fi
 
   if [ -d "${ROOT_DIR}/bazel-cache" ]; then
     chmod -R 0755 "${ROOT_DIR}/bazel-cache"
   fi
 
-  set -x
-  find "${ROOT_DIR}" "${ANDROID_BUILD_TOP}/bazel-cache" \( -name Android.mk -o -name Android.bp \) \
-    -a -not -path "${ROOT_DIR}"/common/Android.bp -a -not -path "${ROOT_DIR}"/msm-kernel/Android.bp \
-    -delete
+  find "${ROOT_DIR}" \( -name Android.mk -o -name Android.bp \) \
+    -a -not -path "${ROOT_DIR}"/msm-kernel/Android.bp -delete
   set +x
 
   ################################################################################
