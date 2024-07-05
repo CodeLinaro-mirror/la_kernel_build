@@ -748,6 +748,7 @@ def _get_defconfig_fragments(
         Label("//build/kernel/kleaf:defconfig_fragment"),
         Label("//build/kernel/kleaf/impl/defconfig:debug"),
         Label("//build/kernel/kleaf/impl/defconfig:gcov"),
+        Label("//build/kernel/kleaf/impl/defconfig:gki_module_protection"),
         Label("//build/kernel/kleaf/impl/defconfig:rust"),
         Label("//build/kernel/kleaf/impl/defconfig:zstd_dwarf_compression"),
     ]
@@ -1867,6 +1868,7 @@ def _create_infos(
         src_protected_modules_list = ctx.file.src_protected_modules_list,
         src_kmi_symbol_list = ctx.file.src_kmi_symbol_list,
         kmi_strict_mode_out = kmi_strict_mode_out,
+        kmi_symbol_list_violations_check_out = kmi_symbol_list_violations_check_out,
     )
 
     # Device modules takes precedence over base_kernel (GKI) modules.
