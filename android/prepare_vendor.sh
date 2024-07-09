@@ -167,6 +167,9 @@ case "${KERNEL_TARGET}" in
   anorak61)
     KERNEL_TARGET="anorak"
     ;;
+  neo61)
+    KERNEL_TARGET="neo-la"
+    ;;
 esac
 
 ################################################################################
