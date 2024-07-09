@@ -441,9 +441,8 @@ if [ -n "${ANDROID_PRODUCT_OUT}" ] && [ -n "${ANDROID_BUILD_TOP}" ]; then
   # to build failure in vendor builds. Update the perms to make sure find cmd
   # goes through w/o any issues.
   if [ -d "${ANDROID_BUILD_TOP}/bazel-cache" ]; then
-    chmod -R 0755 "${ANDROID_BUILD_TOP}/bazel-cache"
-    find "${ANDROID_BUILD_TOP}/bazel-cache" \( -name Android.mk -o -name Android.bp \) \
-      -a -not -path "${ROOT_DIR}"/msm-kernel/Android.bp -delete
+    chmod -R 0777 "${ANDROID_BUILD_TOP}/bazel-cache"
+    find "${ANDROID_BUILD_TOP}/bazel-cache" \( -name Android.mk -o -name Android.bp \) -delete
   fi
 
   if [ -d "${ROOT_DIR}/bazel-cache" ]; then
