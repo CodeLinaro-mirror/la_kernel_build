@@ -145,6 +145,88 @@ ddk_uapi_headers(
 | <a id="ddk_uapi_headers-kernel_build"></a>kernel_build |  [`kernel_build`](#kernel_build).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
+<a id="dependency_graph_drawer"></a>
+
+## dependency_graph_drawer
+
+<pre>
+dependency_graph_drawer(<a href="#dependency_graph_drawer-name">name</a>, <a href="#dependency_graph_drawer-adjacency_list">adjacency_list</a>, <a href="#dependency_graph_drawer-colorful">colorful</a>)
+</pre>
+
+A rule that creates a [Graphviz](https://graphviz.org/) diagram file.
+
+* Inputs:
+  A json file describing a graph as an adjacency list.
+
+* Outputs:
+  A `dependency_graph.dot` file containing the diagram representation.
+
+* NOTE: For further simplification of the resulting diagram
+  [tred utility](https://graphviz.org/docs/cli/tred/) from the CLI can
+  be used as in the following example:
+  ```
+  tred dependency_graph.dot > simplified.dot
+  ```
+
+* Example:
+  ```
+  dependency_graph_drawer(
+      name = "db845c_dependency_graph",
+      adjacency_list = ":db845c_dependencies",
+  )
+  ```
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="dependency_graph_drawer-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="dependency_graph_drawer-adjacency_list"></a>adjacency_list |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="dependency_graph_drawer-colorful"></a>colorful |  Whether outgoing edges from every node are colored.   | Boolean | optional |  `False`  |
+
+
+<a id="dependency_graph_extractor"></a>
+
+## dependency_graph_extractor
+
+<pre>
+dependency_graph_extractor(<a href="#dependency_graph_extractor-name">name</a>, <a href="#dependency_graph_extractor-enable_add_vmlinux">enable_add_vmlinux</a>, <a href="#dependency_graph_extractor-exclude_base_kernel_modules">exclude_base_kernel_modules</a>, <a href="#dependency_graph_extractor-kernel_build">kernel_build</a>,
+                           <a href="#dependency_graph_extractor-kernel_modules">kernel_modules</a>)
+</pre>
+
+A rule that extracts a symbol dependency graph from a kernel build and modules.
+
+It works by matching undefined symbols from one module with exported symbols from other.
+
+* Inputs:
+  It receives a Kernel build target, where the analysis will run (vmlinux + in-tree modules),
+   aditionally a list of external modules can be accepted.
+
+* Outputs:
+  A `dependency_graph.json` file describing the graph as an adjacency list.
+
+* Example:
+  ```
+  dependency_graph_extractor(
+      name = "db845c_dependencies",
+      kernel_build = ":db845c",
+      # kernel_modules = [],
+  )
+  ```
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="dependency_graph_extractor-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="dependency_graph_extractor-enable_add_vmlinux"></a>enable_add_vmlinux |  If `True` enables `kernel_build_add_vmlinux` transition.   | Boolean | optional |  `True`  |
+| <a id="dependency_graph_extractor-exclude_base_kernel_modules"></a>exclude_base_kernel_modules |  Whether the analysis should made for only external modules.   | Boolean | optional |  `False`  |
+| <a id="dependency_graph_extractor-kernel_build"></a>kernel_build |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="dependency_graph_extractor-kernel_modules"></a>kernel_modules |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+
+
 <a id="extract_symbols"></a>
 
 ## extract_symbols
@@ -831,6 +913,33 @@ dependencies are stable, it is recommended to:
 | <a id="ddk_submodule-kwargs"></a>kwargs |  Additional attributes to the internal rule, e.g. [`visibility`](https://docs.bazel.build/versions/main/visibility.html). See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 
+<a id="dependency_graph"></a>
+
+## dependency_graph
+
+<pre>
+dependency_graph(<a href="#dependency_graph-name">name</a>, <a href="#dependency_graph-kernel_build">kernel_build</a>, <a href="#dependency_graph-kernel_modules">kernel_modules</a>, <a href="#dependency_graph-colorful">colorful</a>, <a href="#dependency_graph-exclude_base_kernel_modules">exclude_base_kernel_modules</a>, <a href="#dependency_graph-kwargs">kwargs</a>)
+</pre>
+
+Declare targets for dependency graph visualization.
+
+Output:
+    File with a diagram representing a graph in DOT language.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="dependency_graph-name"></a>name |  Name of this target.   |  none |
+| <a id="dependency_graph-kernel_build"></a>kernel_build |  The [`kernel_build`](#kernel_build).   |  none |
+| <a id="dependency_graph-kernel_modules"></a>kernel_modules |  A list of external [`kernel_module()`](#kernel_module)s.   |  none |
+| <a id="dependency_graph-colorful"></a>colorful |  When set to True, outgoing edges from every node are colored differently.   |  `None` |
+| <a id="dependency_graph-exclude_base_kernel_modules"></a>exclude_base_kernel_modules |  Whether the analysis should made for only external modules.   |  `None` |
+| <a id="dependency_graph-kwargs"></a>kwargs |  Additional attributes to the internal rule, e.g. [`visibility`](https://docs.bazel.build/versions/main/visibility.html). See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
+
+
 <a id="initramfs_modules_lists_test"></a>
 
 ## initramfs_modules_lists_test
@@ -942,7 +1051,8 @@ commands to Bazel commands.
 ## kernel_abi_dist
 
 <pre>
-kernel_abi_dist(<a href="#kernel_abi_dist-name">name</a>, <a href="#kernel_abi_dist-kernel_abi">kernel_abi</a>, <a href="#kernel_abi_dist-kernel_build_add_vmlinux">kernel_build_add_vmlinux</a>, <a href="#kernel_abi_dist-kwargs">kwargs</a>)
+kernel_abi_dist(<a href="#kernel_abi_dist-name">name</a>, <a href="#kernel_abi_dist-kernel_abi">kernel_abi</a>, <a href="#kernel_abi_dist-kernel_build_add_vmlinux">kernel_build_add_vmlinux</a>, <a href="#kernel_abi_dist-ignore_diff">ignore_diff</a>, <a href="#kernel_abi_dist-no_ignore_diff_target">no_ignore_diff_target</a>,
+                <a href="#kernel_abi_dist-kwargs">kwargs</a>)
 </pre>
 
 A wrapper over `copy_to_dist_dir` for [`kernel_abi`](#kernel_abi).
@@ -964,6 +1074,8 @@ particular, the `kernel_build` targets in `data` automatically builds
 | <a id="kernel_abi_dist-name"></a>name |  name of the dist target   |  none |
 | <a id="kernel_abi_dist-kernel_abi"></a>kernel_abi |  name of the [`kernel_abi`](#kernel_abi) invocation.   |  none |
 | <a id="kernel_abi_dist-kernel_build_add_vmlinux"></a>kernel_build_add_vmlinux |  If `True`, all `kernel_build` targets depended on by this change automatically applies a [transition](https://bazel.build/extending/config#user-defined-transitions) that always builds `vmlinux`. For up-to-date implementation details, look for `with_vmlinux_transition` in `build/kernel/kleaf/impl/abi`.<br><br>If there are multiple `kernel_build` targets in `data`, only keep the one for device build. Otherwise, the build may break. For example:<br><br><pre><code>kernel_build(&#10;    name = "tuna",&#10;    base_kernel = "//common:kernel_aarch64"&#10;    ...&#10;)&#10;&#10;kernel_abi(...)&#10;kernel_abi_dist(&#10;    name = "tuna_abi_dist",&#10;    data = [&#10;        ":tuna",&#10;        # "//common:kernel_aarch64", # remove GKI&#10;    ],&#10;    kernel_build_add_vmlinux = True,&#10;)</code></pre><br><br>Enabling this option ensures that `tuna_abi_dist` doesn't build `//common:kernel_aarch64` and `:tuna` twice, once with the transition and once without. Enabling this ensures that `//common:kernel_aarch64` and `:tuna` always built with the transition.<br><br>**Note**: Its value will be `True` by default in the future. During the migration period, this is `False` by default. Once all devices have been fixed, this attribute will be set to `True` by default.   |  `None` |
+| <a id="kernel_abi_dist-ignore_diff"></a>ignore_diff |  [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes). If `True` and the return code of `stgdiff` signals the ABI difference, then the result is ignored.   |  `None` |
+| <a id="kernel_abi_dist-no_ignore_diff_target"></a>no_ignore_diff_target |  [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes). If `ignore_diff` is `True`, this need to be set to a name of the target that doesn't have `ignore_diff`. This target will be recommended as an alternative to a user. If `no_ignore_diff_target` is None, there will be no alternative recommended.   |  `None` |
 | <a id="kernel_abi_dist-kwargs"></a>kwargs |  Additional attributes to the internal rule, e.g. [`visibility`](https://docs.bazel.build/versions/main/visibility.html). See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 
@@ -1032,7 +1144,7 @@ For example, if name is `"kernel_aarch64"`:
 | <a id="kernel_build-module_signing_key"></a>module_signing_key |  A label referring to a module signing key.<br><br>This is to allow for dynamic setting of `CONFIG_MODULE_SIG_KEY` from Bazel.   |  `None` |
 | <a id="kernel_build-system_trusted_key"></a>system_trusted_key |  A label referring to a trusted system key.<br><br>This is to allow for dynamic setting of `CONFIG_SYSTEM_TRUSTED_KEY` from Bazel.   |  `None` |
 | <a id="kernel_build-modules_prepare_force_generate_headers"></a>modules_prepare_force_generate_headers |  If `True` it forces generation of additional headers as part of modules_prepare.   |  `None` |
-| <a id="kernel_build-defconfig_fragments"></a>defconfig_fragments |  A list of targets that are applied to the defconfig.<br><br>As a convention, files should usually be named `<prop>_defconfig` (e.g. `kasan_defconfig`) or `<prop>_<value>_defconfig` (e.g. `lto_none_defconfig`) to provide human-readable hints during the build. The prefix should describe what the defconfig does. However, this is not a requirement. These configs are also applied to external modules, including `kernel_module`s and `ddk_module`s.   |  `None` |
+| <a id="kernel_build-defconfig_fragments"></a>defconfig_fragments |  A list of targets that are applied to the defconfig.<br><br>As a convention, files should usually be named `<prop>_defconfig` (e.g. `kasan_defconfig`) or `<prop>_<value>_defconfig` (e.g. `lto_none_defconfig`) to provide human-readable hints during the build. The prefix should describe what the defconfig does. However, this is not a requirement. These configs are also applied to external modules, including `kernel_module`s and `ddk_module`s.<br><br>**NOTE**: `defconfig_fragments` are applied **after** `make defconfig`, similar to `POST_DEFCONFIG_CMDS`. If you migrate from `PRE_DEFCONFIG_CMDS` to `defconfig_fragments`, certain values may change; double check by building the `<target_name>_config` target and examining the generated `.config` file.   |  `None` |
 | <a id="kernel_build-page_size"></a>page_size |  Default is `"default"`. Page size of the kernel build.<br><br>Value may be one of `"default"`, `"4k"`, `"16k"` or `"64k"`. If `"default"`, the defconfig is left as-is.<br><br>16k / 64k page size is only supported on `arch = "arm64"`.   |  `None` |
 | <a id="kernel_build-pack_module_env"></a>pack_module_env |  If `True`, create `{name}_module_env.tar.gz` and other archives as part of the default output of this target.<br><br>These archives contains necessary files to build external modules.   |  `None` |
 | <a id="kernel_build-sanitizers"></a>sanitizers |  **non-configurable**. A list of sanitizer configurations. By default, no sanitizers are explicity configured; values in defconfig are respected. Possible values are:   - `["kasan_any_mode"]`   - `["kasan_sw_tags"]`   - `["kasan_generic"]`   - `["kcsan"]`   |  `None` |
@@ -1071,13 +1183,13 @@ kernel_images(<a href="#kernel_images-name">name</a>, <a href="#kernel_images-ke
               <a href="#kernel_images-build_system_dlkm">build_system_dlkm</a>, <a href="#kernel_images-build_system_dlkm_flatten">build_system_dlkm_flatten</a>, <a href="#kernel_images-build_dtbo">build_dtbo</a>, <a href="#kernel_images-dtbo_srcs">dtbo_srcs</a>, <a href="#kernel_images-dtbo_config">dtbo_config</a>,
               <a href="#kernel_images-mkbootimg">mkbootimg</a>, <a href="#kernel_images-deps">deps</a>, <a href="#kernel_images-boot_image_outs">boot_image_outs</a>, <a href="#kernel_images-modules_list">modules_list</a>, <a href="#kernel_images-modules_recovery_list">modules_recovery_list</a>,
               <a href="#kernel_images-modules_charger_list">modules_charger_list</a>, <a href="#kernel_images-modules_blocklist">modules_blocklist</a>, <a href="#kernel_images-modules_options">modules_options</a>, <a href="#kernel_images-vendor_ramdisk_binaries">vendor_ramdisk_binaries</a>,
-              <a href="#kernel_images-system_dlkm_fs_type">system_dlkm_fs_type</a>, <a href="#kernel_images-system_dlkm_fs_types">system_dlkm_fs_types</a>, <a href="#kernel_images-system_dlkm_modules_list">system_dlkm_modules_list</a>,
-              <a href="#kernel_images-system_dlkm_modules_blocklist">system_dlkm_modules_blocklist</a>, <a href="#kernel_images-system_dlkm_props">system_dlkm_props</a>, <a href="#kernel_images-vendor_dlkm_archive">vendor_dlkm_archive</a>,
-              <a href="#kernel_images-vendor_dlkm_etc_files">vendor_dlkm_etc_files</a>, <a href="#kernel_images-vendor_dlkm_fs_type">vendor_dlkm_fs_type</a>, <a href="#kernel_images-vendor_dlkm_modules_list">vendor_dlkm_modules_list</a>,
-              <a href="#kernel_images-vendor_dlkm_modules_blocklist">vendor_dlkm_modules_blocklist</a>, <a href="#kernel_images-vendor_dlkm_props">vendor_dlkm_props</a>, <a href="#kernel_images-ramdisk_compression">ramdisk_compression</a>,
-              <a href="#kernel_images-ramdisk_compression_args">ramdisk_compression_args</a>, <a href="#kernel_images-unpack_ramdisk">unpack_ramdisk</a>, <a href="#kernel_images-avb_sign_boot_img">avb_sign_boot_img</a>, <a href="#kernel_images-avb_boot_partition_size">avb_boot_partition_size</a>,
-              <a href="#kernel_images-avb_boot_key">avb_boot_key</a>, <a href="#kernel_images-avb_boot_algorithm">avb_boot_algorithm</a>, <a href="#kernel_images-avb_boot_partition_name">avb_boot_partition_name</a>, <a href="#kernel_images-dedup_dlkm_modules">dedup_dlkm_modules</a>,
-              <a href="#kernel_images-create_modules_order">create_modules_order</a>, <a href="#kernel_images-kwargs">kwargs</a>)
+              <a href="#kernel_images-vendor_ramdisk_dev_nodes">vendor_ramdisk_dev_nodes</a>, <a href="#kernel_images-system_dlkm_fs_type">system_dlkm_fs_type</a>, <a href="#kernel_images-system_dlkm_fs_types">system_dlkm_fs_types</a>,
+              <a href="#kernel_images-system_dlkm_modules_list">system_dlkm_modules_list</a>, <a href="#kernel_images-system_dlkm_modules_blocklist">system_dlkm_modules_blocklist</a>, <a href="#kernel_images-system_dlkm_props">system_dlkm_props</a>,
+              <a href="#kernel_images-vendor_dlkm_archive">vendor_dlkm_archive</a>, <a href="#kernel_images-vendor_dlkm_etc_files">vendor_dlkm_etc_files</a>, <a href="#kernel_images-vendor_dlkm_fs_type">vendor_dlkm_fs_type</a>,
+              <a href="#kernel_images-vendor_dlkm_modules_list">vendor_dlkm_modules_list</a>, <a href="#kernel_images-vendor_dlkm_modules_blocklist">vendor_dlkm_modules_blocklist</a>, <a href="#kernel_images-vendor_dlkm_props">vendor_dlkm_props</a>,
+              <a href="#kernel_images-ramdisk_compression">ramdisk_compression</a>, <a href="#kernel_images-ramdisk_compression_args">ramdisk_compression_args</a>, <a href="#kernel_images-unpack_ramdisk">unpack_ramdisk</a>, <a href="#kernel_images-avb_sign_boot_img">avb_sign_boot_img</a>,
+              <a href="#kernel_images-avb_boot_partition_size">avb_boot_partition_size</a>, <a href="#kernel_images-avb_boot_key">avb_boot_key</a>, <a href="#kernel_images-avb_boot_algorithm">avb_boot_algorithm</a>, <a href="#kernel_images-avb_boot_partition_name">avb_boot_partition_name</a>,
+              <a href="#kernel_images-dedup_dlkm_modules">dedup_dlkm_modules</a>, <a href="#kernel_images-create_modules_order">create_modules_order</a>, <a href="#kernel_images-kwargs">kwargs</a>)
 </pre>
 
 Build multiple kernel images.
@@ -1140,6 +1252,7 @@ For details, see
 | <a id="kernel_images-modules_blocklist"></a>modules_blocklist |  A file containing a list of modules which are blocked from being loaded.<br><br>This file is copied directly to staging directory, and should be in the format: <pre><code>blocklist module_name</code></pre>   |  `None` |
 | <a id="kernel_images-modules_options"></a>modules_options |  Label to a file copied to `/lib/modules/<kernel_version>/modules.options` on the ramdisk.<br><br>Lines in the file should be of the form: <pre><code>options &lt;modulename&gt; &lt;param1&gt;=&lt;val&gt; &lt;param2&gt;=&lt;val&gt; ...</code></pre>   |  `None` |
 | <a id="kernel_images-vendor_ramdisk_binaries"></a>vendor_ramdisk_binaries |  List of vendor ramdisk binaries which includes the device-specific components of ramdisk like the fstab file and the device-specific rc files. If specifying multiple vendor ramdisks and identical file paths exist in the ramdisks, the file from last ramdisk is used.<br><br>Note: **order matters**. To prevent buildifier from sorting the list, add the following: <pre><code># do not sort</code></pre>   |  `None` |
+| <a id="kernel_images-vendor_ramdisk_dev_nodes"></a>vendor_ramdisk_dev_nodes |  List of dev nodes description files which describes special device files to be added to the vendor ramdisk. File format is as accepted by mkbootfs.   |  `None` |
 | <a id="kernel_images-system_dlkm_fs_type"></a>system_dlkm_fs_type |  Deprecated. Use `system_dlkm_fs_types` instead.<br><br>Supported filesystems for `system_dlkm` image are `ext4` and `erofs`. Defaults to `ext4` if not specified.   |  `None` |
 | <a id="kernel_images-system_dlkm_fs_types"></a>system_dlkm_fs_types |  List of file systems type for `system_dlkm` images.<br><br>Supported filesystems for `system_dlkm` image are `ext4` and `erofs`. If not specified, builds `system_dlkm.img` with ext4 else builds `system_dlkm.<fs>.img` for each file system type in the list.   |  `None` |
 | <a id="kernel_images-system_dlkm_modules_list"></a>system_dlkm_modules_list |  location of an optional file containing the list of kernel modules which shall be copied into a system_dlkm partition image.   |  `None` |

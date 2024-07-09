@@ -33,6 +33,7 @@ bzl_library(
         "abi/abi_transitions.bzl",
         "abi/abi_update.bzl",
         "abi/base_kernel_utils.bzl",
+        "abi/dependency_graph.bzl",
         "abi/extracted_symbols.bzl",
         "abi/force_add_vmlinux_utils.bzl",
         "abi/get_src_kmi_symbol_list.bzl",
@@ -169,12 +170,13 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
+# If true, GKI runtime module protection is disabled.
 config_setting(
     name = "force_disable_trim_is_true",
     flag_values = {
         ":force_disable_trim": "1",
     },
-    # All kernel_* from different packages can see this
+    # All kernel_* from different packages can see this.
     visibility = ["//visibility:public"],
 )
 
