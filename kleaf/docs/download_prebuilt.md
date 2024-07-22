@@ -1,9 +1,7 @@
-# Build against downloaded prebuilt GKI (deprecated)
+# Build against downloaded prebuilt GKI
 
-**WARNING**: Contents in this page are deprecated, including
-the `--use_prebuilt_gki` flag and `*_download_or_build` targets.
-To build against downloaded prebuilt GKI with bzlmod, see
-[Setting up DDK workspace](ddk/workspace.md#declare-prebuilts-repository).
+**WARNING**: Building against downloaded prebuilts is currently experimental. If
+you encounter any errors, see [common errors](#common-errors).
 
 ## Step 1: Replace reference to GKI targets with downloaded targets
 

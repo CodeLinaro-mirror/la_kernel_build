@@ -2,17 +2,9 @@
 
 ## Using bzlmod (recommended)
 
-Recommended: If you are using `@kleaf` as a dependent module,
-see [Setting up DDK workspace](ddk/workspace.md).
-
-If you are using `@kleaf` as the root module, see
-[bzlmod support in Kleaf.](bzlmod.md)
+See [bzlmod support in Kleaf.](bzlmod.md)
 
 ## Legacy `WORKSPACE` support
-
-**Warning**: Support for non-Bzlmod builds are deprecated and will be
-removed in Android 16 branches. Information below are
-outdated and not supported with Bzlmod enabled.
 
 ### Using the provided `WORKSPACE` file
 

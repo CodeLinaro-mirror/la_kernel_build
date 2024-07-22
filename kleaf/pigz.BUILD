@@ -22,10 +22,8 @@ cc_binary(
     linkopts = [
         "-lm",
         "-lpthread",
+        "-lz",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-        "@zlib",
-        "@zopfli",
-    ],
+    deps = ["@zopfli"],
 )

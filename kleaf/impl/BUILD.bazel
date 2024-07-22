@@ -33,7 +33,6 @@ bzl_library(
         "abi/abi_transitions.bzl",
         "abi/abi_update.bzl",
         "abi/base_kernel_utils.bzl",
-        "abi/dependency_graph.bzl",
         "abi/extracted_symbols.bzl",
         "abi/force_add_vmlinux_utils.bzl",
         "abi/get_src_kmi_symbol_list.bzl",
@@ -63,7 +62,6 @@ bzl_library(
         "declare_host_tools.bzl",
         "declare_kernel_prebuilts.bzl",
         "declare_toolchain_constants.bzl",
-        "default_host_tools.scl",
         "file.bzl",
         "file_selector.bzl",
         "gki_artifacts.bzl",
@@ -171,13 +169,12 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
-# If true, GKI runtime module protection is disabled.
 config_setting(
     name = "force_disable_trim_is_true",
     flag_values = {
         ":force_disable_trim": "1",
     },
-    # All kernel_* from different packages can see this.
+    # All kernel_* from different packages can see this
     visibility = ["//visibility:public"],
 )
 
@@ -404,19 +401,12 @@ sh_binary(
     visibility = ["//visibility:public"],
 )
 
-py_library(
-    name = "default_host_tools",
-    srcs = ["default_host_tools.py"],
-    visibility = ["//build/kernel/kleaf:__pkg__"],
-)
-
 kernel_platform_toolchain(
     name = "kernel_toolchain_target",
 )
 
 kernel_platform_toolchain(
     name = "kernel_toolchain_exec",
-    visibility = ["//build/kernel/kleaf/tests:__subpackages__"],
     deps = [
         "//prebuilts/kernel-build-tools:linux_x86_imported_libs",
     ],
@@ -493,11 +483,5 @@ python_interpreter_file(
 
 python_runtime_files(
     name = "python_runtime_files",
-    visibility = ["//build/kernel:__pkg__"],
-)
-
-cc_binary(
-    name = "arg_wrapper",
-    srcs = ["arg_wrapper.cpp"],
     visibility = ["//build/kernel:__pkg__"],
 )

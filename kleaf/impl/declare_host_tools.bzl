@@ -14,12 +14,22 @@
 
 """Symlinks to host tools."""
 
-load(":default_host_tools.scl", "DEFAULT_HOST_TOOLS")
-
 visibility([
     "//build/kernel/kleaf/...",
     "//",  # for root MODULE.bazel
 ])
+
+# Superset of all tools we need from host.
+# For the subset of host tools we typically use for a kernel build,
+# see //build/kernel:hermetic-tools.
+_DEFAULT_HOST_TOOLS = [
+    "bash",
+    "perl",
+    "rsync",
+    "sh",
+    # For BTRFS (b/292212788)
+    "find",
+]
 
 def _kleaf_host_tools_repo_impl(repository_ctx):
     repository_ctx.file("WORKSPACE", """\
@@ -37,10 +47,7 @@ exports_files(
     ))
 
     for host_tool in repository_ctx.attr.host_tools:
-        host_path = repository_ctx.which(host_tool)
-        if host_path == None:
-            fail("Missing host tool {}".format(host_tool))
-        repository_ctx.symlink(host_path, host_tool)
+        repository_ctx.symlink(repository_ctx.which(host_tool), host_tool)
 
 # TODO(b/276493276): Hide this once workspace.bzl is deleted.
 kleaf_host_tools_repo = repository_rule(
@@ -58,7 +65,7 @@ def _declare_repos(module_ctx, tag_name):
             host_tools += declared.host_tools
 
     if not host_tools:
-        host_tools = DEFAULT_HOST_TOOLS
+        host_tools = _DEFAULT_HOST_TOOLS
 
     kleaf_host_tools_repo(
         name = "kleaf_host_tools",
@@ -73,7 +80,7 @@ _tag_class = tag_class(
 
                 If `declare_host_tools` is not called anywhere, or only called
                 with empty `host_tools`, the default is `{}`.
-            """.format(repr(DEFAULT_HOST_TOOLS)),
+            """.format(repr(_DEFAULT_HOST_TOOLS)),
         ),
     },
 )

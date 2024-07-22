@@ -255,7 +255,6 @@ def _kernel_env_impl(ctx):
             sed "s|${{PWD}}|\\$PWD|g" | \\
             # Drop reference to bin_dir and replace with variable;
             # Replace $PWD/<not out> with $KLEAF_REPO_DIR/$1
-            sed "s|\\$PWD/{hermetic_base}|\\$PWD/\\$KLEAF_HERMETIC_BASE|g" | \\
             sed "s|\\$PWD/{bin_dir_and_workspace_root}|\\$PWD/\\$KLEAF_BIN_DIR_AND_WORKSPACE_ROOT|g" | \\
             sed "s|{bin_dir_and_workspace_root}|\\$KLEAF_BIN_DIR_AND_WORKSPACE_ROOT|g" | \\
             # List of packages that //build/kernel/... depends on. This excludes
@@ -279,7 +278,6 @@ def _kernel_env_impl(ctx):
         config_tags_comment_file = config_tags_out.env.path,
         pre_env_script = pre_env_script.path,
         post_env_script = post_env_script.path,
-        hermetic_base = hermetic_tools.internal_hermetic_base,
         bin_dir_and_workspace_root = bin_dir_and_workspace_root,
     )
 
@@ -357,8 +355,6 @@ def get_env_info_setup_command(hermetic_tools_setup, build_utils_sh, env_setup_s
     )
 
 def _get_env_setup_cmds(ctx):
-    hermetic_tools = hermetic_toolchain.get(ctx)
-
     pre_env = ""
     if ctx.attr._debug_annotate_scripts[BuildSettingInfo].value:
         pre_env += debug.trap()
@@ -374,11 +370,6 @@ def _get_env_setup_cmds(ctx):
         # This may be overridden by kernel_filegroup.
         KLEAF_REPO_WORKSPACE_ROOT=${{KLEAF_REPO_WORKSPACE_ROOT:-{kleaf_repo_workspace_root}}}
 
-        # hermetic_base for hermetic tools, relative to execroot. This is
-        # handled separately from bin_dir because hermetic_tools has a transition
-        # attached to it.
-        KLEAF_HERMETIC_BASE=${{KLEAF_HERMETIC_BASE:-{hermetic_base}}}
-
         # bin_dir for Kleaf repository, relative to execroot
         # This is:
         # - either bazel-out/k8-fastbuild/bin if @kleaf is the root module;
@@ -392,7 +383,6 @@ def _get_env_setup_cmds(ctx):
         # - or $PWD/external/kleaf (or some variations of it) if @kleaf is a dependent module
         KLEAF_REPO_DIR="$PWD${{KLEAF_REPO_WORKSPACE_ROOT:+/$KLEAF_REPO_WORKSPACE_ROOT}}"
     """.format(
-        hermetic_base = hermetic_tools.internal_hermetic_base,
         bin_dir = ctx.bin_dir.path,
         kleaf_repo_workspace_root = kleaf_repo_workspace_root,
     )
@@ -427,7 +417,7 @@ def _get_env_setup_cmds(ctx):
             export KERNEL_DIR=${{KLEAF_REPO_WORKSPACE_ROOT:+$KLEAF_REPO_WORKSPACE_ROOT/}}${{KERNEL_DIR#{kleaf_repo_workspace_root_slash}}}
         fi
 
-        ## Set up KCPPFLAGS and KCPPFLAGS_COMPAT
+        ## Set up KCPPFLAGS
 
         # Replace ${{ROOT_DIR}} with "/proc/self/cwd" in the file name
         # references in the binaries (e.g. debug info).
@@ -449,11 +439,6 @@ def _get_env_setup_cmds(ctx):
         if [[ "$(realpath ${{ROOT_DIR}}/${{KERNEL_DIR}})" != "${{ROOT_DIR}}/${{KERNEL_DIR}}" ]]; then
             export KCPPFLAGS="$KCPPFLAGS -ffile-prefix-map=$(realpath ${{ROOT_DIR}}/${{KERNEL_DIR}}/..)=/proc/self/cwd"
         fi
-        export KCPPFLAGS_COMPAT="$KCPPFLAGS"
-
-        # Set libclang.so location for use by bindgen for Rust
-        LIBCLANG_PATH=$(dirname $(which clang))/../lib
-        export LIBCLANG_PATH
     """.format(
         get_make_jobs_cmd = status.get_volatile_status_cmd(ctx, "MAKE_JOBS"),
         get_make_keep_going_cmd = status.get_volatile_status_cmd(ctx, "MAKE_KEEP_GOING"),

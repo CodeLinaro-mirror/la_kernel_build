@@ -115,24 +115,6 @@ CI_TARGET_MAPPING = {
                 "remote_filename_fmt": item,
             }
             for item in GKI_ARTIFACTS_AARCH64_OUTS
-        } | {
-            # TODO(b/328770706): download_configs.json should be a proper rule to
-            # get the name of the file from :kernel_aarch64_ddk_headers_archive
-            "kernel_aarch64_ddk_headers_archive.tar.gz": {
-                "target_suffix": "init_ddk_files",
-                "mandatory": True,
-                "remote_filename_fmt": "kernel_aarch64_ddk_headers_archive.tar.gz",
-            },
-            "build.config.constants": {
-                "target_suffix": "init_ddk_files",
-                "mandatory": True,
-                "remote_filename_fmt": "build.config.constants",
-            },
-            "manifest.xml": {
-                "target_suffix": "init_ddk_files",
-                "mandatory": False,
-                "remote_filename_fmt": "manifest_{build_number}.xml",
-            },
         },
     },
 }

@@ -88,6 +88,7 @@ def _system_dlkm_image_impl(ctx):
         """.format(
             base_kernel_system_dlkm_staging_archive = base_kernel_system_dlkm_staging_archive.path,
             modules_staging_dir = modules_staging_dir,
+            system_dlkm_staging_dir = system_dlkm_staging_dir,
         )
 
         extra_flags_cmd = """

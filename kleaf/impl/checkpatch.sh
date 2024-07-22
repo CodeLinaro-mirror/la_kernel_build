@@ -138,8 +138,8 @@ if [[ "$SUBJECT" =~ ^UPSTREAM|^BACKPORT|^FROMGIT ]]; then
   exit 0
 fi
 
-if [[ "$SUBJECT" =~ ^Revert|^Reapply ]]; then
-  echo "Not linting revert/reapply patches for "${DIR}". Skipping this check."
+if [[ "$SUBJECT" =~ ^Revert ]]; then
+  echo "Not linting revert patches for "${DIR}". Skipping this check."
   exit 0
 fi
 
@@ -186,10 +186,6 @@ echo "========================================================" >> "${MY_RESULTS
 # TODO: b/199237323 - Run with --no-tree option for now to avoid spdxcheck.py
 #                     failures. A better fix would be to remove spdxcheck.py.
 CHECKPATCH_ARGS+=(--no-tree)
-
-# Run with --noshowfile option to ensure consistent output in cases where
-# --showfile is present in a .checkpatch.conf file.
-CHECKPATCH_ARGS+=(--noshowfile)
 
 # Delay exit on non-zero checkpatch.pl return code so we can finish logging.
 

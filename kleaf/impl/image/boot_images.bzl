@@ -67,7 +67,6 @@ def _boot_images_impl(ctx):
     inputs += ctx.files.vendor_ramdisk_binaries
     if ctx.attr.gki_ramdisk_prebuilt_binary:
         inputs += [ctx.file.gki_ramdisk_prebuilt_binary]
-    inputs += ctx.files.vendor_ramdisk_dev_nodes
 
     transitive_inputs = [
         kernel_build_outs,
@@ -124,13 +123,6 @@ def _boot_images_impl(ctx):
         command += """
             GKI_RAMDISK_PREBUILT_BINARY="{gki_ramdisk_prebuilt_binary}"
         """.format(gki_ramdisk_prebuilt_binary = ctx.file.gki_ramdisk_prebuilt_binary.path)
-
-    if ctx.files.vendor_ramdisk_dev_nodes:
-        command += """
-            VENDOR_RAMDISK_DEV_NODES="{vendor_ramdisk_dev_nodes}"
-        """.format(
-            vendor_ramdisk_dev_nodes = " ".join([file.path for file in ctx.files.vendor_ramdisk_dev_nodes]),
-        )
 
     command += """
              # Create and restore DIST_DIR.
@@ -257,7 +249,6 @@ Execute `build_boot_images` in `build_utils.sh`.""",
 """, values = ["vendor_boot", "vendor_kernel_boot"]),
         "vendor_ramdisk_binaries": attr.label_list(allow_files = True),
         "gki_ramdisk_prebuilt_binary": attr.label(allow_single_file = True),
-        "vendor_ramdisk_dev_nodes": attr.label_list(allow_files = True),
         "unpack_ramdisk": attr.bool(
             doc = """ When false it skips unpacking the vendor ramdisk and copy it as
             is, without modifications, into the boot image. Also skip the mkbootfs step.
