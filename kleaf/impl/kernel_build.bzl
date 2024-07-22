@@ -57,8 +57,8 @@ load(
     "TOOLCHAIN_VERSION_FILENAME",
 )
 load(":debug.bzl", "debug")
-load(":file_selector.bzl", "file_selector")
 load(":file.bzl", "file")
+load(":file_selector.bzl", "file_selector")
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
 load(":kernel_config.bzl", "kernel_config")
 load(":kernel_config_settings.bzl", "kernel_config_settings")
@@ -98,6 +98,7 @@ def kernel_build(
         make_goals = None,
         kconfig_ext = None,
         dtstree = None,
+        rewrite_absolute_paths_in_config = None,
         kmi_symbol_list = None,
         protected_exports_list = None,
         protected_modules_list = None,
@@ -302,6 +303,19 @@ def kernel_build(
 
           Labels are created for each item in `module_implicit_outs` as in `outs`.
 
+        rewrite_absolute_paths_in_config: If true, `.config` does not contain
+          absolute paths for files like `kmi_symbol_list`, `module_signing_key`,
+          `system_trusted_key`. A relative path is written instead and the file
+          is restored to that relative path under `$OUT_DIR`.
+
+          Requires patch "module: allow UNUSED_KSYMS_WHITELIST to be relative
+          against objtree.". See these links for backports:
+
+          * android14-5.15: http://r.android.com/3101435
+          * android14-6.1: http://r.android.com/3101434
+
+          This is true and not modifiable on main-kernel-build-2024
+          (android15-6.6) and above.
         kmi_symbol_list: A label referring to the main KMI symbol list file. See `additional_kmi_symbol_lists`.
 
           This is the Bazel equivalent of `ADDITIONAL_KMI_SYMBOL_LISTS`.
@@ -401,6 +415,12 @@ def kernel_build(
           (e.g. `kasan_defconfig`) or `<prop>_<value>_defconfig` (e.g. `lto_none_defconfig`)
           to provide human-readable hints during the build. The prefix should
           describe what the defconfig does. However, this is not a requirement.
+
+          **NOTE**: `defconfig_fragments` are applied **after** `make defconfig`, similar
+          to `POST_DEFCONFIG_CMDS`. If you migrate from `PRE_DEFCONFIG_CMDS`
+          to `defconfig_fragments`, certain values may change; double check
+          by building the `<target_name>_config` target and examining the
+          generated `.config` file.
         page_size: Default is `"default"`. Page size of the kernel build.
 
           Value may be one of `"default"`, `"4k"`, `"16k"` or `"64k"`. If
@@ -548,6 +568,7 @@ def kernel_build(
         raw_kmi_symbol_list = raw_kmi_symbol_list_target_name,
         module_signing_key = module_signing_key,
         system_trusted_key = system_trusted_key,
+        rewrite_absolute_paths_in_config = rewrite_absolute_paths_in_config,
         lto = lto,
         defconfig_fragments = defconfig_fragments,
         **internal_kwargs
@@ -2089,6 +2110,13 @@ def _kmi_symbol_list_strict_mode(ctx, all_output_files, all_module_names_file):
               IGNORED because --kgdb is set!".format(this_label = ctx.label))
         return None
 
+    # Skip for --gcov builds.
+    if ctx.attr._gcov[BuildSettingInfo].value:
+        # buildifier: disable=print
+        print("\nWARNING: {this_label}: Attribute kmi_symbol_list_strict_mode\
+              IGNORED because --gcov is set!".format(this_label = ctx.label))
+        return None
+
     if not ctx.attr.kmi_symbol_list_strict_mode:
         return None
     if not ctx.files.raw_kmi_symbol_list:
@@ -2186,6 +2214,13 @@ def _kmi_symbol_list_violations_check(ctx, modules_staging_archive):
         # buildifier: disable=print
         print("\nWARNING: {this_label}: Symbol list violations check \
               IGNORED because --kgdb is set!".format(this_label = ctx.label))
+        return None
+
+    # Skip for --gcov builds.
+    if ctx.attr._gcov[BuildSettingInfo].value:
+        # buildifier: disable=print
+        print("\nWARNING: {this_label}: Attribute kmi_symbol_list_strict_mode\
+              IGNORED because --gcov is set!".format(this_label = ctx.label))
         return None
 
     inputs = [
