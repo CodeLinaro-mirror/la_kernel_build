@@ -527,5 +527,12 @@ if [ -n "${ANDROID_PRODUCT_OUT}" ] && [ -n "${ANDROID_BUILD_TOP}" ]; then
   )
 fi
 
+HOST_TOOLS=${ANDROID_EXT_MODULES_OUT}/msm-kernel/host_tools
+BUILD_TOOLS=${ROOT_DIR}/build/kernel/build-tools
+
+if [ -e "${HOST_TOOLS}/perl" ]; then
+  cp -r "${HOST_TOOLS}/perl" "${BUILD_TOOLS}/path/linux-x86/perl"
+fi
+
 # remove bazel dir to avoid build issues
 rm -rf ${ANDROID_BUILD_TOP}/kernel_platform/out/bazel
