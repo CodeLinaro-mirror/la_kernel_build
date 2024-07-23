@@ -407,10 +407,24 @@ config_setting(
 )
 
 # Default is false.
+# If true, build some parts of the toolchain from sources.
+bool_flag(
+    name = "toolchain_from_sources",
+    build_setting_default = False,
+    visibility = ["//visibility:private"],
+)
+
+config_setting(
+    name = "toolchain_from_sources_is_true",
+    flag_values = {":toolchain_from_sources": "1"},
+    visibility = ["//build/kernel:__pkg__"],
+)
+
+# Default is true.
 # If true, use pigz as drop-in replacement for gzip.
 bool_flag(
     name = "gzip_is_pigz",
-    build_setting_default = False,
+    build_setting_default = True,
     visibility = ["//visibility:private"],
 )
 
@@ -517,10 +531,10 @@ selects.config_setting_group(
 )
 
 # Debug flag to control make verbosity
-# E (default) = Error (-s)
-# I = Info
-# D = Debug (V=1)
-# V = Verbose (V=2)
+# E (default): Only print errors (make -s)
+# I: print brief description of make targets being built (make)
+# D: print full commands (make V=1)
+# V: print the reason for the rebuild of each make target (make V=2)
 string_flag(
     name = "debug_make_verbosity",
     build_setting_default = "E",
@@ -618,6 +632,19 @@ config_setting(
     flag_values = {":use_signed_prebuilts": "1"},
     # Visible to any package that calls define_common_kernels()
     visibility = ["//visibility:public"],
+)
+
+# If true, drop llvm-strings from hermetic-tools.
+bool_flag(
+    name = "remove_strings_from_hermetic_tools",
+    build_setting_default = False,
+    visibility = ["//visibility:private"],
+)
+
+config_setting(
+    name = "remove_strings_from_hermetic_tools_is_true",
+    flag_values = {":remove_strings_from_hermetic_tools": "1"},
+    visibility = ["//build/kernel:__pkg__"],
 )
 
 # The values of --config, as passed by command line and bazelrc files.
@@ -847,6 +874,7 @@ test_suite(
         ":check_declared_output_list_test",
         ":empty_test",
         "//build/bazel_common_rules/exec/tests",
+        "//build/kernel:init_ddk_test",
         "//build/kernel/kleaf/impl:get_kmi_string_test",
         "//build/kernel/kleaf/impl:visibility_test",
         "//build/kernel/kleaf/tests",
@@ -864,4 +892,7 @@ py_library(
     ],
     imports = ["."],
     visibility = ["//build/kernel:__subpackages__"],
+    deps = [
+        "//build/kernel/kleaf/impl:default_host_tools",
+    ],
 )
