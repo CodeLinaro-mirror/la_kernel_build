@@ -149,14 +149,31 @@ def get_localversion_from_git(project: pathlib.Path) -> PathCollectible | None:
     )
 
 
+def _find_repo(curdir: pathlib.Path) -> pathlib.Path | None:
+    """Find repo installation."""
+    while curdir.parent != curdir:  # is not root
+        maybe_dot_repo = curdir / ".repo"
+        if maybe_dot_repo.is_dir():
+            return curdir
+        curdir = curdir.parent
+    return None
+
+
 def list_projects() -> list[pathlib.Path]:
     """Lists projects in the repository.
 
     Returns:
         a list of Git projects relative to CWD.
     """
-    repo_root_s, repo_manifest = os.environ["KLEAF_REPO_MANIFEST"].split(":")
-    repo_root = pathlib.Path(repo_root_s)
+    repo_root_s, repo_manifest = os.environ.get("KLEAF_REPO_MANIFEST", ":").split(":")
+    if repo_root_s:
+        repo_root = pathlib.Path(repo_root_s)
+    else:
+        repo_root = _find_repo(pathlib.Path(".").resolve())
+
+    if not repo_root:
+        logging.warning("Unable to determine repo root. Please specify --repo_manifest.")
+        return []
 
     if repo_manifest:
         with open(repo_manifest) as repo_manifest_file:
@@ -220,7 +237,13 @@ class Stamp(object):
             "KLEAF_IGNORE_MISSING_PROJECTS") == "true"
         self.use_kleaf_localversion = os.environ.get(
             "KLEAF_USE_KLEAF_LOCALVERSION") == "true"
+
         self.projects = list_projects()
+        extra_git_project_env_var = os.environ.get("KLEAF_EXTRA_GIT_PROJECTS")
+        if extra_git_project_env_var:
+            self.projects.extend(pathlib.Path(value) for value in
+                                 extra_git_project_env_var.split(":"))
+
         self.init_for_dot_source_date_epoch_dir()
 
     def init_for_dot_source_date_epoch_dir(self) -> None:
