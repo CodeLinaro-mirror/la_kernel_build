@@ -98,7 +98,11 @@ function rel_path() {
   python -c "import os.path; import sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))" "$1" "$2"
 }
 
-ROOT_DIR=$($(dirname $(readlink -f $0))/../gettop.sh)
+# Use host readlink. b/348003050
+MYPATH=$(readlink -f "$0")
+MYDIR=${MYPATH%/*}
+ROOT_DIR=${MYDIR%build/kernel/android}
+ROOT_DIR=${ROOT_DIR%/}
 echo "  kernel platform root: $ROOT_DIR"
 
 ################################################################################

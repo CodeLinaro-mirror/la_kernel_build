@@ -30,7 +30,13 @@
 # Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause-Clear
 
-ROOT_DIR=$($(dirname $(readlink -f $0))/../gettop.sh)
+# Use host readlink. b/348003050
+MYPATH=$(readlink -f "$0")
+MYDIR=${MYPATH%/*}
+ROOT_DIR=${MYDIR%build/kernel/android}
+ROOT_DIR=${ROOT_DIR%/}
+
+echo "  kernel platform root: $ROOT_DIR"
 
 set -e
 
