@@ -1221,7 +1221,7 @@ def get_grab_gcno_step(ctx, src_dir, is_kernel_build):
             base_kernel = base_kernel_utils.get_base_kernel(ctx)
         base_kernel_gcno_dir_cmd = ""
         if base_kernel and base_kernel[GcovInfo].gcno_mapping:
-            extra_args = "--base {}".format(base_kernel[GcovInfo].gcno_mapping.path)
+            extra_args = "--file_mappings {}".format(base_kernel[GcovInfo].gcno_mapping.path)
             inputs.append(base_kernel[GcovInfo].gcno_mapping)
             if base_kernel[GcovInfo].gcno_dir:
                 inputs.append(base_kernel[GcovInfo].gcno_dir)
@@ -1238,7 +1238,7 @@ def get_grab_gcno_step(ctx, src_dir, is_kernel_build):
         # embedded in vmlinux. This file just makes such ir-reproducibility more explicit.
         grab_gcno_cmd = """
             rsync -a --prune-empty-dirs --include '*/' --include '*.gcno' --exclude '*' {src_dir}/ {gcno_dir}/
-            {print_gcno_mapping} {extra_args} {src_dir}:{gcno_dir} > {gcno_mapping}
+            {print_gcno_mapping} {extra_args} --mappings {src_dir}:{gcno_dir} > {gcno_mapping}
             # Archive gcno_dir + gcno_mapping + base_kernel_gcno_dir
             {base_kernel_gcno_cmd}
             cp {gcno_mapping} {gcno_dir}
@@ -1484,7 +1484,7 @@ def _build_main_action(
         all_module_basenames_file = all_module_basenames_file,
     )
     grab_symtypes_step = _get_grab_symtypes_step(ctx)
-    grab_gcno_step = get_grab_gcno_step(ctx, "${OUT_DIR}", is_kernel_build = True)
+    grab_gcno_step = get_grab_gcno_step(ctx, "${COMMON_OUT_DIR}", is_kernel_build = True)
     grab_cmd_step = get_grab_cmd_step(ctx, "${OUT_DIR}")
     compile_commands_step = compile_commands_utils.get_step(ctx, "${OUT_DIR}")
     grab_gdb_scripts_step = kgdb.get_grab_gdb_scripts_step(ctx)

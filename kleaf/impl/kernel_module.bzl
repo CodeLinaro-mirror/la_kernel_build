@@ -361,7 +361,7 @@ def _kernel_module_impl(ctx):
         symlink_name = "module_{}".format(ctx.attr.name),
     )
     grab_cmd_step = get_grab_cmd_step(ctx, "${OUT_DIR}/${ext_mod_rel}")
-    grab_gcno_step = get_grab_gcno_step(ctx, "${OUT_DIR}/${ext_mod_rel}", is_kernel_build = False)
+    grab_gcno_step = get_grab_gcno_step(ctx, "${COMMON_OUT_DIR}", is_kernel_build = False)
     compile_commands_step = compile_commands_utils.get_step(ctx, "${OUT_DIR}/${ext_mod_rel}")
 
     for step in (
@@ -681,7 +681,7 @@ def _kernel_module_impl(ctx):
         ddk_headers_info,
         ddk_config_info,
         GcovInfo(
-            gcno_mapping = grab_gcno_step.outputs,
+            gcno_mapping = grab_gcno_step.gcno_mapping,
             gcno_dir = grab_gcno_step.gcno_dir,
         ),
         KernelCmdsInfo(
