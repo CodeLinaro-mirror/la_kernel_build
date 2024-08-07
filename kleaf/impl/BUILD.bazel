@@ -66,6 +66,7 @@ bzl_library(
         "default_host_tools.scl",
         "file.bzl",
         "file_selector.bzl",
+        "gcov_utils.bzl",
         "gki_artifacts.bzl",
         "image/boot_images.bzl",
         "image/dtbo.bzl",
@@ -105,12 +106,14 @@ bzl_library(
         "merged_kernel_uapi_headers.bzl",
         "modules_prepare.bzl",
         "out_headers_allowlist_archive.bzl",
+        "platform_transition.bzl",
         "python.bzl",
         "raw_kmi_symbol_list.bzl",
         "scripts_config_arg_builder.bzl",
         "srcs_aspect.bzl",
         "stamp.bzl",
         "status.bzl",
+        "transitioned_tool.bzl",
         "utils.bzl",
     ],
     visibility = ["//build/kernel/kleaf:__subpackages__"],
@@ -135,7 +138,7 @@ bzl_library(
     ],
     visibility = ["//build/kernel/kleaf:__subpackages__"],
     deps = [
-        "//build/bazel_common_rules/exec",
+        "//build/bazel_common_rules/exec/impl:exec",
     ],
 )
 
