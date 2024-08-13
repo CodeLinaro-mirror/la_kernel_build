@@ -14,6 +14,7 @@
 
 """Helper macro to wrap prebuilt tools before adding to hermetic_tools."""
 
+load(":debug.bzl", "debug")
 load(":platform_transition.bzl", "platform_transition")
 
 visibility("//build/kernel/...")
@@ -41,7 +42,10 @@ _transitioned_tool = rule(
             executable = True,
             allow_files = True,
             mandatory = True,
+            # We can't put platform_transition on the incoming edge
+            # because https://github.com/bazelbuild/bazel/issues/23278.
             cfg = platform_transition,
+            aspects = [debug.print_platforms_aspect],
         ),
         "target_platform": attr.label(),
     },
@@ -59,7 +63,8 @@ def prebuilt_transitioned_tool(name, src, **kwargs):
         name = name,
         src = src,
         target_platform = select({
-            "//conditions:default": "@platforms//host",
+            Label("//build/kernel/kleaf:musl_prebuilts_is_true"): Label("//build/kernel/kleaf/impl:host_musl"),
+            "//conditions:default": None,
         }),
         **kwargs
     )
@@ -79,7 +84,10 @@ _transitioned_files = rule(
     attrs = {
         "srcs": attr.label_list(
             allow_files = True,
+            # We can't put platform_transition on the incoming edge
+            # because https://github.com/bazelbuild/bazel/issues/23278.
             cfg = platform_transition,
+            aspects = [debug.print_platforms_aspect],
         ),
         "target_platform": attr.label(),
     },
@@ -97,7 +105,8 @@ def prebuilt_transitioned_files(name, srcs, **kwargs):
         name = name,
         srcs = srcs,
         target_platform = select({
-            "//conditions:default": "@platforms//host",
+            Label("//build/kernel/kleaf:musl_prebuilts_is_true"): Label("//build/kernel/kleaf/impl:host_musl"),
+            "//conditions:default": None,
         }),
         **kwargs
     )
