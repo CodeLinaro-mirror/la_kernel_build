@@ -48,8 +48,12 @@ _REPO_BOUNDARY_FILES = ("MODULE.bazel", "REPO.bazel", "WORKSPACE.bazel", "WORKSP
 # Regular actions should explicitly use hermetic toolchain whenever
 # possible.
 _ACTION_HERMETIC_TOOLS = [
+    # for `bazel test` to generate xml
+    "prebuilts/build-tools/path/linux-x86/cat",
     # for copy_file
     "prebuilts/build-tools/path/linux-x86/cp",
+    # for `bazel test` to generate xml
+    "prebuilts/build-tools/path/linux-x86/sed",
     # build_test uses touch
     "prebuilts/build-tools/path/linux-x86/touch",
     # https://github.com/bazelbuild/bazel/issues/19355
@@ -572,6 +576,7 @@ class BazelWrapper(KleafHelpPrinter):
             # Toolchains and platforms
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/hermetic_cc.bazelrc",
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/platforms.bazelrc",
+            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/musl.bazelrc",
             # Control Network access - with no internet by default.
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/network.bazelrc",
             # Experimental bzlmod support
