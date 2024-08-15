@@ -163,9 +163,22 @@ KernelBuildInfo = provider(
             [Default outputs](https://docs.bazel.build/versions/main/skylark/rules.html#default-outputs)
             of the rule specified by `base_kernel`""",
         "interceptor_output": "`interceptor` log. See [`interceptor`](https://android.googlesource.com/kernel/tools/interceptor/) project.",
-        "compile_commands_with_vars": "A file that can be transformed into `compile_commands.json`.",
-        "compile_commands_out_dir": "A subset of `$OUT_DIR` for `compile_commands.json`.",
         "kernel_release": "The file `kernel.release`.",
+    },
+)
+
+CompileCommandsSingleInfo = provider(
+    doc = """Provides info necessary to build compile_commands.json for a single target.""",
+    fields = {
+        "compile_commands_with_vars": "A file that can be transformed into `compile_commands.json`.",
+        "compile_commands_common_out_dir": "A subset of `$COMMON_OUT_DIR` for `compile_commands.json`.",
+    },
+)
+
+CompileCommandsInfo = provider(
+    doc = """Provides info necessary to build compile_commands.json for multiple targets.""",
+    fields = {
+        "infos": """A [depset](https://bazel.build/extending/depsets) of CompileCommandsSingleInfo""",
     },
 )
 
@@ -417,6 +430,32 @@ DdkConfigInfo = provider(
             of this and its dependencies. Uses `postorder` ordering (dependencies first).""",
         "defconfig": """A [depset](https://bazel.build/extending/depsets) containing the Kconfig
             file of this and its dependencies. Uses `postorder` ordering (dependencies first).""",
+    },
+)
+
+DdkIncludeInfo = provider(
+    """Describes include info of current target, excluding dependencies.
+
+    This info represents a list of include paths relative to execroot. It is
+    interpreted as follows:
+
+    ```
+    [prefix + include for include in includes]
+    ```
+
+    If there are generated files in `direct_files`, the list further expands to:
+
+    ```
+    [root + prefix + include for include in includes for root in
+        [file.root for file in <generated .h files in direct_files>]]
+    ```
+    """,
+    fields = {
+        "prefix": """When prepended to an item in `includes` or `linux_includes`,
+            the item becomes the path below execroot.""",
+        "direct_files": "depset of direct file dependencies of this target.",
+        "includes": "A list of `includes` attribute of this target. Not prefixed.",
+        "linux_includes": "Like `includes` but added to `LINUXINCLUDE`. Not prefixed.",
     },
 )
 

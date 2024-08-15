@@ -214,6 +214,19 @@ def ddk_module(
         name: Name of target. This should usually be name of the output `.ko` file without the
           suffix.
         srcs: sources and local headers.
+
+            Source files (`.c`, `.S`, `.rs`) must be in the package of
+            this `ddk_module` target, or in subpackages.
+
+            Generated source files (`.c`, `.S`, `.rs`) are accepted as long as
+            they are in the package of this `ddk_module` target, or in
+            subpackages.
+
+            Header files specified here are only visible to this `ddk_module`
+            target, but not dependencies. To export a header so dependencies
+            can use it, put it in `hdrs` and set `includes` accordingly.
+
+            Generated header files are accepted.
         deps: A list of dependent targets. Each of them must be one of the following:
 
             - [`kernel_module`](#kernel_module)
@@ -223,6 +236,9 @@ def ddk_module(
         textual_hdrs: See [`ddk_headers.textual_hdrs`](#ddk_headers-textual_hdrs)
         includes: See [`ddk_headers.includes`](#ddk_headers-includes)
         linux_includes: See [`ddk_headers.linux_includes`](#ddk_headers-linux_includes)
+
+          Unlike `ddk_headers.linux_includes`, `ddk_module.linux_includes` is **NOT**
+          applied to dependent `ddk_module`s.
         kernel_build: [`kernel_build`](#kernel_build)
         conditional_srcs: A dictionary that specifies sources conditionally compiled based on configs.
 
@@ -372,6 +388,8 @@ def ddk_module(
         kconfig = kconfig,
         kernel_build = kernel_build,
         module_deps = deps,
+        module_hdrs = hdrs,
+        module_textual_hdrs = textual_hdrs,
         generate_btf = generate_btf,
     )
 

@@ -160,6 +160,9 @@ def _default_target_configs():
             # Assume TRIM_NONLISTED_KMI="" in build.config.gki.aarch64.16k
             "trim_nonlisted_kmi": False,
             "page_size": "16k",
+            # Assume BUILD_GKI_ARTIFACTS=1
+            "build_gki_artifacts": True,
+            "gki_boot_img_sizes": gki_boot_img_sizes,
         }),
         "kernel_aarch64_interceptor": dicts.add(aarch64_common, {
             "enable_interceptor": True,
@@ -196,7 +199,6 @@ def _default_target_configs():
 
 # buildifier: disable=unnamed-macro
 def define_common_kernels(
-        branch = None,
         target_configs = None,
         toolchain_version = None,
         visibility = None):
@@ -439,19 +441,6 @@ def define_common_kernels(
     of the unsigned one. This requires `--use_prebuilt_gki` to be set to a signed build.
 
     Args:
-      branch: **Deprecated**. This attribute is ignored.
-
-        This used to be used to calculate the default `--dist_dir`, which was
-        `out/{branch}/dist`. This was expected to be
-        the value of `BRANCH` in `build.config`. If not set, it was loaded
-        from `common/build.config.constants` **in `//{common_kernel_package}`**
-        where `common_kernel_package` was supplied to `define_kleaf_workspace()`
-        in the `WORKSPACE` file. Usually, `common_kernel_package = "common"`.
-        Hence, if `define_common_kernels()` was called in a different package, it
-        was required to be supplied.
-
-        Now, the default value of `--dist_dir` is `out/{name}/dist`, so the value
-        of `branch` has no effect. Hence, the attribute is ignored.
       target_configs: A dictionary, where keys are target names, and
         values are a dictionary of configurations to override the default
         configuration for this target.
@@ -462,14 +451,6 @@ def define_common_kernels(
 
         See [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
     """
-
-    if branch != None:
-        # buildifier: disable=print
-        print(("\nWARNING: {package}: define_common_kernels() no longer uses the branch " +
-               "attribute. Default value of --dist_dir has been changed to out/{{name}}/dist. " +
-               "Please remove the branch attribute from define_common_kernels().").format(
-            package = str(native.package_relative_label(":x")).removesuffix(":x"),
-        ))
 
     if visibility == None:
         visibility = ["//visibility:public"]
@@ -599,6 +580,7 @@ def _define_common_kernel(
         build_config,
         toolchain_version,
         visibility,
+        defconfig_fragments = None,
         enable_interceptor = None,
         kmi_symbol_list = None,
         additional_kmi_symbol_lists = None,
@@ -623,6 +605,7 @@ def _define_common_kernel(
         outs = outs,
         arch = arch,
         build_config = build_config,
+        defconfig_fragments = defconfig_fragments,
         toolchain_version = toolchain_version,
         visibility = visibility,
         enable_interceptor = enable_interceptor,
@@ -698,6 +681,7 @@ def _define_common_kernel(
             "certs/signing_key.x509",
         ],
         build_config = name + "_build_config",
+        defconfig_fragments = defconfig_fragments,
         enable_interceptor = enable_interceptor,
         visibility = visibility,
         collect_unstripped_modules = _COLLECT_UNSTRIPPED_MODULES,
@@ -934,7 +918,7 @@ def _define_common_kernel(
 
     kernel_compile_commands(
         name = name + "_compile_commands",
-        kernel_build = name,
+        deps = [name],
     )
 
     kernel_kythe(

@@ -31,6 +31,8 @@ load(":btf.bzl", "btf")
 load(":cache_dir.bzl", "cache_dir")
 load(
     ":common_providers.bzl",
+    "CompileCommandsInfo",
+    "CompileCommandsSingleInfo",
     "GcovInfo",
     "KernelBuildAbiInfo",
     "KernelBuildExtModuleInfo",
@@ -808,6 +810,11 @@ def _get_defconfig_fragments(
         name = module_protection_target,
         first_selector = select({
             Label("//build/kernel/kleaf/impl:force_disable_trim_is_true"): "False",
+            Label("//build/kernel/kleaf:debug_is_true"): "False",
+            Label("//build/kernel/kleaf:gcov_is_true"): "False",
+            Label("//build/kernel/kleaf:kasan_is_true"): "False",
+            Label("//build/kernel/kleaf:kcsan_is_true"): "False",
+            Label("//build/kernel/kleaf:kgdb_is_true"): "False",
             "//conditions:default": None,
         }),
         second_selector = kernel_build_trim_nonlisted_kmi,
@@ -1480,7 +1487,7 @@ def _build_main_action(
     grab_symtypes_step = _get_grab_symtypes_step(ctx)
     grab_gcno_step = get_grab_gcno_step(ctx, "${OUT_DIR}", is_kernel_build = True)
     grab_cmd_step = get_grab_cmd_step(ctx, "${OUT_DIR}")
-    compile_commands_step = compile_commands_utils.kernel_build_step(ctx)
+    compile_commands_step = compile_commands_utils.get_step(ctx, "${OUT_DIR}")
     grab_gdb_scripts_step = kgdb.get_grab_gdb_scripts_step(ctx)
     grab_kbuild_output_step = _get_grab_kbuild_output_step(ctx)
     copy_module_symvers_step = _get_copy_module_symvers_step(ctx)
@@ -1635,7 +1642,7 @@ def _build_main_action(
         ruledir = ruledir,
         cmd_dir = grab_cmd_step.cmd_dir,
         compile_commands_with_vars = compile_commands_step.compile_commands_with_vars,
-        compile_commands_out_dir = compile_commands_step.compile_commands_out_dir,
+        compile_commands_common_out_dir = compile_commands_step.compile_commands_common_out_dir,
         gcno_outputs = grab_gcno_step.outputs,
         gcno_mapping = grab_gcno_step.gcno_mapping,
         gcno_dir = grab_gcno_step.gcno_dir,
@@ -1790,8 +1797,6 @@ def _create_infos(
         outs = depset(all_output_files["outs"].values()),
         base_kernel_files = kbuild_mixed_tree_ret.base_kernel_files,
         interceptor_output = main_action_ret.interceptor_output,
-        compile_commands_with_vars = main_action_ret.compile_commands_with_vars,
-        compile_commands_out_dir = main_action_ret.compile_commands_out_dir,
     )
 
     kernel_build_uname_info = KernelBuildUnameInfo(
@@ -1936,6 +1941,13 @@ def _create_infos(
         directories = depset([main_action_ret.cmd_dir]),
     )
 
+    compile_commands_info = CompileCommandsInfo(
+        infos = depset([CompileCommandsSingleInfo(
+            compile_commands_with_vars = main_action_ret.compile_commands_with_vars,
+            compile_commands_common_out_dir = main_action_ret.compile_commands_common_out_dir,
+        )]),
+    )
+
     modules_prepare_archive = utils.find_file(
         _MODULES_PREPARE_ARCHIVE,
         ctx.files.modules_prepare,
@@ -1994,6 +2006,7 @@ def _create_infos(
         images_info,
         gcov_info,
         filegroup_decl_info,
+        compile_commands_info,
         ctx.attr.config[KernelEnvAttrInfo],
         ctx.attr.config[KernelToolchainInfo],
         output_group_info,
