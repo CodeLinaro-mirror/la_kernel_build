@@ -160,6 +160,9 @@ def _default_target_configs():
             # Assume TRIM_NONLISTED_KMI="" in build.config.gki.aarch64.16k
             "trim_nonlisted_kmi": False,
             "page_size": "16k",
+            # Assume BUILD_GKI_ARTIFACTS=1
+            "build_gki_artifacts": True,
+            "gki_boot_img_sizes": gki_boot_img_sizes,
         }),
         "kernel_aarch64_interceptor": dicts.add(aarch64_common, {
             "enable_interceptor": True,
@@ -599,6 +602,7 @@ def _define_common_kernel(
         build_config,
         toolchain_version,
         visibility,
+        defconfig_fragments = None,
         enable_interceptor = None,
         kmi_symbol_list = None,
         additional_kmi_symbol_lists = None,
@@ -623,6 +627,7 @@ def _define_common_kernel(
         outs = outs,
         arch = arch,
         build_config = build_config,
+        defconfig_fragments = defconfig_fragments,
         toolchain_version = toolchain_version,
         visibility = visibility,
         enable_interceptor = enable_interceptor,
@@ -698,6 +703,7 @@ def _define_common_kernel(
             "certs/signing_key.x509",
         ],
         build_config = name + "_build_config",
+        defconfig_fragments = defconfig_fragments,
         enable_interceptor = enable_interceptor,
         visibility = visibility,
         collect_unstripped_modules = _COLLECT_UNSTRIPPED_MODULES,
