@@ -49,6 +49,7 @@ _transitioned_tool = rule(
         ),
         "target_platform": attr.label(),
     },
+    executable = True,
 )
 
 def prebuilt_transitioned_tool(name, src, **kwargs):
@@ -64,6 +65,24 @@ def prebuilt_transitioned_tool(name, src, **kwargs):
         src = src,
         target_platform = select({
             Label("//build/kernel/kleaf:musl_prebuilts_is_true"): Label("//build/kernel/kleaf/impl:host_musl"),
+            "//conditions:default": None,
+        }),
+        **kwargs
+    )
+
+def transitioned_tool_from_sources(name, src, **kwargs):
+    """Helper macro to wrap tools built from sources before adding to hermetic_tools.
+
+    Args:
+        name: name of target
+        src: Label to prebuilt tool that selects between different platforms.
+        **kwargs: common kwargs
+    """
+    _transitioned_tool(
+        name = name,
+        src = src,
+        target_platform = select({
+            Label("//build/kernel/kleaf:musl_tools_from_sources_is_true"): Label("//build/kernel/kleaf/impl:host_musl"),
             "//conditions:default": None,
         }),
         **kwargs

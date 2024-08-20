@@ -665,6 +665,7 @@ config_setting(
 
 # For prebuilt binaries, use musl variant.
 # Experimental: some prebuilt binaries may still be using the glibc variant.
+# See build/kernel/kleaf/docs/musl.md
 bool_flag(
     name = "musl_prebuilts",
     build_setting_default = False,
@@ -675,6 +676,35 @@ config_setting(
     name = "musl_prebuilts_is_true",
     flag_values = {":musl_prebuilts": "1"},
     visibility = ["//build/kernel:__subpackages__"],
+)
+
+# Experimental: Kbuild builds host tools against musl libc.
+# See build/kernel/kleaf/docs/musl.md
+bool_flag(
+    name = "musl_kbuild",
+    build_setting_default = False,
+    visibility = ["//visibility:private"],
+)
+
+config_setting(
+    name = "musl_kbuild_is_true",
+    flag_values = {":musl_kbuild": "1"},
+    visibility = ["//visibility:public"],
+)
+
+# For hermetic tools built from sources, use musl libc.
+# Experimental: some hermetic tools built from sources may still be using glibc.
+# See build/kernel/kleaf/docs/musl.md
+bool_flag(
+    name = "musl_tools_from_sources",
+    build_setting_default = False,
+    visibility = ["//visibility:private"],
+)
+
+config_setting(
+    name = "musl_tools_from_sources_is_true",
+    flag_values = {":musl_tools_from_sources": "1"},
+    visibility = ["//visibility:public"],
 )
 
 # The values of --config, as passed by command line and bazelrc files.

@@ -58,6 +58,11 @@ load(
     "MODULES_STAGING_ARCHIVE",
     "MODULE_ENV_ARCHIVE_SUFFIX",
 )
+load(
+    ":ddk/ddk_headers.bzl",
+    "DdkHeadersInfo",
+    "ddk_headers_common_impl",
+)
 load(":debug.bzl", "debug")
 load(":file.bzl", "file")
 load(":file_selector.bzl", "file_selector")
@@ -122,6 +127,7 @@ def kernel_build(
         pack_module_env = None,
         sanitizers = None,
         ddk_module_defconfig_fragments = None,
+        ddk_module_headers = None,
         **kwargs):
     """Defines a kernel build target with all dependent targets.
 
@@ -436,6 +442,13 @@ def kernel_build(
           in `ddk_module`s building against this kernel.
           Unlike `defconfig_fragments`, `ddk_module_defconfig_fragments` is not applied
           to this `kernel_build` target, nor dependent legacy `kernel_module`s.
+        ddk_module_headers: A list of `ddk_headers`, to be used in `ddk_module`s
+          building against this kernel.
+
+          Inherits `ddk_module_headers` from `base_kernel`, with a lower priority
+          than `ddk_module_headers` of this kernel_build.
+
+          These headers are not applied to this `kernel_build` target.
         **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
@@ -526,6 +539,15 @@ def kernel_build(
         **internal_kwargs
     )
 
+    native.platform(
+        name = name + "_platform_exec_musl",
+        parents = [name + "_platform_exec"],
+        constraint_values = [
+            Label("//build/kernel/kleaf/impl:musl"),
+        ],
+        **internal_kwargs
+    )
+
     kernel_env(
         name = env_target_name,
         build_config = build_config,
@@ -537,7 +559,10 @@ def kernel_build(
         lto = lto,
         make_goals = make_goals,
         target_platform = name + "_platform_target",
-        exec_platform = name + "_platform_exec",
+        exec_platform = select({
+            Label("//build/kernel/kleaf:musl_kbuild_is_true"): name + "_platform_exec_musl",
+            "//conditions:default": name + "_platform_exec",
+        }),
         defconfig_fragments = defconfig_fragments,
         **internal_kwargs
     )
@@ -625,6 +650,7 @@ def kernel_build(
         pack_module_env = pack_module_env,
         sanitizers = sanitizers,
         ddk_module_defconfig_fragments = ddk_module_defconfig_fragments,
+        ddk_module_headers = ddk_module_headers,
         arch = arch,
         **kwargs
     )
@@ -1319,7 +1345,18 @@ def _get_modinst_step(ctx, modules_staging_dir):
          # Set variables and create dirs for modules
            mkdir -p {modules_staging_dir}
          # Install modules
-           if grep -q "\\bmodules\\b" <<< "{make_goals}" ; then
+           if grep -q -E -e "\\bmodules\\b|[.]ko\\b" <<< "{make_goals}" ; then
+               if grep -q -E -e "[.]ko\\b" <<< "{make_goals}" ; then
+                   # For single_module builds, we need to generate our own
+                   # modules.order since `make` deletes it, but it's needed for
+                   # `modules_install`. We don't really care about the module
+                   # ordering here. With fw_devlink enabled in GKI, the probe
+                   # ordering should be handled based on device dependencies.
+                   : > ${{OUT_DIR}}/modules.order
+                   for module in {make_goals}; do
+                       echo ${{module}} | sed -n "s:\\([.]\\)ko\\>.*:\\1o:p"  >> ${{OUT_DIR}}/modules.order
+                   done
+               fi
                make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} DEPMOD=true O=${{OUT_DIR}} {module_strip_flag} INSTALL_MOD_PATH=$(realpath {modules_staging_dir}) modules_install
            else
                # Workaround as this file is required, hence just produce a placeholder.
@@ -1329,7 +1366,7 @@ def _get_modinst_step(ctx, modules_staging_dir):
         modules_staging_dir = modules_staging_dir,
         internal_outs_under_out_dir = " ".join(["${{OUT_DIR}}/{}".format(item) for item in _kernel_build_internal_outs]),
         module_strip_flag = module_strip_flag,
-        make_goals = ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals,
+        make_goals = " ".join(ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals),
     )
 
     if base_kernel:
@@ -1450,7 +1487,20 @@ def _build_main_action(
     command += """
            {kbuild_mixed_tree_cmd}
          # Actual kernel build
-           {interceptor_command_prefix} make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} {make_goals}
+           if grep -q "\\bdtbs\\b" <<< "{make_goals}" ; then
+               # TODO(b/359683179): if we build dtbs with the individual kernel
+               # modules, then not all of the kernel modules are found in the
+               # OUT_DIR. Building dtbs first, fixes this issue.
+               {interceptor_command_prefix} make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} dtbs
+           fi
+           make_subgoals=$(echo "{make_goals}" | sed "s:\\<dtbs\\>::" || true)
+           if grep -q -E -e "[.]ko\\b" <<< "${{make_subgoals}}" ; then
+               # TODO(b/359681021) Follow up with the upstream maintainer to
+               # see what needs to be done to drop KBUILD_MODPOST_WARN=1.
+               {interceptor_command_prefix} make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} KBUILD_MODPOST_WARN=1 ${{make_subgoals}}
+           else
+               {interceptor_command_prefix} make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} ${{make_subgoals}}
+           fi
          # Install modules
            {modinst_cmd}
          # Archive headers in OUT_DIR
@@ -1741,8 +1791,25 @@ def _create_infos(
             for dep in ext_mod_serialized_env_info_deps
         },
         fake_system_map = True,
-        extra_restore_outputs_cmd = "",
-        extra_inputs = depset(transitive = [module_srcs.module_scripts]),
+        extra_restore_outputs_cmd = """
+            (
+                {kbuild_mixed_tree_cmd}
+              # Stitch together the GKI symbols and device module symbols
+              # together for proper linking during the modpost step. This will
+              # also help detect CRC differences between the GKI and device
+              # builds if the same symbol is defined twice with different CRC
+              # values.
+                if [[ -f "${{KBUILD_MIXED_TREE}}/Module.symvers" ]]; then
+                  cp ${{KBUILD_MIXED_TREE}}/Module.symvers ${{OUT_DIR}}/Module.symvers.tmp
+                  grep -v -e "\\bvmlinux\\b" ${{OUT_DIR}}/Module.symvers >> ${{OUT_DIR}}/Module.symvers.tmp
+                  cat ${{OUT_DIR}}/Module.symvers.tmp | sort -u > ${{OUT_DIR}}/Module.symvers
+                  rm -f ${{OUT_DIR}}/Module.symvers.tmp
+                fi
+            )
+        """.format(
+            kbuild_mixed_tree_cmd = kbuild_mixed_tree_ret.cmd,
+        ),
+        extra_inputs = depset(kbuild_mixed_tree_ret.outputs, transitive = [module_srcs.module_scripts]),
     )
 
     # External modules do not need implicit_outs because they are unsigned.
@@ -1795,6 +1862,15 @@ def _create_infos(
         collect_unstripped_modules = ctx.attr.collect_unstripped_modules,
         strip_modules = ctx.attr.strip_modules,
         ddk_module_defconfig_fragments = ddk_module_defconfig_fragments,
+    )
+
+    ddk_headers_info = ddk_headers_common_impl(
+        ctx.label,
+        # Because of left-to-right ordering, put DdkHeadersInfo from base_kernel
+        # at the end of the direct list so it has a lower priority.
+        ctx.attr.ddk_module_headers + ([base_kernel] if base_kernel else []),
+        [],
+        [],
     )
 
     kernel_uapi_depsets = []
@@ -1859,6 +1935,7 @@ def _create_infos(
     output_group_info = OutputGroupInfo(**output_group_kwargs)
 
     kbuild_mixed_tree_files = all_output_files["outs"].values() + all_output_files["module_outs"].values()
+    kbuild_mixed_tree_files.append(all_output_files["internal_outs"]["Module.symvers"])
     kbuild_mixed_tree_info = KernelBuildMixedTreeInfo(
         files = depset(kbuild_mixed_tree_files),
     )
@@ -1920,6 +1997,7 @@ def _create_infos(
 
     return [
         cmds_info,
+        ddk_headers_info,
         serialized_env_info,
         orig_env_info,
         kbuild_mixed_tree_info,
@@ -2092,6 +2170,10 @@ _kernel_build = rule(
             doc = "Additional defconfig fragments for dependant DDK modules.",
             allow_empty = True,
             allow_files = True,
+        ),
+        "ddk_module_headers": attr.label_list(
+            doc = "Additional `ddk_headers` for dependant DDK modules.",
+            providers = [DdkHeadersInfo],
         ),
         "arch": attr.string(),
     } | _kernel_build_additional_attrs() | gcov_attrs(),
