@@ -26,7 +26,7 @@ load(":abi/get_src_protected_exports_files.bzl", "get_src_protected_exports_list
 load(":abi/protected_exports.bzl", "protected_exports")
 load(":common_providers.bzl", "KernelBuildAbiInfo")
 load(":diff.bzl", "diff")
-load(":hermetic_exec.bzl", "hermetic_exec")
+load(":empty_binary.bzl", "empty_binary")
 load(":kernel_build.bzl", "kernel_build")
 
 visibility("//build/kernel/kleaf/...")
@@ -224,14 +224,12 @@ def _not_define_abi_targets(
     )
 
     # For kernel_abi_dist to use when define_abi_targets is not set.
-    hermetic_exec(
+    empty_binary(
         name = name + "_diff_executable",
-        script = "",
         **private_kwargs
     )
-    hermetic_exec(
+    empty_binary(
         name = name + "_diff_executable_xml",
-        script = "",
         **private_kwargs
     )
 
@@ -336,7 +334,7 @@ def _define_abi_targets(
         kmi_symbol_list = name + "_src_kmi_symbol_list",
         protected_exports_list = name + "_src_protected_exports_list",
         kmi_symbol_checks = name + "_kmi_symbol_checks",
-        **private_kwargs
+        **kwargs
     )
 
     native.filegroup(
@@ -360,14 +358,17 @@ def _define_abi_definition_targets(
     Defines `{name}_diff_executable`.
     """
 
+    private_kwargs = kwargs | {
+        "visibility": ["//visibility:private"],
+    }
+
     default_outputs = []
 
     if not abi_definition_stg:
         # For kernel_abi_dist to use when abi_definition is empty.
-        hermetic_exec(
+        empty_binary(
             name = name + "_diff_executable",
-            script = "",
-            **kwargs
+            **private_kwargs
         )
         default_outputs.append(name + "_diff_executable")
 
@@ -377,19 +378,21 @@ def _define_abi_definition_targets(
                           name,
                       ) +
                       "See kleaf/docs/abi.md for more information.",
+            **kwargs
         )
     else:
         native.filegroup(
             name = name + "_out_file",
             srcs = [name + "_dump"],
             output_group = "abi_out_file",
-            **kwargs
+            **private_kwargs
         )
         stgdiff(
             name = name + "_diff",
             baseline = abi_definition_stg,
             new = name + "_out_file",
             kmi_enforced = kmi_enforced,
+            **kwargs
         )
         default_outputs.append(name + "_diff")
 
@@ -398,14 +401,14 @@ def _define_abi_definition_targets(
             name = name + "_diff_executable",
             srcs = [name + "_diff"],
             output_group = "executable",
-            **kwargs
+            **private_kwargs
         )
 
         native.filegroup(
             name = name + "_diff_git_message",
             srcs = [name + "_diff"],
             output_group = "git_message",
-            **kwargs
+            **private_kwargs
         )
 
         diff(
@@ -421,7 +424,7 @@ symbol list must be updated before updating ABI definition.
                 native.package_relative_label(name + "_update_symbol_list"),
                 native.package_relative_label(name + "_update"),
             ),
-            **kwargs
+            **private_kwargs
         )
 
         diff(
@@ -437,7 +440,7 @@ protected exports list must be updated before updating ABI definition.
                 native.package_relative_label(native.package_relative_label(name + "_update_protected_exports")),
                 native.package_relative_label(name + "_update"),
             ),
-            **kwargs
+            **private_kwargs
         )
 
         update_source_file(
@@ -450,7 +453,7 @@ protected exports list must be updated before updating ABI definition.
                 # Ensure KMI checks are executed before updating ABI.
                 kmi_symbol_checks,
             ],
-            **kwargs
+            **private_kwargs
         )
 
         abi_update(
@@ -459,6 +462,7 @@ protected exports list must be updated before updating ABI definition.
             git_message = name + "_diff_git_message",
             diff = name + "_diff_executable",
             nodiff_update = name + "_nodiff_update",
+            **kwargs
         )
 
     return default_outputs
