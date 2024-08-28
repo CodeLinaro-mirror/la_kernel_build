@@ -167,6 +167,9 @@ case "${KERNEL_TARGET}" in
   anorak61)
     KERNEL_TARGET="anorak"
     ;;
+  neo61)
+    KERNEL_TARGET="neo-la"
+    ;;
 esac
 
 ################################################################################
@@ -265,17 +268,19 @@ ANDROID_ABL_OUT_DIR=${ANDROID_KERNEL_OUT}/kernel-abl
 
 if [ "${KERNEL_TARGET}" == "autoghgvm" ]; then
   ABL_IMAGE=LinuxLoader.efi
+  DIST_ABL_IMAGE=LinuxLoader_${TARGET_BUILD_VARIANT}.efi
 else
   ABL_IMAGE=unsigned_abl.elf
+  DIST_ABL_IMAGE=unsigned_abl_${TARGET_BUILD_VARIANT}.elf
 fi
 
 if [ ! -e "${ANDROID_ABL_OUT_DIR}/abl-${TARGET_BUILD_VARIANT}/${ABL_IMAGE}" ] || \
     ! diff -q "${ANDROID_ABL_OUT_DIR}/abl-${TARGET_BUILD_VARIANT}/${ABL_IMAGE}" \
-  "${ANDROID_KP_OUT_DIR}/dist/unsigned_abl_${TARGET_BUILD_VARIANT}.elf" ; then
+  "${ANDROID_KP_OUT_DIR}/dist/${DIST_ABL_IMAGE}" ; then
   COPY_ABL_NEEDED=1
 fi
 
-if [ ! -e "${ANDROID_KP_OUT_DIR}/dist/unsigned_abl_${TARGET_BUILD_VARIANT}.elf" ] && \
+if [ ! -e "${ANDROID_KP_OUT_DIR}/dist/${DIST_ABL_IMAGE}" ] && \
    [ "${COPY_ABL_NEEDED}" == "1" ]; then
   RECOMPILE_ABL=1
 fi
@@ -286,7 +291,7 @@ fi
 
 ################################################################################
 if [ "${RECOMPILE_ABL}" == "1" ] && [ -n "${TARGET_BUILD_VARIANT}" ] && \
-   [ "${KERNEL_TARGET}" != "autogvm" ]; then
+   [ "${KERNEL_TARGET}" != "autogvm" ] && [ "${KERNEL_TARGET}" != "autoghgvm" ]; then
   echo
   echo "  Recompiling edk2"
     (
