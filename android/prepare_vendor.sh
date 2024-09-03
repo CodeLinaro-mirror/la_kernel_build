@@ -359,6 +359,10 @@ if [ "${COPY_NEEDED}" == "1" ]; then
       "${ANDROID_KERNEL_OUT}/extra_bootconfig"
   fi
 
+  if [ -e "${ANDROID_KP_OUT_DIR}/dist/output_opts.txt" ]; then
+    cp "${ANDROID_KP_OUT_DIR}/dist/output_opts.txt" "${ANDROID_KERNEL_OUT}/"
+  fi
+
   files=(
     "Image"
     "vmlinux"
