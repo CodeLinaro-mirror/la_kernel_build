@@ -315,11 +315,6 @@ for EXT_MOD in ${EXT_MODULES}; do
 
     mapfile -t build_flags < "${KERNEL_KIT}/build_opts.txt"
 
-    output_flags=
-    if [ -e "${KERNEL_KIT}/output_opts.txt" ]; then
-      mapfile -t output_flags < "${KERNEL_KIT}/output_opts.txt"
-    fi
-
     if [ "$ALLOW_UNSAFE_DDK_HEADERS" = "true" ]; then
       build_flags+=("--allow_ddk_unsafe_headers")
     fi
@@ -330,7 +325,7 @@ for EXT_MOD in ${EXT_MODULES}; do
     fi
 
     # Run the dist command passing in the output directory from Android build system
-    ./tools/bazel "${output_flags[@]}" run "${build_flags[@]}" "$build_target" \
+    ./tools/bazel run "${build_flags[@]}" "$build_target" \
       -- --dist_dir="${OUT_DIR}/${EXT_MOD_REL}"
 
     # The Module.symvers file is named "<target>_<variant>_Modules.symvers, but other modules are
