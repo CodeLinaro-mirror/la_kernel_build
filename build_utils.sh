@@ -317,9 +317,12 @@ function build_system_dlkm() {
   echo " Creating system_dlkm image"
 
   rm -rf ${SYSTEM_DLKM_STAGING_DIR}
+  # MODULES_[RECOVERY_LIST|CHARGER]_LIST should not influence system_dlkm, as
+  # GKI modules are not loaded when booting into either recovery or charger
+  # modes, so do not consider them, and pass empty strings instead.
   create_modules_staging "${SYSTEM_DLKM_MODULES_LIST:-${MODULES_LIST}}" "${MODULES_STAGING_DIR}" \
     ${SYSTEM_DLKM_STAGING_DIR} "${SYSTEM_DLKM_MODULES_BLOCKLIST:-${MODULES_BLOCKLIST}}" \
-    "${MODULES_RECOVERY_LIST:-""}" "${MODULES_CHARGER_LIST:-""}" "-e"
+    "" "" "-e"
 
   local system_dlkm_root_dir=$(echo ${SYSTEM_DLKM_STAGING_DIR}/lib/modules/*)
   cp ${system_dlkm_root_dir}/modules.load ${DIST_DIR}/system_dlkm.modules.load
@@ -362,6 +365,7 @@ function build_system_dlkm() {
   # No need to sign the image as modules are signed
   avbtool add_hashtree_footer \
     --partition_name system_dlkm \
+    --hash_algorithm sha256 \
     --image "${DIST_DIR}/system_dlkm.img"
 
   # Archive system_dlkm_staging_dir
@@ -761,13 +765,13 @@ function build_gki_boot_images() {
   # overwritten by the Android platform build to include an accurate SPL.
   # Note, the certified GKI release builds will not include the SPL
   # property.
-  local spl_month=$((($(date +'%m') + 3) % 12))
+  local spl_month=$((($(date +'%-m') + 3) % 12))
   local spl_year="$(date +'%Y')"
   if [ $((${spl_month} % 3)) -gt 0 ]; then
     # Round up to the next quarterly platform release (QPR) month
     spl_month=$((${spl_month} + 3 - (${spl_month} % 3)))
   fi
-  if [ "${spl_month}" -lt "$(date +'%m')" ]; then
+  if [ "${spl_month}" -lt "$(date +'%-m')" ]; then
     # rollover to the next year
     spl_year="$((${spl_year} + 1))"
   fi
