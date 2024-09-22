@@ -712,6 +712,63 @@ anything except:
 - `kernel_build`
 - `linux_includes`
 
+It is not recommended that a `ddk_submodule` depends on a `ddk_headers` target that specifies
+`linux_includes`. If a `ddk_submodule` does depend on a `ddk_headers` target
+that specifies `linux_includes`, all submodules below the same directory (i.e. sharing the same
+`Kbuild` file) gets these `linux_includes`. This is because `LINUXINCLUDE` is set for the whole
+`Kbuild` file, not per compilation unit.
+
+In particular, a `ddk_submodule` should not depend on `//common:all_headers`.
+Instead, the dependency should come from the `kernel_build`; that is, the `kernel_build` of
+the `ddk_module`, or the `base_kernel`, should specify
+`ddk_module_headers = "//common:all_headers"`.
+
+To avoid confusion, the dependency on this `ddk_headers` target with `linux_includes` should
+be moved to the top-level `ddk_module`. In this case, all submodules of this `ddk_module`
+receives the said `LINUXINCLUDE` from the `ddk_headers` target.
+
+Example:
+```
+# //common
+kernel_build(name = "kernel_aarch64", ddk_module_headers = ":all_headers_aarch64")
+ddk_headers(
+    name = "all_headers_aarch64",
+    linux_includes = [
+        "arch/arm64/include",
+        "arch/arm64/include/uapi",
+        "include",
+        "include/uapi",
+    ],
+)
+```
+```
+# //device
+kernel_build(name = "tuna", base_kernel = "//common:kernel_aarch64")
+
+ddk_headers(name = "uapi", linux_includes = ["uapi/include"])
+
+ddk_module(
+    name = "mymodule",
+    kernel_build = ":tuna",
+    deps = [
+        ":mysubmodule"
+        # Specify dependency on :uapi in the top level ddk_module
+        ":uapi",
+    ],
+)
+
+ddk_submodule(
+    name = "mysubmodule",
+    deps = [
+        # Not recommended to specify dependency on :uapi since it contains
+        # linux_includes
+
+        # No need tp specify dependency on //common:all_headers_aarch64
+        # since it comes from :tuna -> //common:kernel_aarch64
+    ]
+)
+```
+
 **Ordering of `includes`**
 
 **The best practice is to not have conflicting header names and search paths.**
@@ -933,6 +990,10 @@ ddk_module(
 `linux_includes` must be specified in the top-level `ddk_module`; see
 [`ddk_module.linux_includes`](#ddk_module-linux_includes).
 
+`ddk_submodule` should avoid depending on `ddk_headers` that has
+`linux_includes`. See the Submodules section in [`ddk_module`](#ddk_module)
+for best practices.
+
 **Ordering of `includes`**
 
 See [`ddk_module`](#ddk_module).
@@ -1148,14 +1209,15 @@ particular, the `kernel_build` targets in `data` automatically builds
 ## kernel_build
 
 <pre>
-kernel_build(<a href="#kernel_build-name">name</a>, <a href="#kernel_build-build_config">build_config</a>, <a href="#kernel_build-outs">outs</a>, <a href="#kernel_build-keep_module_symvers">keep_module_symvers</a>, <a href="#kernel_build-srcs">srcs</a>, <a href="#kernel_build-module_outs">module_outs</a>, <a href="#kernel_build-implicit_outs">implicit_outs</a>,
-             <a href="#kernel_build-module_implicit_outs">module_implicit_outs</a>, <a href="#kernel_build-generate_vmlinux_btf">generate_vmlinux_btf</a>, <a href="#kernel_build-deps">deps</a>, <a href="#kernel_build-arch">arch</a>, <a href="#kernel_build-base_kernel">base_kernel</a>, <a href="#kernel_build-make_goals">make_goals</a>,
-             <a href="#kernel_build-kconfig_ext">kconfig_ext</a>, <a href="#kernel_build-dtstree">dtstree</a>, <a href="#kernel_build-kmi_symbol_list">kmi_symbol_list</a>, <a href="#kernel_build-protected_exports_list">protected_exports_list</a>, <a href="#kernel_build-protected_modules_list">protected_modules_list</a>,
-             <a href="#kernel_build-additional_kmi_symbol_lists">additional_kmi_symbol_lists</a>, <a href="#kernel_build-trim_nonlisted_kmi">trim_nonlisted_kmi</a>, <a href="#kernel_build-kmi_symbol_list_strict_mode">kmi_symbol_list_strict_mode</a>,
-             <a href="#kernel_build-collect_unstripped_modules">collect_unstripped_modules</a>, <a href="#kernel_build-enable_interceptor">enable_interceptor</a>, <a href="#kernel_build-kbuild_symtypes">kbuild_symtypes</a>, <a href="#kernel_build-toolchain_version">toolchain_version</a>,
-             <a href="#kernel_build-strip_modules">strip_modules</a>, <a href="#kernel_build-module_signing_key">module_signing_key</a>, <a href="#kernel_build-system_trusted_key">system_trusted_key</a>,
-             <a href="#kernel_build-modules_prepare_force_generate_headers">modules_prepare_force_generate_headers</a>, <a href="#kernel_build-defconfig_fragments">defconfig_fragments</a>, <a href="#kernel_build-page_size">page_size</a>, <a href="#kernel_build-pack_module_env">pack_module_env</a>,
-             <a href="#kernel_build-sanitizers">sanitizers</a>, <a href="#kernel_build-ddk_module_defconfig_fragments">ddk_module_defconfig_fragments</a>, <a href="#kernel_build-ddk_module_headers">ddk_module_headers</a>, <a href="#kernel_build-kwargs">kwargs</a>)
+kernel_build(<a href="#kernel_build-name">name</a>, <a href="#kernel_build-build_config">build_config</a>, <a href="#kernel_build-outs">outs</a>, <a href="#kernel_build-makefile">makefile</a>, <a href="#kernel_build-keep_module_symvers">keep_module_symvers</a>, <a href="#kernel_build-srcs">srcs</a>, <a href="#kernel_build-module_outs">module_outs</a>,
+             <a href="#kernel_build-implicit_outs">implicit_outs</a>, <a href="#kernel_build-module_implicit_outs">module_implicit_outs</a>, <a href="#kernel_build-generate_vmlinux_btf">generate_vmlinux_btf</a>, <a href="#kernel_build-deps">deps</a>, <a href="#kernel_build-arch">arch</a>, <a href="#kernel_build-base_kernel">base_kernel</a>,
+             <a href="#kernel_build-make_goals">make_goals</a>, <a href="#kernel_build-kconfig_ext">kconfig_ext</a>, <a href="#kernel_build-dtstree">dtstree</a>, <a href="#kernel_build-kmi_symbol_list">kmi_symbol_list</a>, <a href="#kernel_build-protected_exports_list">protected_exports_list</a>,
+             <a href="#kernel_build-protected_modules_list">protected_modules_list</a>, <a href="#kernel_build-additional_kmi_symbol_lists">additional_kmi_symbol_lists</a>, <a href="#kernel_build-trim_nonlisted_kmi">trim_nonlisted_kmi</a>,
+             <a href="#kernel_build-kmi_symbol_list_strict_mode">kmi_symbol_list_strict_mode</a>, <a href="#kernel_build-collect_unstripped_modules">collect_unstripped_modules</a>, <a href="#kernel_build-enable_interceptor">enable_interceptor</a>,
+             <a href="#kernel_build-kbuild_symtypes">kbuild_symtypes</a>, <a href="#kernel_build-toolchain_version">toolchain_version</a>, <a href="#kernel_build-strip_modules">strip_modules</a>, <a href="#kernel_build-module_signing_key">module_signing_key</a>,
+             <a href="#kernel_build-system_trusted_key">system_trusted_key</a>, <a href="#kernel_build-modules_prepare_force_generate_headers">modules_prepare_force_generate_headers</a>, <a href="#kernel_build-defconfig_fragments">defconfig_fragments</a>,
+             <a href="#kernel_build-page_size">page_size</a>, <a href="#kernel_build-pack_module_env">pack_module_env</a>, <a href="#kernel_build-sanitizers">sanitizers</a>, <a href="#kernel_build-ddk_module_defconfig_fragments">ddk_module_defconfig_fragments</a>,
+             <a href="#kernel_build-ddk_module_headers">ddk_module_headers</a>, <a href="#kernel_build-kwargs">kwargs</a>)
 </pre>
 
 Defines a kernel build target with all dependent targets.
@@ -1182,6 +1244,7 @@ For example, if name is `"kernel_aarch64"`:
 | <a id="kernel_build-name"></a>name |  The final kernel target name, e.g. `"kernel_aarch64"`.   |  none |
 | <a id="kernel_build-build_config"></a>build_config |  Label of the build.config file, e.g. `"build.config.gki.aarch64"`.   |  none |
 | <a id="kernel_build-outs"></a>outs |  The expected output files.<br><br>Note: in-tree modules should be specified in `module_outs` instead.<br><br>This attribute must be either a `dict` or a `list`. If it is a `list`, for each item in `out`:<br><br>- If `out` does not contain a slash, the build rule   automatically finds a file with name `out` in the kernel   build output directory `${OUT_DIR}`. <pre><code>  find ${OUT_DIR} -name {out}</code></pre>   There must be exactly one match.   The file is copied to the following in the output directory   `{name}/{out}`<br><br>  Example: <pre><code>  kernel_build(name = "kernel_aarch64", outs = ["vmlinux"])</code></pre>   The bulid system copies `${OUT_DIR}/[<optional subdirectory>/]vmlinux`   to `kernel_aarch64/vmlinux`.   `kernel_aarch64/vmlinux` is the label to the file.<br><br>- If `out` contains a slash, the build rule locates the file in the   kernel build output directory `${OUT_DIR}` with path `out`   The file is copied to the following in the output directory     1. `{name}/{out}`     2. `{name}/$(basename {out})`<br><br>  Example: <pre><code>  kernel_build(&#10;    name = "kernel_aarch64",&#10;    outs = ["arch/arm64/boot/vmlinux"])</code></pre>   The bulid system copies     `${OUT_DIR}/arch/arm64/boot/vmlinux`   to:     - `kernel_aarch64/arch/arm64/boot/vmlinux`     - `kernel_aarch64/vmlinux`   They are also the labels to the output files, respectively.<br><br>  See `search_and_cp_output.py` for details.<br><br>Files in `outs` are part of the [`DefaultInfo`](https://docs.bazel.build/versions/main/skylark/lib/DefaultInfo.html) that this `kernel_build` returns. For example: <pre><code>kernel_build(name = "kernel", outs = ["vmlinux"], ...)&#10;copy_to_dist_dir(name = "kernel_dist", data = [":kernel"])</code></pre> `vmlinux` will be included in the distribution.<br><br>If it is a `dict`, it is wrapped in [`select()`](https://docs.bazel.build/versions/main/configurable-attributes.html).<br><br>Example: <pre><code>kernel_build(&#10;  name = "kernel_aarch64",&#10;  outs = {"config_foo": ["vmlinux"]})</code></pre> If conditions in `config_foo` is met, the rule is equivalent to <pre><code>kernel_build(&#10;  name = "kernel_aarch64",&#10;  outs = ["vmlinux"])</code></pre> As explained above, the bulid system copies `${OUT_DIR}/[<optional subdirectory>/]vmlinux` to `kernel_aarch64/vmlinux`. `kernel_aarch64/vmlinux` is the label to the file.<br><br>Note that a `select()` may not be passed into `kernel_build()` because [`select()` cannot be evaluated in macros](https://docs.bazel.build/versions/main/configurable-attributes.html#why-doesnt-select-work-in-macros). Hence: - [combining `select()`s](https://docs.bazel.build/versions/main/configurable-attributes.html#combining-selects)   is not allowed. Instead, expand the cartesian product. - To use   [`AND` chaining](https://docs.bazel.build/versions/main/configurable-attributes.html#or-chaining)   or   [`OR` chaining](https://docs.bazel.build/versions/main/configurable-attributes.html#selectsconfig_setting_group),   use `selects.config_setting_group()`.   |  none |
+| <a id="kernel_build-makefile"></a>makefile |  `Makefile` governing the kernel tree sources (see `srcs`). Example values:<br><br>*   `None` (default): Falls back to the value of `KERNEL_DIR` from `build_config`.     `kernel_build()` executes `make` in `KERNEL_DIR`.<br><br>    Note: The usage of specifying `KERNEL_DIR` in `build_config` is deprecated and will     trigger a warning/error in the future.<br><br>*   `"//common:Makefile"` (most common): the kernel sources are located in     `//common`. This means `kernel_build()` executes `make` to build the kernel image     and in-tree drivers in `common`.<br><br>    This usually replaces `//common:set_kernel_dir_build_config` in your `build_config`;     that is, if you set `kernel_build.makefile`, it is likely that you may drop     `//common:set_kernel_dir_build_config` from components of     `kernel_build.build_config`.<br><br>    This replaces `KERNEL_DIR=common` in your `build_config`.<br><br>*   `"@kleaf//common:Makefile"`: If you set up a DDK workspace such that Kleaf     tooling and your kernel source tree are located in the `@kleaf` submodule, you     should specify the full label in the package. *   the `Makefile` next to the build config:<br><br>    For example:<br><br>    ```     kernel_build(         name = "tuna",         build_config = "//package:build.config.tuna", # the build.config.tuna is in //package         makefile = "//package:Makefile", # so set KERNEL_DIR to "package"     )     ```<br><br>    In this example, `build.config.tuna` is in `//package`. Hence,     setting `makefile = "Makefile"` is equivalent to the     legacy behavior of not setting `KERNEL_DIR` in `build.config`, and allowing     `_setup_env.sh` to decide the value by inferring from the directory containing the     build config, which is the `//package`.<br><br>*   `Makefile` in the current package: the kernel sources are in the current package     where `kernel_build()` is called.<br><br>    For example:<br><br>    ```     kernel_build(         name = "tuna",         build_config = "build.config.tuna", # the build.config.tuna is in this package         makefile = "Makefile", # so set KERNEL_DIR to this package     )     ```   |  `None` |
 | <a id="kernel_build-keep_module_symvers"></a>keep_module_symvers |  If set to True, a copy of the default output `Module.symvers` is kept. * To avoid collisions in mixed build distribution packages, the file is renamed   as `$(name)_Module.symvers`. * Default is False.   |  `None` |
 | <a id="kernel_build-srcs"></a>srcs |  The kernel sources (a `glob()`). If unspecified or `None`, it is the following: <pre><code>glob(&#10;    ["**"],&#10;    exclude = [&#10;        "**/.*",          # Hidden files&#10;        "**/.*/**",       # Files in hidden directories&#10;        "**/BUILD.bazel", # build files&#10;        "**/*.bzl",       # build files&#10;    ],&#10;)</code></pre>   |  `None` |
 | <a id="kernel_build-module_outs"></a>module_outs |  A list of in-tree drivers. Similar to `outs`, but for `*.ko` files.<br><br>If a `*.ko` kernel module should not be copied to `${DIST_DIR}`, it must be included `implicit_outs` instead of `module_outs`. The list `implicit_outs + module_outs` must include **all** `*.ko` files in `${OUT_DIR}`. If not, a build error is raised.<br><br>Like `outs`, `module_outs` are part of the [`DefaultInfo`](https://docs.bazel.build/versions/main/skylark/lib/DefaultInfo.html) that this `kernel_build` returns. For example: <pre><code>kernel_build(name = "kernel", module_outs = ["foo.ko"], ...)&#10;copy_to_dist_dir(name = "kernel_dist", data = [":kernel"])</code></pre> `foo.ko` will be included in the distribution.<br><br>Like `outs`, this may be a `dict`. If so, it is wrapped in [`select()`](https://docs.bazel.build/versions/main/configurable-attributes.html). See documentation for `outs` for more details.   |  `None` |
@@ -1203,7 +1266,7 @@ For example, if name is `"kernel_aarch64"`:
 | <a id="kernel_build-collect_unstripped_modules"></a>collect_unstripped_modules |  If `True`, provide all unstripped in-tree.   |  `None` |
 | <a id="kernel_build-enable_interceptor"></a>enable_interceptor |  If set to `True`, enable interceptor so it can be used in [`kernel_compile_commands`](#kernel_compile_commands).   |  `None` |
 | <a id="kernel_build-kbuild_symtypes"></a>kbuild_symtypes |  The value of `KBUILD_SYMTYPES`.<br><br>This can be set to one of the following:<br><br>- `"true"` - `"false"` - `"auto"` - `None`, which defaults to `"auto"`<br><br>If the value is `"auto"`, it is determined by the `--kbuild_symtypes` flag.<br><br>If the value is `"true"`; or the value is `"auto"` and `--kbuild_symtypes` is specified, then `KBUILD_SYMTYPES=1`. **Note**: kernel build time can be significantly longer.<br><br>If the value is `"false"`; or the value is `"auto"` and `--kbuild_symtypes` is not specified, then `KBUILD_SYMTYPES=`.   |  `None` |
-| <a id="kernel_build-toolchain_version"></a>toolchain_version |  [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes). The toolchain version to depend on.   |  `None` |
+| <a id="kernel_build-toolchain_version"></a>toolchain_version |  **Deprecated**. [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes). The toolchain version to depend on.<br><br>It is deprecated to specify `toolchain_version`. Instead, delete the attribute, so it uses the default clang toolchain. The default clang toolchain version is specified in the `@kernel_toolchain_info` repository, usually containing the content of `common/build.config.constants`.   |  `None` |
 | <a id="kernel_build-strip_modules"></a>strip_modules |  If `None` or not specified, default is `False`. If set to `True`, debug information for distributed modules is stripped.<br><br>This corresponds to negated value of `DO_NOT_STRIP_MODULES` in `build.config`.   |  `None` |
 | <a id="kernel_build-module_signing_key"></a>module_signing_key |  A label referring to a module signing key.<br><br>This is to allow for dynamic setting of `CONFIG_MODULE_SIG_KEY` from Bazel.   |  `None` |
 | <a id="kernel_build-system_trusted_key"></a>system_trusted_key |  A label referring to a trusted system key.<br><br>This is to allow for dynamic setting of `CONFIG_SYSTEM_TRUSTED_KEY` from Bazel.   |  `None` |
@@ -1312,7 +1375,7 @@ For details, see
 | <a id="kernel_images-dtbo_config"></a>dtbo_config |  a config file to create dtbo image by cfg_create command.   |  `None` |
 | <a id="kernel_images-mkbootimg"></a>mkbootimg |  Path to the mkbootimg.py script which builds boot.img. Only used if `build_boot`. If `None`, default to `//tools/mkbootimg:mkbootimg.py`. NOTE: This overrides `MKBOOTIMG_PATH`.   |  `None` |
 | <a id="kernel_images-deps"></a>deps |  Additional dependencies to build images.<br><br>This must include the following: - For `initramfs`:   - The file specified by `MODULES_LIST`   - The file specified by `MODULES_BLOCKLIST`, if `MODULES_BLOCKLIST` is set   - The file containing the list of modules needed for booting into recovery.   - The file containing the list of modules needed for booting into charger mode. - For `vendor_dlkm` image:   - The file specified by `VENDOR_DLKM_MODULES_LIST`   - The file specified by `VENDOR_DLKM_MODULES_BLOCKLIST`, if set   - The file specified by `VENDOR_DLKM_PROPS`, if set   - The file specified by `selinux_fc` in `VENDOR_DLKM_PROPS`, if set   |  `None` |
-| <a id="kernel_images-boot_image_outs"></a>boot_image_outs |  A list of output files that will be installed to `DIST_DIR` when `build_boot_images` in `build/kernel/build_utils.sh` is executed.<br><br>You may leave out `vendor_boot.img` from the list. It is automatically added when `build_vendor_boot = True`.<br><br>If `build_boot` is equal to `False`, the default is empty.<br><br>If `build_boot` is equal to `True`, the default list assumes the following: - `BOOT_IMAGE_FILENAME` is not set (which takes default value `boot.img`), or is set to   `"boot.img"` - `vendor_boot.img` if `build_vendor_boot` - `RAMDISK_EXT=lz4`. Is used when `ramdisk_compression`(see below) is not specified. - `BOOT_IMAGE_HEADER_VERSION >= 4`, which creates `vendor-bootconfig.img` to contain   `VENDOR_BOOTCONFIG if `build_vendor_boot`. - The list contains `dtb.img`   |  `None` |
+| <a id="kernel_images-boot_image_outs"></a>boot_image_outs |  A list of output files that will be installed to `DIST_DIR` when `build_boot_images` in `build/kernel/build_utils.sh` is executed.<br><br>You may leave out `vendor_boot.img` from the list. It is automatically added when `build_vendor_boot = True`.<br><br>If `build_boot` is equal to `False`, the default is empty.<br><br>If `build_boot` is equal to `True`, the default list assumes the following: - `BOOT_IMAGE_FILENAME` is not set (which takes default value `boot.img`), or is set to   `"boot.img"` - `vendor_boot.img` if `build_vendor_boot` - `RAMDISK_EXT=lz4`. Is used when `ramdisk_compression`(see below) is not specified.   - The list contains `ramdisk.<ramdisk_ext>` which means it assumes `build_boot_images`     generates this file. See `build_utils.sh` on conditions for when it is actually     generated. - if `build_vendor_boot`, it assumes `VENDOR_BOOTCONFIG` is set and   `BOOT_IMAGE_HEADER_VERSION >= 4`, which creates `vendor-bootconfig.img` to contain   `VENDOR_BOOTCONFIG` . - The list contains `dtb.img`   |  `None` |
 | <a id="kernel_images-modules_list"></a>modules_list |  A file containing list of modules to use for `vendor_boot.modules.load`.   |  `None` |
 | <a id="kernel_images-modules_recovery_list"></a>modules_recovery_list |  A file containing a list of modules to load when booting into recovery.   |  `None` |
 | <a id="kernel_images-modules_charger_list"></a>modules_charger_list |  A file containing a list of modules to load when booting into charger mode.   |  `None` |

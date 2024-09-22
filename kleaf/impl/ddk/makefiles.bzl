@@ -284,6 +284,14 @@ def _makefiles_impl(ctx):
         order = DDK_INCLUDE_INFO_ORDER,
     )
 
+    submodule_linux_includes = {}
+    for dep in submodule_deps:
+        out = dep[DdkSubmoduleInfo].out
+        if not out:
+            continue
+        dirname = paths.dirname(out)
+        submodule_linux_includes.setdefault(dirname, []).append(dep[DdkSubmoduleInfo].linux_includes_include_infos)
+
     module_symvers_depset = depset(transitive = [
         target[ModuleSymversInfo].restore_paths
         for target in module_symvers_deps
@@ -313,6 +321,16 @@ def _makefiles_impl(ctx):
 
     if ctx.attr.top_level_makefile:
         args.add("--produce-top-level-makefile")
+    if ctx.attr.kbuild_has_linux_include:
+        args.add("--kbuild-has-linux-include")
+
+    for dirname, linux_includes_include_infos_list in submodule_linux_includes.items():
+        args.add("--submodule-linux-include-dirs", dirname)
+        args.add_all(
+            depset(transitive = linux_includes_include_infos_list),
+            map_each = _gather_prefixed_linux_includes,
+            uniquify = True,
+        )
 
     args.add_all(
         "--linux-include-dirs",
@@ -389,11 +407,13 @@ def _makefiles_impl(ctx):
         DefaultInfo(files = depset([output_makefiles])),
         DdkSubmoduleInfo(
             outs = depset(outs_depset_direct, transitive = outs_depset_transitive),
+            out = ctx.attr.module_out,
             srcs = depset(transitive = srcs_depset_transitive),
             kernel_module_deps = depset(
                 [kernel_utils.create_kernel_module_dep_info(target) for target in kernel_module_deps],
                 transitive = [dep[DdkSubmoduleInfo].kernel_module_deps for dep in submodule_deps],
             ),
+            linux_includes_include_infos = include_infos,
         ),
         ModuleSymversInfo(
             restore_paths = module_symvers_depset,
@@ -422,6 +442,10 @@ makefiles = rule(
         "module_local_defines": attr.string_list(),
         "module_copts": attr.string_list(),
         "top_level_makefile": attr.bool(),
+        "kbuild_has_linux_include": attr.bool(
+            doc = "Whether to add LINUXINCLUDE to Kbuild",
+            default = True,
+        ),
         "internal_target_fail_message": attr.string(
             doc = "For testing only. Assert that this target to fail to build with the given message.",
         ),

@@ -36,6 +36,9 @@ function append_cmd() {
 export -f append_cmd
 
 export KERNEL_DIR
+if [ -n "${KLEAF_INTERNAL_PREFERRED_KERNEL_DIR}" ]; then
+  KERNEL_DIR="${KLEAF_INTERNAL_PREFERRED_KERNEL_DIR}"
+fi
 # for case that KERNEL_DIR is not specified in environment
 if [ -z "${KERNEL_DIR}" ]; then
     # for the case that KERNEL_DIR is not specified in the BUILD_CONFIG file
@@ -57,6 +60,23 @@ for fragment in ${BUILD_CONFIG_FRAGMENTS}; do
   . ${ROOT_DIR}/${fragment}
 done
 set +a
+
+if [ -n "${KLEAF_INTERNAL_PREFERRED_KERNEL_DIR}" ]; then
+  if [ "${KERNEL_DIR}" != "${KLEAF_INTERNAL_PREFERRED_KERNEL_DIR}" ]; then
+    # If kernel_build.makefile is set and inconsistent with the value in build config, print a error.
+    echo "ERROR: kernel_build.makefile is set to be below ${KLEAF_INTERNAL_PREFERRED_KERNEL_DIR}," >&2
+    echo "  But it is not the same as KERNEL_DIR=${KERNEL_DIR}." >&2
+    echo "  Please delete KERNEL_DIR=${KERNEL_DIR} from ${BUILD_CONFIG}." >&2
+    exit 1
+  fi
+  unset KLEAF_INTERNAL_PREFERRED_KERNEL_DIR
+else
+  # If kernel_build.makefile is not set, print a warning
+  echo "WARNING: kernel_build.makefile is not set, and KERNEL_DIR=${KERNEL_DIR}. " >&2
+  echo "  To suppress this warning, set:" >&2
+  echo '    kernel_build(makefiles = "//'"${KERNEL_DIR}"':Makefile")' >&2
+  echo "  and delete KERNEL_DIR from build config if it is set explicitly." >&2
+fi
 
 # For incremental kernel development, it is beneficial to trade certain
 # optimizations for faster builds.

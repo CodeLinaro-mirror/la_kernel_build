@@ -18,6 +18,7 @@ Generate a DDK module Makefile
 
 import absl.flags.argparse_flags
 import argparse
+import collections
 import json
 import logging
 import os
@@ -96,7 +97,9 @@ def _gen_makefile(
         out_file.write(content)
 
 
-def _merge_directories(output_makefiles: pathlib.Path, submodule_makefile_dir: pathlib.Path):
+def _merge_directories(
+        output_makefiles: pathlib.Path,
+        submodule_makefile_dir: pathlib.Path):
     """Merges the content of submodule_makefile_dir into output_makefiles.
 
     File of the same relative path are concatenated.
@@ -122,6 +125,24 @@ def _merge_directories(output_makefiles: pathlib.Path, submodule_makefile_dir: p
                 dst.write(src.read())
                 dst.write("\n")
 
+def _append_submodule_linux_include_dirs(
+        output_makefiles: pathlib.Path,
+        linux_include_dirs: list[pathlib.Path],
+        submodule_linux_include_dirs: dict[pathlib.Path, list[pathlib.Path]],
+):
+    """For top-level ddk_module, append LINUXINCLUDE from deps of submodules"""
+    for dirname, linux_includes_of_dir in submodule_linux_include_dirs.items():
+        kbuild_file = output_makefiles / dirname / "Kbuild"
+        with open(kbuild_file, "a") as out_file:
+            out_file.write(textwrap.dedent("""\
+                # Common LINUXINLUDE for all submodules in this directory
+            """))
+
+            combined_linux_includes = linux_includes_of_dir + linux_include_dirs
+            combined_linux_includes = list(collections.OrderedDict.fromkeys(
+                combined_linux_includes).keys())
+            _handle_linux_includes(out_file, True, combined_linux_includes)
+
 
 def gen_ddk_makefile(
         output_makefiles: pathlib.Path,
@@ -130,6 +151,8 @@ def gen_ddk_makefile(
         produce_top_level_makefile: Optional[bool],
         submodule_makefiles: list[pathlib.Path],
         kernel_module_out: Optional[pathlib.Path],
+        linux_include_dirs: list[pathlib.Path],
+        submodule_linux_include_dirs: dict[pathlib.Path, list[pathlib.Path]],
         **kwargs
 ):
     if produce_top_level_makefile:
@@ -143,11 +166,15 @@ def gen_ddk_makefile(
             output_makefiles=output_makefiles,
             package=package,
             kernel_module_out=kernel_module_out,
+            linux_include_dirs=linux_include_dirs,
             **kwargs
         )
 
     for submodule_makefile_dir in submodule_makefiles:
         _merge_directories(output_makefiles, submodule_makefile_dir)
+    _append_submodule_linux_include_dirs(output_makefiles,
+                                         linux_include_dirs,
+                                         submodule_linux_include_dirs)
 
 
 def _gen_ddk_makefile_for_module(
@@ -159,6 +186,7 @@ def _gen_ddk_makefile_for_module(
         linux_include_dirs: list[pathlib.Path],
         local_defines: list[str],
         copt_file: Optional[TextIO],
+        kbuild_has_linux_include: bool,
         **unused_kwargs
 ):
     kernel_module_srcs_json_content = json.load(kernel_module_srcs_json)
@@ -239,7 +267,8 @@ def _gen_ddk_makefile_for_module(
                 """))
 
         out_file.write(f"\n# Common flags for {kernel_module_out.with_suffix('.o').name}\n")
-        _handle_linux_includes(out_file, linux_include_dirs)
+        _handle_linux_includes(out_file, kbuild_has_linux_include,
+                               linux_include_dirs)
         # At this time of writing (2022-11-01), this is the order how cc_library
         # constructs arguments to the compiler.
         _handle_defines(out_cflags, local_defines)
@@ -335,9 +364,13 @@ def _handle_src(
                     """))
 
 
-def _handle_linux_includes(out_file: TextIO,
+def _handle_linux_includes(out_file: TextIO, kbuild_has_linux_include: bool,
                            linux_include_dirs: list[pathlib.Path]):
     if not linux_include_dirs:
+        return
+    if not kbuild_has_linux_include:
+        out_file.write(
+            "# Skipping LINUXINCLUDE for submodules; they are added later\n")
         return
     out_file.write("\n")
     out_file.write(textwrap.dedent("""\
@@ -387,6 +420,17 @@ def _handle_copts(out_cflags: TextIO,
                 """))
 
 
+class SubmoduleLinuxIncludeDirAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if not values:
+            raise argparse.ArgumentTypeError(
+                "--submodule-linux-include-dirs requires at least one value")
+        dirname = values[0]
+        if not hasattr(namespace, self.dest):
+            setattr(namespace, self.dest, {})
+        getattr(namespace, self.dest)[dirname] = values[1:]
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO,
                         format="%(levelname)s: %(message)s")
@@ -406,9 +450,15 @@ if __name__ == "__main__":
     parser.add_argument("--local-defines", nargs="*", default=[])
     parser.add_argument("--copt-file", type=argparse.FileType("r"))
     parser.add_argument("--produce-top-level-makefile", action="store_true")
+    parser.add_argument("--kbuild-has-linux-include", action="store_true")
+    parser.add_argument("--kbuild-add-submodule-linux-include",
+                        action="store_true")
     parser.add_argument("--submodule-makefiles",
                         type=pathlib.Path, nargs="*", default=[])
     parser.add_argument("--internal-target-fail-message", default=None)
+    parser.add_argument("--submodule-linux-include-dirs",
+                        type=pathlib.Path, nargs="+", default={},
+                        action=SubmoduleLinuxIncludeDirAction)
 
     args = parser.parse_args()
 

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("@kernel_toolchain_info//:dict.bzl", "VARS")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_tools")
 load("//build/kernel/kleaf/impl:bison_wrapper.bzl", "bison_wrapper")
@@ -111,6 +110,12 @@ native_binary_with_arg(
 )
 
 prebuilt_transitioned_tool(
+    name = "m4",
+    src = "//prebuilts/build-tools:m4",
+    visibility = ["//visibility:private"],
+)
+
+prebuilt_transitioned_tool(
     name = "prebuilt_bison",
     src = "//prebuilts/build-tools:bison",
     visibility = ["//visibility:private"],
@@ -119,21 +124,22 @@ prebuilt_transitioned_tool(
 bison_wrapper(
     name = "bison",
     actual = ":prebuilt_bison",
+    m4 = ":m4",
     pkgdata_dir = "//prebuilts/build-tools:bison.runfiles_dir",
     pkgdata_files = "//prebuilts/build-tools:bison.runfiles",
     visibility = ["//visibility:private"],
 )
 
-prebuilt_transitioned_tool(
-    name = "prebuilt_swig",
+swig_wrapper(
+    name = "wrapped_swig",
     src = "//prebuilts/kernel-build-tools:swig",
+    swig_lib = "//prebuilts/kernel-build-tools:swig_lib_dir",
     visibility = ["//visibility:private"],
 )
 
-swig_wrapper(
+prebuilt_transitioned_tool(
     name = "swig",
-    src = ":prebuilt_swig",
-    swig_lib = "//prebuilts/kernel-build-tools:swig_lib_dir",
+    src = ":wrapped_swig",
     visibility = ["//visibility:private"],
 )
 
@@ -164,7 +170,6 @@ _PREBUILT_TOOLS = [
     "//prebuilts/build-tools:awk",
     "//prebuilts/build-tools:bc",
     "//prebuilts/build-tools:flex",
-    "//prebuilts/build-tools:m4",
     "//prebuilts/build-tools:make",
     "//prebuilts/build-tools:openssl",
     "//prebuilts/build-tools:runextractor",
@@ -213,6 +218,7 @@ _HERMETIC_TOOLS = [
     ":bison",
     ":gzip",
     ":lz4",
+    ":m4",
     ":swig",
     ":tar",
     # TODO: This is only used by abi_stgdiff. It should be fine to be removed from hermetic_tools.
@@ -309,11 +315,6 @@ hermetic_tools(
         },
         "//conditions:default": {
             ":toybox_find": "find",
-        },
-    }) | select({
-        "//build/kernel/kleaf:remove_strings_from_hermetic_tools_is_true": {},
-        "//conditions:default": {
-            "//prebuilts/clang/host/linux-x86/clang-{}:bin/llvm-strings".format(VARS["CLANG_VERSION"]): "llvm-strings",
         },
     }) | {
         ":toybox": ":".join(_TOYS),
