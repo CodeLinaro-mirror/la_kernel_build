@@ -58,9 +58,15 @@ load(
     "MODULES_STAGING_ARCHIVE",
     "MODULE_ENV_ARCHIVE_SUFFIX",
 )
+load(
+    ":ddk/ddk_headers.bzl",
+    "DdkHeadersInfo",
+    "ddk_headers_common_impl",
+)
 load(":debug.bzl", "debug")
 load(":file.bzl", "file")
-load(":file_selector.bzl", "file_selector")
+load(":file_selector.bzl", "file_selector", "file_selector_bool")
+load(":gcov_utils.bzl", "gcov_attrs", "get_grab_gcno_step")
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
 load(":kernel_config.bzl", "kernel_config")
 load(":kernel_config_settings.bzl", "kernel_config_settings")
@@ -90,6 +96,7 @@ def kernel_build(
         name,
         build_config,
         outs,
+        makefile = None,
         keep_module_symvers = None,
         srcs = None,
         module_outs = None,
@@ -121,6 +128,7 @@ def kernel_build(
         pack_module_env = None,
         sanitizers = None,
         ddk_module_defconfig_fragments = None,
+        ddk_module_headers = None,
         **kwargs):
     """Defines a kernel build target with all dependent targets.
 
@@ -140,6 +148,60 @@ def kernel_build(
     Args:
         name: The final kernel target name, e.g. `"kernel_aarch64"`.
         build_config: Label of the build.config file, e.g. `"build.config.gki.aarch64"`.
+        makefile: `Makefile` governing the kernel tree sources (see `srcs`).
+            Example values:
+
+            *   `None` (default): Falls back to the value of `KERNEL_DIR` from `build_config`.
+                `kernel_build()` executes `make` in `KERNEL_DIR`.
+
+                Note: The usage of specifying `KERNEL_DIR` in `build_config` is deprecated and will
+                trigger a warning/error in the future.
+
+            *   `"//common:Makefile"` (most common): the kernel sources are located in
+                `//common`. This means `kernel_build()` executes `make` to build the kernel image
+                and in-tree drivers in `common`.
+
+                This usually replaces `//common:set_kernel_dir_build_config` in your `build_config`;
+                that is, if you set `kernel_build.makefile`, it is likely that you may drop
+                `//common:set_kernel_dir_build_config` from components of
+                `kernel_build.build_config`.
+
+                This replaces `KERNEL_DIR=common` in your `build_config`.
+
+            *   `"@kleaf//common:Makefile"`: If you set up a DDK workspace such that Kleaf
+                tooling and your kernel source tree are located in the `@kleaf` submodule, you
+                should specify the full label in the package.
+            *   the `Makefile` next to the build config:
+
+                For example:
+
+                ```
+                kernel_build(
+                    name = "tuna",
+                    build_config = "//package:build.config.tuna", # the build.config.tuna is in //package
+                    makefile = "//package:Makefile", # so set KERNEL_DIR to "package"
+                )
+                ```
+
+                In this example, `build.config.tuna` is in `//package`. Hence,
+                setting `makefile = "Makefile"` is equivalent to the
+                legacy behavior of not setting `KERNEL_DIR` in `build.config`, and allowing
+                `_setup_env.sh` to decide the value by inferring from the directory containing the
+                build config, which is the `//package`.
+
+            *   `Makefile` in the current package: the kernel sources are in the current package
+                where `kernel_build()` is called.
+
+                For example:
+
+                ```
+                kernel_build(
+                    name = "tuna",
+                    build_config = "build.config.tuna", # the build.config.tuna is in this package
+                    makefile = "Makefile", # so set KERNEL_DIR to this package
+                )
+                ```
+
         kconfig_ext: Label of an external Kconfig.ext file sourced by the GKI kernel.
         keep_module_symvers: If set to True, a copy of the default output `Module.symvers` is kept.
           * To avoid collisions in mixed build distribution packages, the file is renamed
@@ -385,8 +447,14 @@ def kernel_build(
 
           If the value is `"false"`; or the value is `"auto"` and
           `--kbuild_symtypes` is not specified, then `KBUILD_SYMTYPES=`.
-        toolchain_version: [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes).
+        toolchain_version: **Deprecated**.
+          [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes).
           The toolchain version to depend on.
+
+          It is deprecated to specify `toolchain_version`. Instead, delete the attribute, so it
+          uses the default clang toolchain. The default clang toolchain version is specified in the
+          `@kernel_toolchain_info` repository, usually containing the content of
+          `common/build.config.constants`.
         strip_modules: If `None` or not specified, default is `False`.
           If set to `True`, debug information for distributed modules is stripped.
 
@@ -435,6 +503,13 @@ def kernel_build(
           in `ddk_module`s building against this kernel.
           Unlike `defconfig_fragments`, `ddk_module_defconfig_fragments` is not applied
           to this `kernel_build` target, nor dependent legacy `kernel_module`s.
+        ddk_module_headers: A list of `ddk_headers`, to be used in `ddk_module`s
+          building against this kernel.
+
+          Inherits `ddk_module_headers` from `base_kernel`, with a lower priority
+          than `ddk_module_headers` of this kernel_build.
+
+          These headers are not applied to this `kernel_build` target.
         **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
@@ -471,7 +546,6 @@ def kernel_build(
     if arch == None:
         arch = "arm64"
 
-    trim_nonlisted_kmi_str = str(trim_nonlisted_kmi)
     trim_nonlisted_kmi = trim_nonlisted_kmi_utils.selected_attr(trim_nonlisted_kmi)
 
     internal_kwargs = dict(kwargs)
@@ -495,12 +569,16 @@ def kernel_build(
         kernel_build_arch = arch,
         kernel_build_page_size = page_size,
         kernel_build_sanitizers = sanitizers,
-        kernel_build_trim_nonlisted_kmi = trim_nonlisted_kmi_str,
+        kernel_build_trim_nonlisted_kmi = trim_nonlisted_kmi,
         **internal_kwargs
     )
 
     toolchain_constraints = []
     if toolchain_version != None:
+        # buildifier: disable=print
+        print("\nWARNING: {}: kernel_build.toolchain_version is deprecated. Please delete it.".format(
+            native.package_relative_label(name),
+        ))
         toolchain_constraint = Label("//prebuilts/clang/host/linux-x86/kleaf:{}".format(toolchain_version))
         toolchain_constraints.append(Label(toolchain_constraint))
     else:
@@ -519,16 +597,25 @@ def kernel_build(
 
     native.platform(
         name = name + "_platform_exec",
+        # Note that this does not respect --host_platform.
+        parents = [Label("@platforms//host")],
+        constraint_values = toolchain_constraints,
+        **internal_kwargs
+    )
+
+    native.platform(
+        name = name + "_platform_exec_musl",
+        parents = [name + "_platform_exec"],
         constraint_values = [
-            Label("@platforms//os:linux"),
-            Label("@platforms//cpu:x86_64"),
-        ] + toolchain_constraints,
+            Label("//build/kernel/kleaf/impl:musl"),
+        ],
         **internal_kwargs
     )
 
     kernel_env(
         name = env_target_name,
         build_config = build_config,
+        makefile = makefile,
         kconfig_ext = kconfig_ext,
         dtstree = dtstree,
         srcs = srcs,
@@ -537,7 +624,10 @@ def kernel_build(
         lto = lto,
         make_goals = make_goals,
         target_platform = name + "_platform_target",
-        exec_platform = name + "_platform_exec",
+        exec_platform = select({
+            Label("//build/kernel/kleaf:musl_kbuild_is_true"): name + "_platform_exec_musl",
+            "//conditions:default": name + "_platform_exec",
+        }),
         defconfig_fragments = defconfig_fragments,
         **internal_kwargs
     )
@@ -625,6 +715,7 @@ def kernel_build(
         pack_module_env = pack_module_env,
         sanitizers = sanitizers,
         ddk_module_defconfig_fragments = ddk_module_defconfig_fragments,
+        ddk_module_headers = ddk_module_headers,
         arch = arch,
         **kwargs
     )
@@ -803,21 +894,20 @@ def _get_defconfig_fragments(
 
     module_protection_target = kernel_build_name + "_defconfig_fragment_module_protection"
 
-    # When the value is not specified in the kernel_build rule, do nothing.
-    if kernel_build_trim_nonlisted_kmi == "None":
-        kernel_build_trim_nonlisted_kmi = "True"
-    file_selector(
+    file_selector_bool(
         name = module_protection_target,
         first_selector = select({
-            Label("//build/kernel/kleaf/impl:force_disable_trim_is_true"): "False",
-            Label("//build/kernel/kleaf:debug_is_true"): "False",
-            Label("//build/kernel/kleaf:gcov_is_true"): "False",
-            Label("//build/kernel/kleaf:kasan_is_true"): "False",
-            Label("//build/kernel/kleaf:kcsan_is_true"): "False",
-            Label("//build/kernel/kleaf:kgdb_is_true"): "False",
+            Label("//build/kernel/kleaf/impl:force_disable_trim_is_true"): False,
+            Label("//build/kernel/kleaf:debug_is_true"): False,
+            Label("//build/kernel/kleaf:gcov_is_true"): False,
+            Label("//build/kernel/kleaf:kasan_is_true"): False,
+            Label("//build/kernel/kleaf:kcsan_is_true"): False,
+            Label("//build/kernel/kleaf:kgdb_is_true"): False,
             "//conditions:default": None,
         }),
         second_selector = kernel_build_trim_nonlisted_kmi,
+        # When the value is not specified in the kernel_build rule, do nothing.
+        third_selector = True,
         files = {
             Label("//build/kernel/kleaf/impl/defconfig:gki_module_protection_disabled_defconfig"): "False",
             Label("//build/kernel/kleaf/impl:empty_filegroup"): "True",
@@ -867,9 +957,8 @@ def _uniq(lst):
 
 def _progress_message_suffix(ctx):
     """Returns suffix for all progress messages for kernel_build."""
-    return "{}{}".format(
+    return "{} %{{label}}".format(
         ctx.attr.config[KernelEnvAttrInfo].progress_message_note,
-        ctx.label,
     )
 
 def _create_kbuild_mixed_tree(ctx):
@@ -905,7 +994,7 @@ def _create_kbuild_mixed_tree(ctx):
             inputs = depset(transitive = [base_kernel_files]),
             outputs = [kbuild_mixed_tree],
             tools = hermetic_tools.deps,
-            progress_message = "Creating KBUILD_MIXED_TREE {}".format(_progress_message_suffix(ctx)),
+            progress_message = "Creating KBUILD_MIXED_TREE{}".format(_progress_message_suffix(ctx)),
             command = kbuild_mixed_tree_command,
         )
 
@@ -1190,78 +1279,6 @@ def _get_grab_symtypes_step(ctx):
         outputs = outputs,
     )
 
-def get_grab_gcno_step(ctx, src_dir, is_kernel_build):
-    """Returns a step for grabbing the `*.gcno`files from `src_dir`.
-
-    Args:
-        ctx: Context from the rule.
-        src_dir: Source directory.
-        is_kernel_build: The flag to indicate whether the rule is `kernel_build`.
-
-    Returns:
-      A struct with fields (inputs, tools, outputs, cmd, gcno_mapping, gcno_dir)
-    """
-    grab_gcno_cmd = ""
-    inputs = []
-    outputs = []
-    tools = []
-    gcno_mapping = None
-    gcno_dir = None
-    if ctx.attr._gcov[BuildSettingInfo].value:
-        gcno_dir = ctx.actions.declare_directory("{name}/{name}_gcno".format(name = ctx.label.name))
-        gcno_mapping = ctx.actions.declare_file("{name}/gcno_mapping.{name}.json".format(name = ctx.label.name))
-        gcno_archive = ctx.actions.declare_file(
-            "{name}/{name}.gcno.tar.gz".format(name = ctx.label.name),
-        )
-        outputs += [gcno_dir, gcno_mapping, gcno_archive]
-        tools.append(ctx.executable._print_gcno_mapping)
-
-        extra_args = ""
-        base_kernel = ""
-        if is_kernel_build == True:
-            base_kernel = base_kernel_utils.get_base_kernel(ctx)
-        base_kernel_gcno_dir_cmd = ""
-        if base_kernel and base_kernel[GcovInfo].gcno_mapping:
-            extra_args = "--base {}".format(base_kernel[GcovInfo].gcno_mapping.path)
-            inputs.append(base_kernel[GcovInfo].gcno_mapping)
-            if base_kernel[GcovInfo].gcno_dir:
-                inputs.append(base_kernel[GcovInfo].gcno_dir)
-                base_kernel_gcno_dir_cmd = """
-                    # Copy all *.gcno files and its subdirectories recursively.
-                    rsync -a -L --prune-empty-dirs --include '*/' --include '*.gcno' --exclude '*' {base_gcno_dir}/ {gcno_dir}/
-                """.format(
-                    base_gcno_dir = base_kernel[GcovInfo].gcno_dir.path,
-                    gcno_dir = gcno_dir.path,
-                )
-
-        # Note: Emitting `src_dir` is one source of ir-reproducible output for sandbox actions.
-        # However, note that these ir-reproducibility are tied to vmlinux, because these paths are already
-        # embedded in vmlinux. This file just makes such ir-reproducibility more explicit.
-        grab_gcno_cmd = """
-            rsync -a --prune-empty-dirs --include '*/' --include '*.gcno' --exclude '*' {src_dir}/ {gcno_dir}/
-            {print_gcno_mapping} {extra_args} {src_dir}:{gcno_dir} > {gcno_mapping}
-            # Archive gcno_dir + gcno_mapping + base_kernel_gcno_dir
-            {base_kernel_gcno_cmd}
-            cp {gcno_mapping} {gcno_dir}
-            tar czf {gcno_archive} -C {gcno_dir} .
-        """.format(
-            src_dir = src_dir,
-            gcno_dir = gcno_dir.path,
-            gcno_mapping = gcno_mapping.path,
-            print_gcno_mapping = ctx.executable._print_gcno_mapping.path,
-            extra_args = extra_args,
-            gcno_archive = gcno_archive.path,
-            base_kernel_gcno_cmd = base_kernel_gcno_dir_cmd,
-        )
-    return struct(
-        inputs = inputs,
-        tools = tools,
-        cmd = grab_gcno_cmd,
-        outputs = outputs,
-        gcno_mapping = gcno_mapping,
-        gcno_dir = gcno_dir,
-    )
-
 def _get_grab_kbuild_output_step(ctx):
     """Returns a step for grabbing the `*`files from `OUT_DIR`.
 
@@ -1392,7 +1409,18 @@ def _get_modinst_step(ctx, modules_staging_dir):
          # Set variables and create dirs for modules
            mkdir -p {modules_staging_dir}
          # Install modules
-           if grep -q "\\bmodules\\b" <<< "{make_goals}" ; then
+           if grep -q -E -e "\\bmodules\\b|[.]ko\\b" <<< "{make_goals}" ; then
+               if grep -q -E -e "[.]ko\\b" <<< "{make_goals}" ; then
+                   # For single_module builds, we need to generate our own
+                   # modules.order since `make` deletes it, but it's needed for
+                   # `modules_install`. We don't really care about the module
+                   # ordering here. With fw_devlink enabled in GKI, the probe
+                   # ordering should be handled based on device dependencies.
+                   : > ${{OUT_DIR}}/modules.order
+                   for module in {make_goals}; do
+                       echo ${{module}} | sed -n "s:\\([.]\\)ko\\>.*:\\1o:p"  >> ${{OUT_DIR}}/modules.order
+                   done
+               fi
                make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} DEPMOD=true O=${{OUT_DIR}} {module_strip_flag} INSTALL_MOD_PATH=$(realpath {modules_staging_dir}) modules_install
            else
                # Workaround as this file is required, hence just produce a placeholder.
@@ -1402,7 +1430,7 @@ def _get_modinst_step(ctx, modules_staging_dir):
         modules_staging_dir = modules_staging_dir,
         internal_outs_under_out_dir = " ".join(["${{OUT_DIR}}/{}".format(item) for item in _kernel_build_internal_outs]),
         module_strip_flag = module_strip_flag,
-        make_goals = ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals,
+        make_goals = " ".join(ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals),
     )
 
     if base_kernel:
@@ -1485,7 +1513,7 @@ def _build_main_action(
         all_module_basenames_file = all_module_basenames_file,
     )
     grab_symtypes_step = _get_grab_symtypes_step(ctx)
-    grab_gcno_step = get_grab_gcno_step(ctx, "${OUT_DIR}", is_kernel_build = True)
+    grab_gcno_step = get_grab_gcno_step(ctx, "${COMMON_OUT_DIR}", is_kernel_build = True)
     grab_cmd_step = get_grab_cmd_step(ctx, "${OUT_DIR}")
     compile_commands_step = compile_commands_utils.get_step(ctx, "${OUT_DIR}")
     grab_gdb_scripts_step = kgdb.get_grab_gdb_scripts_step(ctx)
@@ -1523,7 +1551,20 @@ def _build_main_action(
     command += """
            {kbuild_mixed_tree_cmd}
          # Actual kernel build
-           {interceptor_command_prefix} make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} {make_goals}
+           if grep -q "\\bdtbs\\b" <<< "{make_goals}" ; then
+               # TODO(b/359683179): if we build dtbs with the individual kernel
+               # modules, then not all of the kernel modules are found in the
+               # OUT_DIR. Building dtbs first, fixes this issue.
+               {interceptor_command_prefix} make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} dtbs
+           fi
+           make_subgoals=$(echo "{make_goals}" | sed "s:\\<dtbs\\>::" || true)
+           if grep -q -E -e "[.]ko\\b" <<< "${{make_subgoals}}" ; then
+               # TODO(b/359681021) Follow up with the upstream maintainer to
+               # see what needs to be done to drop KBUILD_MODPOST_WARN=1.
+               {interceptor_command_prefix} make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} KBUILD_MODPOST_WARN=1 ${{make_subgoals}}
+           else
+               {interceptor_command_prefix} make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} ${{make_subgoals}}
+           fi
          # Install modules
            {modinst_cmd}
          # Archive headers in OUT_DIR
@@ -1628,7 +1669,7 @@ def _build_main_action(
         inputs = depset(_uniq(inputs), transitive = transitive_inputs),
         outputs = command_outputs,
         tools = depset(_uniq(tools), transitive = transitive_tools),
-        progress_message = "Building kernel {}".format(_progress_message_suffix(ctx)),
+        progress_message = "Building kernel{}".format(_progress_message_suffix(ctx)),
         command = command,
         execution_requirements = kernel_utils.local_exec_requirements(ctx),
     )
@@ -1814,8 +1855,25 @@ def _create_infos(
             for dep in ext_mod_serialized_env_info_deps
         },
         fake_system_map = True,
-        extra_restore_outputs_cmd = "",
-        extra_inputs = depset(transitive = [module_srcs.module_scripts]),
+        extra_restore_outputs_cmd = """
+            (
+                {kbuild_mixed_tree_cmd}
+              # Stitch together the GKI symbols and device module symbols
+              # together for proper linking during the modpost step. This will
+              # also help detect CRC differences between the GKI and device
+              # builds if the same symbol is defined twice with different CRC
+              # values.
+                if [[ -f "${{KBUILD_MIXED_TREE}}/Module.symvers" ]]; then
+                  cp ${{KBUILD_MIXED_TREE}}/Module.symvers ${{OUT_DIR}}/Module.symvers.tmp
+                  grep -v -e "\\bvmlinux\\b" ${{OUT_DIR}}/Module.symvers >> ${{OUT_DIR}}/Module.symvers.tmp
+                  cat ${{OUT_DIR}}/Module.symvers.tmp | sort -u > ${{OUT_DIR}}/Module.symvers
+                  rm -f ${{OUT_DIR}}/Module.symvers.tmp
+                fi
+            )
+        """.format(
+            kbuild_mixed_tree_cmd = kbuild_mixed_tree_ret.cmd,
+        ),
+        extra_inputs = depset(kbuild_mixed_tree_ret.outputs, transitive = [module_srcs.module_scripts]),
     )
 
     # External modules do not need implicit_outs because they are unsigned.
@@ -1868,6 +1926,16 @@ def _create_infos(
         collect_unstripped_modules = ctx.attr.collect_unstripped_modules,
         strip_modules = ctx.attr.strip_modules,
         ddk_module_defconfig_fragments = ddk_module_defconfig_fragments,
+    )
+
+    base_kernel_for_ddk_headers = base_kernel_utils.get_base_kernel_for_ddk_headers(ctx)
+    ddk_headers_info = ddk_headers_common_impl(
+        ctx.label,
+        # Because of left-to-right ordering, put DdkHeadersInfo from base_kernel
+        # at the end of the direct list so it has a lower priority.
+        ctx.attr.ddk_module_headers + ([base_kernel_for_ddk_headers] if base_kernel_for_ddk_headers else []),
+        [],
+        [],
     )
 
     kernel_uapi_depsets = []
@@ -1932,6 +2000,7 @@ def _create_infos(
     output_group_info = OutputGroupInfo(**output_group_kwargs)
 
     kbuild_mixed_tree_files = all_output_files["outs"].values() + all_output_files["module_outs"].values()
+    kbuild_mixed_tree_files.append(all_output_files["internal_outs"]["Module.symvers"])
     kbuild_mixed_tree_info = KernelBuildMixedTreeInfo(
         files = depset(kbuild_mixed_tree_files),
     )
@@ -1993,6 +2062,7 @@ def _create_infos(
 
     return [
         cmds_info,
+        ddk_headers_info,
         serialized_env_info,
         orig_env_info,
         kbuild_mixed_tree_info,
@@ -2111,11 +2181,6 @@ _kernel_build = rule(
             executable = True,
             doc = "label referring to the script to process outputs",
         ),
-        "_print_gcno_mapping": attr.label(
-            default = Label("//build/kernel/kleaf/impl:print_gcno_mapping"),
-            cfg = "exec",
-            executable = True,
-        ),
         "deps": attr.label_list(
             allow_files = True,
         ),
@@ -2146,7 +2211,6 @@ _kernel_build = rule(
         "_warn_undeclared_modules": attr.label(default = "//build/kernel/kleaf:warn_undeclared_modules"),
         "_preserve_cmd": attr.label(default = "//build/kernel/kleaf/impl:preserve_cmd"),
         "_kmi_symbol_list_violations_check": attr.label(default = "//build/kernel/kleaf:kmi_symbol_list_violations_check"),
-        "_gcov": attr.label(default = "//build/kernel/kleaf:gcov"),
         # Though these rules are unrelated to the `_kernel_build` rule, they are added as fake
         # dependencies so KernelBuildExtModuleInfo and KernelBuildUapiInfo works.
         # There are no real dependencies. Bazel does not build these targets before building the
@@ -2172,8 +2236,12 @@ _kernel_build = rule(
             allow_empty = True,
             allow_files = True,
         ),
+        "ddk_module_headers": attr.label_list(
+            doc = "Additional `ddk_headers` for dependant DDK modules.",
+            providers = [DdkHeadersInfo],
+        ),
         "arch": attr.string(),
-    } | _kernel_build_additional_attrs(),
+    } | _kernel_build_additional_attrs() | gcov_attrs(),
     toolchains = [hermetic_toolchain.type],
 )
 
@@ -2268,7 +2336,7 @@ def _kmi_symbol_list_strict_mode(ctx, all_output_files, all_module_names):
         tools = depset(tools, transitive = transitive_tools),
         outputs = [out],
         command = command,
-        progress_message = "Checking for kmi_symbol_list_strict_mode {}".format(_progress_message_suffix(ctx)),
+        progress_message = "Checking for kmi_symbol_list_strict_mode{}".format(_progress_message_suffix(ctx)),
     )
     return out
 
@@ -2347,7 +2415,7 @@ def _kmi_symbol_list_violations_check(ctx, modules_staging_archive):
         tools = depset(tools, transitive = transitive_tools),
         outputs = [out],
         command = command,
-        progress_message = "Checking for kmi_symbol_list_violations {}".format(_progress_message_suffix(ctx)),
+        progress_message = "Checking for kmi_symbol_list_violations{}".format(_progress_message_suffix(ctx)),
     )
 
     return out
@@ -2414,7 +2482,7 @@ def _repack_modules_staging_archive(
         ],
         outputs = [modules_staging_archive],
         tools = hermetic_tools.deps,
-        progress_message = "Repackaging modules_staging_archive {}".format(_progress_message_suffix(ctx)),
+        progress_message = "Repackaging modules_staging_archive{}".format(_progress_message_suffix(ctx)),
         command = cmd,
     )
     return modules_staging_archive
@@ -2465,6 +2533,6 @@ def _create_module_scripts_archive(
         tools = hermetic_tools.deps,
         command = cmd,
         arguments = [args],
-        progress_message = "Archiving scripts/kconfig for ext module {}".format(_progress_message_suffix(ctx)),
+        progress_message = "Archiving scripts/kconfig for ext module{}".format(_progress_message_suffix(ctx)),
     )
     return out

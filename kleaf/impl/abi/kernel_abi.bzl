@@ -25,7 +25,8 @@ load(":abi/get_src_kmi_symbol_list.bzl", "get_src_kmi_symbol_list")
 load(":abi/get_src_protected_exports_files.bzl", "get_src_protected_exports_list", "get_src_protected_modules_list")
 load(":abi/protected_exports.bzl", "protected_exports")
 load(":common_providers.bzl", "KernelBuildAbiInfo")
-load(":hermetic_exec.bzl", "hermetic_exec")
+load(":diff.bzl", "diff")
+load(":empty_binary.bzl", "empty_binary")
 load(":kernel_build.bzl", "kernel_build")
 
 visibility("//build/kernel/kleaf/...")
@@ -223,14 +224,12 @@ def _not_define_abi_targets(
     )
 
     # For kernel_abi_dist to use when define_abi_targets is not set.
-    hermetic_exec(
+    empty_binary(
         name = name + "_diff_executable",
-        script = "",
         **private_kwargs
     )
-    hermetic_exec(
+    empty_binary(
         name = name + "_diff_executable_xml",
-        script = "",
         **private_kwargs
     )
 
@@ -335,7 +334,7 @@ def _define_abi_targets(
         kmi_symbol_list = name + "_src_kmi_symbol_list",
         protected_exports_list = name + "_src_protected_exports_list",
         kmi_symbol_checks = name + "_kmi_symbol_checks",
-        **private_kwargs
+        **kwargs
     )
 
     native.filegroup(
@@ -359,14 +358,17 @@ def _define_abi_definition_targets(
     Defines `{name}_diff_executable`.
     """
 
+    private_kwargs = kwargs | {
+        "visibility": ["//visibility:private"],
+    }
+
     default_outputs = []
 
     if not abi_definition_stg:
         # For kernel_abi_dist to use when abi_definition is empty.
-        hermetic_exec(
+        empty_binary(
             name = name + "_diff_executable",
-            script = "",
-            **kwargs
+            **private_kwargs
         )
         default_outputs.append(name + "_diff_executable")
 
@@ -376,19 +378,21 @@ def _define_abi_definition_targets(
                           name,
                       ) +
                       "See kleaf/docs/abi.md for more information.",
+            **kwargs
         )
     else:
         native.filegroup(
             name = name + "_out_file",
             srcs = [name + "_dump"],
             output_group = "abi_out_file",
-            **kwargs
+            **private_kwargs
         )
         stgdiff(
             name = name + "_diff",
             baseline = abi_definition_stg,
             new = name + "_out_file",
             kmi_enforced = kmi_enforced,
+            **kwargs
         )
         default_outputs.append(name + "_diff")
 
@@ -397,59 +401,59 @@ def _define_abi_definition_targets(
             name = name + "_diff_executable",
             srcs = [name + "_diff"],
             output_group = "executable",
-            **kwargs
+            **private_kwargs
         )
 
         native.filegroup(
             name = name + "_diff_git_message",
             srcs = [name + "_diff"],
             output_group = "git_message",
-            **kwargs
+            **private_kwargs
+        )
+
+        diff(
+            name = name + "_diff_symbol_list",
+            file1 = name + "_extracted_symbols",
+            file2 = kmi_symbol_list,
+            failure_message = """\
+symbol list must be updated before updating ABI definition.
+    To update, execute
+        tools/bazel run {}
+    To discover additional files to be updated, execute
+        tools/bazel run -k {}""".format(
+                native.package_relative_label(name + "_update_symbol_list"),
+                native.package_relative_label(name + "_update"),
+            ),
+            **private_kwargs
+        )
+
+        diff(
+            name = name + "_diff_protected_exports_list",
+            file1 = name + "_protected_exports",
+            file2 = protected_exports_list,
+            failure_message = """\
+protected exports list must be updated before updating ABI definition.
+    To update, execute
+        tools/bazel run {}
+    To discover additional files to be updated, execute
+        tools/bazel run -k {}""".format(
+                native.package_relative_label(native.package_relative_label(name + "_update_protected_exports")),
+                native.package_relative_label(name + "_update"),
+            ),
+            **private_kwargs
         )
 
         update_source_file(
-            name = name + "_update_definition",
+            name = name + "_nodiff_update",
             src = name + "_out_file",
             dst = abi_definition_stg,
-            **kwargs
-        )
-
-        hermetic_exec(
-            name = name + "_nodiff_update",
-            data = [
-                name + "_extracted_symbols",
-                name + "_protected_exports",
-                name + "_update_definition",
-                kmi_symbol_list,
-                protected_exports_list,
-                # This is unused in the script, but placed here just to ensure
-                # the checks are executed.
+            deps = [
+                name + "_diff_symbol_list",
+                name + "_diff_protected_exports_list",
+                # Ensure KMI checks are executed before updating ABI.
                 kmi_symbol_checks,
             ],
-            script = """
-                # Ensure that symbol list is updated
-                if ! diff -q $(rootpath {src_symbol_list}) $(rootpath {dst_symbol_list}); then
-                    echo "ERROR: symbol list must be updated before updating ABI definition."
-                    echo " To update, execute 'tools/bazel run {update_symbol_list_label}'." >&2
-                    exit 1
-                fi
-                # Ensure that protected exports list is updated
-                if ! diff -q $(rootpath {src_protected_exports_list}) $(rootpath {dst_protected_exports_list}); then
-                echo "ERROR: protected exports list must be updated before updating ABI definition. To update, execute 'tools/bazel run {update_protected_exports_label}'." >&2
-                    exit 1
-                fi
-                # Update abi_definition
-                $(rootpath {update_definition})
-                """.format(
-                src_protected_exports_list = name + "_protected_exports",
-                dst_protected_exports_list = protected_exports_list,
-                src_symbol_list = name + "_extracted_symbols",
-                dst_symbol_list = kmi_symbol_list,
-                update_protected_exports_label = native.package_relative_label(name + "_update_protected_exports"),
-                update_symbol_list_label = native.package_relative_label(name + "_update_symbol_list"),
-                update_definition = name + "_update_definition",
-            ),
-            **kwargs
+            **private_kwargs
         )
 
         abi_update(
@@ -458,6 +462,7 @@ def _define_abi_definition_targets(
             git_message = name + "_diff_git_message",
             diff = name + "_diff_executable",
             nodiff_update = name + "_nodiff_update",
+            **kwargs
         )
 
     return default_outputs

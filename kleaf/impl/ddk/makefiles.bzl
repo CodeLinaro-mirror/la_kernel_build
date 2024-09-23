@@ -271,13 +271,26 @@ def _makefiles_impl(ctx):
         includes = ctx.attr.module_includes,
         linux_includes = ctx.attr.module_linux_includes,
     )]
+
+    # Because of left-to-right ordering (DDK_INCLUDE_INFO_ORDER), kernel_build with
+    # lowest priority is placed at the end of the list.
+    transitive_include_info_targets = ctx.attr.module_deps + ctx.attr.module_hdrs + ctx.attr.module_textual_hdrs
+    if ctx.attr.kernel_build:
+        transitive_include_info_targets.append(ctx.attr.kernel_build)
+
     include_infos = depset(
         direct_include_infos,
-        transitive = get_ddk_transitive_include_infos(
-            ctx.attr.module_deps + ctx.attr.module_hdrs + ctx.attr.module_textual_hdrs,
-        ),
+        transitive = get_ddk_transitive_include_infos(transitive_include_info_targets),
         order = DDK_INCLUDE_INFO_ORDER,
     )
+
+    submodule_linux_includes = {}
+    for dep in submodule_deps:
+        out = dep[DdkSubmoduleInfo].out
+        if not out:
+            continue
+        dirname = paths.dirname(out)
+        submodule_linux_includes.setdefault(dirname, []).append(dep[DdkSubmoduleInfo].linux_includes_include_infos)
 
     module_symvers_depset = depset(transitive = [
         target[ModuleSymversInfo].restore_paths
@@ -308,6 +321,16 @@ def _makefiles_impl(ctx):
 
     if ctx.attr.top_level_makefile:
         args.add("--produce-top-level-makefile")
+    if ctx.attr.kbuild_has_linux_include:
+        args.add("--kbuild-has-linux-include")
+
+    for dirname, linux_includes_include_infos_list in submodule_linux_includes.items():
+        args.add("--submodule-linux-include-dirs", dirname)
+        args.add_all(
+            depset(transitive = linux_includes_include_infos_list),
+            map_each = _gather_prefixed_linux_includes,
+            uniquify = True,
+        )
 
     args.add_all(
         "--linux-include-dirs",
@@ -345,7 +368,7 @@ def _makefiles_impl(ctx):
         outputs = [output_makefiles],
         executable = ctx.executable._gen_makefile,
         arguments = [args],
-        progress_message = "Generating Makefile {}".format(ctx.label),
+        progress_message = "Generating Makefile %{label}",
     )
 
     outs_depset_direct = []
@@ -361,13 +384,17 @@ def _makefiles_impl(ctx):
 
     # Add all files from hdrs and textual_hdrs (use DdkHeadersInfo if available,
     #  otherwise use default files).
-    srcs_depset_transitive.append(get_headers_depset(
-        ctx.attr.module_hdrs + ctx.attr.module_textual_hdrs,
-    ))
+    srcs_depset_transitive.append(get_headers_depset(ctx.attr.module_hdrs + ctx.attr.module_textual_hdrs))
+
+    # Add ddk_module_headers files from kernel_build
+    if ctx.attr.kernel_build:
+        srcs_depset_transitive.append(ctx.attr.kernel_build[DdkHeadersInfo].files)
 
     ddk_headers_info = ddk_headers_common_impl(
         ctx.label,
-        # hdrs of the ddk_module + hdrs of submodules
+        # hdrs of the ddk_module + hdrs of submodules.
+        # Don't export kernel_build[DdkHeadersInfo] to avoid raising its priority;
+        # dependent makefiles() target will put kernel_build[DdkHeadersInfo] at the end.
         ctx.attr.module_hdrs + ctx.attr.module_textual_hdrs + submodule_deps,
         # includes of the ddk_module. The includes of submodules are handled by adding
         # them to hdrs.
@@ -380,11 +407,13 @@ def _makefiles_impl(ctx):
         DefaultInfo(files = depset([output_makefiles])),
         DdkSubmoduleInfo(
             outs = depset(outs_depset_direct, transitive = outs_depset_transitive),
+            out = ctx.attr.module_out,
             srcs = depset(transitive = srcs_depset_transitive),
             kernel_module_deps = depset(
                 [kernel_utils.create_kernel_module_dep_info(target) for target in kernel_module_deps],
                 transitive = [dep[DdkSubmoduleInfo].kernel_module_deps for dep in submodule_deps],
             ),
+            linux_includes_include_infos = include_infos,
         ),
         ModuleSymversInfo(
             restore_paths = module_symvers_depset,
@@ -396,6 +425,11 @@ makefiles = rule(
     implementation = _makefiles_impl,
     doc = "Generate `Makefile` and `Kbuild` files for `ddk_module`",
     attrs = {
+        "kernel_build": attr.label(
+            providers = [DdkHeadersInfo],
+            # This is not set on ddk_submodule, but only on the overarching ddk_module.
+            mandatory = False,
+        ),
         # module_X is the X attribute of the ddk_module. Prefixed with `module_`
         # because they aren't real srcs / hdrs / deps to the makefiles rule.
         "module_srcs": attr.label_list(allow_files = [".c", ".h", ".S", ".rs"]),
@@ -408,6 +442,10 @@ makefiles = rule(
         "module_local_defines": attr.string_list(),
         "module_copts": attr.string_list(),
         "top_level_makefile": attr.bool(),
+        "kbuild_has_linux_include": attr.bool(
+            doc = "Whether to add LINUXINCLUDE to Kbuild",
+            default = True,
+        ),
         "internal_target_fail_message": attr.string(
             doc = "For testing only. Assert that this target to fail to build with the given message.",
         ),

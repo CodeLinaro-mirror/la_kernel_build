@@ -48,8 +48,14 @@ _REPO_BOUNDARY_FILES = ("MODULE.bazel", "REPO.bazel", "WORKSPACE.bazel", "WORKSP
 # Regular actions should explicitly use hermetic toolchain whenever
 # possible.
 _ACTION_HERMETIC_TOOLS = [
+    # for `bazel test` to generate xml
+    "prebuilts/build-tools/path/linux-x86/cat",
     # for copy_file
     "prebuilts/build-tools/path/linux-x86/cp",
+    # for `bazel test` to generate xml
+    "prebuilts/build-tools/path/linux-x86/sed",
+    # build_test uses touch
+    "prebuilts/build-tools/path/linux-x86/touch",
     # https://github.com/bazelbuild/bazel/issues/19355
     "prebuilts/build-tools/path/linux-x86/python3",
     # for rules_python toolchain resolution
@@ -570,6 +576,8 @@ class BazelWrapper(KleafHelpPrinter):
             # Toolchains and platforms
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/hermetic_cc.bazelrc",
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/platforms.bazelrc",
+            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/musl_platform.bazelrc",
+            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/musl.bazelrc",
             # Control Network access - with no internet by default.
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/network.bazelrc",
             # Experimental bzlmod support
@@ -724,16 +732,17 @@ class BazelWrapper(KleafHelpPrinter):
             all_tools.add(dst_path)
             src_path = shutil.which(tool)
             if src_path:
-                src_path = pathlib.Path(src_path)
-                if dst_path.is_symlink():
-                    if dst_path.resolve() == src_path:
-                        continue
-                    dst_path.unlink()
+                src_path = pathlib.Path(src_path).resolve()
+                if dst_path.is_symlink() and dst_path.resolve() == src_path:
+                    continue
+            # Delete broken symlinks or symlinks that is not correct
+            # We could use dst_path.exists(follow_symlinks=False) once updated
+            # to 3.12
+            if dst_path.is_symlink() or dst_path.exists():
+                dst_path.unlink()
+            if src_path:
                 dst_path.symlink_to(src_path)
                 continue
-            if dst_path.exists():
-                # Always unlink the file because it might be a symlink.
-                dst_path.unlink()
             dst_path.write_text(textwrap.dedent(f"""\
                 #!/bin/sh
                 echo "ERROR:Tool {tool} not found on host" >&2

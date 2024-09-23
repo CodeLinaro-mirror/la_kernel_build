@@ -90,6 +90,7 @@ use_repo(kernel_toolchain_ext, "kleaf_host_tools")
 register_toolchains(
     "@kleaf_clang_toolchain//:all",
     "//build/kernel:hermetic_tools_toolchain",
+    "//prebuilts/build-tools:py_toolchain_musl",
     "//prebuilts/build-tools:py_toolchain",
 )
 
@@ -113,7 +114,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_pkg",
-    version = "0.10.1",
+    version = "1.0.1",
 )
 
 bazel_dep(

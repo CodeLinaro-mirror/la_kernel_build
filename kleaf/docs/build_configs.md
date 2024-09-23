@@ -25,6 +25,7 @@ _"Not supported"_ is displayed. Contact [owners](../OWNERS) if you need support.
 * [`BUILD_CONFIG`](#build_config)
 * [`BUILD_CONFIG_FRAGMENTS`](#build_config_fragments)
 * [`FAST_BUILD`](#fast_build)
+* [`KERNEL_DIR`](#kernel_dir)
 * [`OUT_DIR`](#out_dir)
 * [`DIST_DIR`](#dist_dir)
 * [`MAKE_GOALS`](#make_goals)
@@ -128,6 +129,22 @@ installing modules by building the `kernel_build` target, e.g.
 $ bazel build //common:kernel_aarch64
 ```
 
+## KERNEL\_DIR
+
+```python
+kernel_build(makefile = ...)
+```
+
+If you set `KERNEL_DIR=common` in your build config, set
+`makefile = "//common:Makefile"` instead.
+
+If you did not set `KERNEL_DIR` in your build config, then set `kernel_dir` to
+the `Makefile` next to the build config file.
+
+If your use case is different from any of the above, or you would like to
+understand the mechanics of this attribute, see
+[kernel_build.makefile](api_reference/kernel.md#kernel_build-makefile).
+
 ## OUT\_DIR
 
 Not used in Bazel. Alternatives:
@@ -139,13 +156,19 @@ You may customize [`DIST_DIR`](#dist_dir). See below.
 You may specify it statically with
 
 ```python
+pkg_install(destdir=...)
+```
+
+or
+
+```python
 copy_to_dist_dir(dist_dir=...)
 ```
 
-You may override it in the command line with `--dist_dir`:
+You may override it in the command line with `--destdir`:
 
 ```shell
-$ bazel run ..._dist -- --dist_dir=...
+$ bazel run ..._dist -- --destdir=...
 ```
 
 See [documentation for all rules].
@@ -208,15 +231,8 @@ Not supported. Contact [owners](../OWNERS) if you need support for this config.
 
 ## LD
 
-Not used in Bazel. Alternatives:
-
-You may customize the clang toolchain version via
-
-```python
-kernel_build(toolchain_version=...)
-```
-
-See [documentation for all rules].
+Not customizable in Bazel. Alternatives: use `--user_clang_toolchain` to specify
+a custom clang toolchain.
 
 ## HERMETIC\_TOOLCHAIN
 
@@ -359,7 +375,7 @@ Not supported.
 Reason: commands are disallowed in general because of unclear dependency.
 
 You may define a `genrule` target with appropriate inputs (possibly from a
-`kernel_build` macro), then add the target to your `copy_to_dist_dir` macro.
+`kernel_build` macro), then add the target to your `pkg_files` macro.
 
 ## LTO
 
@@ -403,7 +419,7 @@ Not used in Bazel.
 Reason: commands are disallowed in general because of unclear dependency.
 
 Alternatives: You may define a `genrule` or `exec` target with appropriate
-inputs, then add the target to your `copy_to_dist_dir` macro.
+inputs, then add the target to your `pkg_files` macro.
 
 See [documentation for `genrule`].
 
@@ -414,7 +430,7 @@ Not used in Bazel.
 Reason: commands are disallowed in general because of unclear dependency.
 
 Alternatives: You may define a `genrule` or `exec` target with appropriate
-inputs, then add the target to your `copy_to_dist_dir` macro.
+inputs, then add the target to your `pkg_files` macro.
 
 See [documentation for `genrule`].
 
@@ -462,7 +478,7 @@ Not used in Bazel.
 Reason: Commands are disallowed in general because of unclear dependency.
 
 Alternatives: you may define a `genrule` or `exec` target with appropriate
-inputs, then add the target to your `copy_to_dist_dir` macro.
+inputs, then add the target to your `pkg_files` macro.
 
 ## SKIP\_UNPACKING\_RAMDISK
 
@@ -750,7 +766,7 @@ See [documentation for all rules].
 
 ## BUILD\_GKI\_CERTIFICATION\_TOOLS
 
-Add `//build/kernel:gki_certification_tools` to your `copy_to_dist_dir()` macro
+Add `//build/kernel:gki_certification_tools` to your `pkg_files()` macro
 invocation.
 
 See [build/kernel/BUILD.bazel](../../BUILD.bazel).

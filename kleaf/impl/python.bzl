@@ -14,24 +14,24 @@
 
 """Utilities to get files from Python toolchain."""
 
+load("//build/kernel/kleaf/impl:debug.bzl", "debug")
+
 visibility("//build/kernel/kleaf/...")
 
 _PY_TOOLCHAIN_TYPE = "@bazel_tools//tools/python:toolchain_type"
 
-def _python_interpreter_file_impl(ctx):
-    return DefaultInfo(files = depset([ctx.toolchains[_PY_TOOLCHAIN_TYPE].py3_runtime.interpreter]))
-
-python_interpreter_file = rule(
-    doc = "Resolves to the Python interpreter from resolved Python toolchain.",
-    implementation = _python_interpreter_file_impl,
-    toolchains = [config_common.toolchain_type(_PY_TOOLCHAIN_TYPE, mandatory = True)],
-)
-
 def _python_runtime_files_impl(ctx):
-    return DefaultInfo(files = ctx.toolchains[_PY_TOOLCHAIN_TYPE].py3_runtime.files)
+    debug.print_platforms(ctx)
+    return DefaultInfo(
+        files = depset([ctx.toolchains[_PY_TOOLCHAIN_TYPE].py3_runtime.interpreter]),
+        runfiles = ctx.runfiles(
+            transitive_files = ctx.toolchains[_PY_TOOLCHAIN_TYPE].py3_runtime.files,
+        ),
+    )
 
 python_runtime_files = rule(
-    doc = "Resolves to the Python runtime files from resolved Python toolchain.",
+    doc = "Resolves to the Python interpreter from resolved Python toolchain.",
     implementation = _python_runtime_files_impl,
     toolchains = [config_common.toolchain_type(_PY_TOOLCHAIN_TYPE, mandatory = True)],
+    subrules = [debug.print_platforms],
 )

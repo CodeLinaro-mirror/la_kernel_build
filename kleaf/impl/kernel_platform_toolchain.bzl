@@ -22,10 +22,12 @@ load(
 )
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
 load(":common_providers.bzl", "KernelPlatformToolchainInfo")
+load(":debug.bzl", "debug")
 
 visibility("//build/kernel/kleaf/...")
 
 def _kernel_platform_toolchain_impl(ctx):
+    should_print_platforms = debug.print_platforms(ctx)
     cc_info = cc_common.merge_cc_infos(
         cc_infos = [src[CcInfo] for src in ctx.attr.deps],
     )
@@ -50,7 +52,7 @@ def _kernel_platform_toolchain_impl(ctx):
             "kleaf-no-canonical-prefixes",
             # Disable flags for C++. These only applies to cc_* rules with
             # C++ code.
-            "kleaf-host-cc-rules-flags",
+            "kleaf-host-cc",
         ],
     )
     compile_variables = cc_common.create_compile_variables(
@@ -92,6 +94,15 @@ def _kernel_platform_toolchain_impl(ctx):
         variables = link_variables,
     )
 
+    # See kernel_toolchains.bzl on how RUNPATH_EXECROOT is interpreted.
+    # Because Bazel isolates each .so in its own directory, $ORIGIN in these .so files no longer
+    # works. So we have to rely on the source tree directly, instead of the generated
+    # library_search_directories.
+    ldexpr = "' '".join([
+        '"-Wl,-rpath,${{RUNPATH_EXECROOT}}/{}"'.format(runpath.path)
+        for runpath in ctx.files.runpaths
+    ])
+
     all_files = depset(transitive = [
         depset(cc_info.compilation_context.direct_headers),
         cc_info.compilation_context.headers,
@@ -107,12 +118,17 @@ def _kernel_platform_toolchain_impl(ctx):
     )
     bin_path = paths.dirname(compiler_executable)
 
+    if should_print_platforms:
+        # buildifier: disable=print
+        print("{}: {}".format(ctx.label, cc_toolchain.toolchain_id))
+
     return KernelPlatformToolchainInfo(
         compiler_version = cc_toolchain.compiler,
         toolchain_id = cc_toolchain.toolchain_id,
         all_files = all_files,
         cflags = compile_command_line,
         ldflags = link_command_line,
+        ldexpr = ldexpr,
         bin_path = bin_path,
     )
 
@@ -121,9 +137,11 @@ kernel_platform_toolchain = rule(
     implementation = _kernel_platform_toolchain_impl,
     attrs = {
         "deps": attr.label_list(providers = [CcInfo]),
+        "runpaths": attr.label_list(allow_files = True),
         # For using mandatory = False
         "_cc_toolchain": attr.label(default = "@bazel_tools//tools/cpp:optional_current_cc_toolchain"),
     },
     toolchains = use_cpp_toolchain(mandatory = False),
     fragments = ["cpp"],
+    subrules = [debug.print_platforms],
 )
