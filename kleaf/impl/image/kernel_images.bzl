@@ -23,6 +23,7 @@ load(":image/boot_images.bzl", "boot_images")
 load(":image/dtbo.bzl", "dtbo")
 load(":image/image_utils.bzl", "image_utils")
 load(":image/initramfs.bzl", "initramfs")
+load(":image/or_file.bzl", "or_file")
 load(":image/system_dlkm_image.bzl", "system_dlkm_image")
 load(":image/vendor_dlkm_image.bzl", "vendor_dlkm_image")
 
@@ -342,6 +343,10 @@ def kernel_images(
           See complete list
           [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
     """
+    private_kwargs = kwargs | {
+        "visibility": ["//visibility:private"],
+    }
+
     all_rules = []
 
     build_any_boot_image = build_boot or build_vendor_boot or build_vendor_kernel_boot or \
@@ -427,45 +432,66 @@ def kernel_images(
         all_rules.append(":{}_initramfs".format(name))
 
     if build_system_dlkm:
+        or_file(
+            name = "{}_system_dlkm_modules_list".format(name),
+            first = system_dlkm_modules_list,
+            second = modules_list,
+            **private_kwargs
+        )
+        or_file(
+            name = "{}_system_dlkm_modules_blocklist".format(name),
+            first = system_dlkm_modules_blocklist,
+            second = modules_blocklist,
+            **private_kwargs
+        )
+
+        if system_dlkm_fs_type and system_dlkm_fs_types:
+            fail("""{}: Both system_dlkm_fs_type="{}" and system_dlkm_fs_types={} are specified. system_dlkm_fs_type is deprecated, use system_dlkm_fs_types instead.""".format(
+                native.package_relative_label(name),
+                system_dlkm_fs_type,
+                system_dlkm_fs_types,
+            ))
+
+        # Build system_dlkm.img with ext4 fs as default
+        if not system_dlkm_fs_type and not system_dlkm_fs_types:
+            system_dlkm_fs_types = ["kleaf_internal_legacy_ext4_single"]
+
+        # if system_dlkm_fs_type: Build system_dlkm.img with given fs type
+        if system_dlkm_fs_type:
+            system_dlkm_fs_types = [system_dlkm_fs_type]
+
         system_dlkm_image(
             name = "{}_system_dlkm_image".format(name),
             # For GKI system_dlkm
             kernel_modules_install = kernel_modules_install,
             # For device system_dlkm, give GKI's system_dlkm_staging_archive.tar.gz
-            base_kernel_images = base_kernel_images,
-            build_system_dlkm_flatten_image = build_system_dlkm_flatten,
+            base = base_kernel_images,
+            build_flatten = build_system_dlkm_flatten,
             deps = deps,
-            modules_list = modules_list,
-            modules_blocklist = modules_blocklist,
-            system_dlkm_fs_type = system_dlkm_fs_type,
-            system_dlkm_fs_types = system_dlkm_fs_types,
-            system_dlkm_modules_list = system_dlkm_modules_list,
-            system_dlkm_modules_blocklist = system_dlkm_modules_blocklist,
-            system_dlkm_props = system_dlkm_props,
-            create_modules_order = False,
+            modules_list = ":{}_system_dlkm_modules_list".format(name),
+            modules_blocklist = ":{}_system_dlkm_modules_blocklist".format(name),
+            fs_types = system_dlkm_fs_types,
+            props = system_dlkm_props,
             **kwargs
         )
         all_rules.append(":{}_system_dlkm_image".format(name))
 
     if build_vendor_dlkm:
-        if vendor_dlkm_fs_type == None:
-            vendor_dlkm_fs_type = "ext4"
-
         vendor_dlkm_image(
             name = "{}_vendor_dlkm_image".format(name),
             kernel_modules_install = kernel_modules_install,
             vendor_boot_modules_load = vendor_boot_modules_load,
-            build_vendor_dlkm_flatten_image = build_vendor_dlkm_flatten,
+            build_flatten = build_vendor_dlkm_flatten,
             deps = deps,
-            vendor_dlkm_archive = vendor_dlkm_archive,
-            vendor_dlkm_etc_files = vendor_dlkm_etc_files,
-            vendor_dlkm_fs_type = vendor_dlkm_fs_type,
-            vendor_dlkm_modules_list = vendor_dlkm_modules_list,
-            vendor_dlkm_modules_blocklist = vendor_dlkm_modules_blocklist,
-            vendor_dlkm_props = vendor_dlkm_props,
+            archive = vendor_dlkm_archive,
+            etc_files = vendor_dlkm_etc_files,
+            fs_type = vendor_dlkm_fs_type,
+            modules_list = vendor_dlkm_modules_list,
+            modules_blocklist = vendor_dlkm_modules_blocklist,
+            props = vendor_dlkm_props,
             dedup_dlkm_modules = dedup_dlkm_modules,
             system_dlkm_image = "{}_system_dlkm_image".format(name) if build_system_dlkm else None,
-            base_kernel_images = base_kernel_images,
+            base_system_dlkm_image = base_kernel_images,
             create_modules_order = create_modules_order,
             **kwargs
         )
