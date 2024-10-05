@@ -263,8 +263,14 @@ for EXT_MOD in ${EXT_MODULES}; do
   module_path="$(echo "$EXT_MOD" | sed -e 's/^[\.\/]*//')"
   top_dir="$(echo "$module_path" | cut -d '/' -f 1)"
 
+  # Count the number of levels EXT_MOD relative to the kernel source directory
+  levels=$(echo "$EXT_MOD" | grep -o '^\(\.\./\)*' | awk '{print gsub(/\.\.\//,"")}')
+
+  # Construct the path to go back the required number of levels
+  back_path=$(printf '../%.0s' $(seq 1 $levels))
+
   # Create a link to the module's tree within kernel_platform
-  (cd "$ROOT_DIR" && ln -fs "../${top_dir}")
+  (cd "$ROOT_DIR" && ln -fs "${back_path}${top_dir}")
 
   # Search for the module package by looking up from the module_path
   pkg_path="$module_path"
