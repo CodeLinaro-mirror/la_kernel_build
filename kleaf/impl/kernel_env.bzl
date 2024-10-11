@@ -53,6 +53,21 @@ def _get_kbuild_symtypes(ctx):
     # Should not reach
     fail("{}: kernel_env has unknown value for kbuild_symtypes: {}".format(ctx.attr.label, ctx.attr.kbuild_symtypes))
 
+def _get_set_arch_cmd(ctx):
+    """Returns command that sets ARCH.
+
+    This is called before `source _setup_env.sh` so that it can be overridden by build configs.
+    """
+    toolchains = kernel_toolchains_utils.get(ctx)
+    inferred_arch = toolchains.target_arch
+    if inferred_arch == "riscv64":
+        inferred_arch = "riscv"
+    return """
+        export ARCH="{inferred_arch}"
+    """.format(
+        inferred_arch = inferred_arch,
+    )
+
 def _get_check_arch_cmd(ctx):
     toolchains = kernel_toolchains_utils.get(ctx)
     declared_arch = toolchains.target_arch
@@ -74,6 +89,18 @@ def _get_check_arch_cmd(ctx):
         declared_arch = declared_arch,
         exit_cmd = exit_cmd,
     )
+
+def _get_set_ndk_triple_cmd():
+    """Returns command that sets NDK_TRIPLE."""
+    return """
+        if [[ "${ARCH}" == "arm64" ]]; then
+            export NDK_TRIPLE="${AARCH64_NDK_TRIPLE}"
+        elif [[ "${ARCH}" == "x86_64" ]]; then
+            export NDK_TRIPLE="${X86_64_NDK_TRIPLE}"
+        elif [[ "${ARCH}" == "arm" ]]; then
+            export NDK_TRIPLE="${ARM_NDK_TRIPLE}"
+        fi
+    """
 
 def _get_make_goals(ctx):
     # Fallback to goals from build.config
@@ -243,8 +270,10 @@ def _kernel_env_impl(ctx):
           export BUILD_CONFIG={build_config}
           {set_kernel_dir_cmd}
           {set_localversion_cmd}
+          {set_arch_cmd}
           source {setup_env}
           {check_arch_cmd}
+          {set_ndk_triple_cmd}
         # Variables from resolved toolchain
           {toolchains_setup_env_var_cmd}
         # TODO(b/236012223) Remove the warning after deprecation.
@@ -290,8 +319,10 @@ def _kernel_env_impl(ctx):
         build_config = build_config.path,
         set_kernel_dir_cmd = set_kernel_dir_ret.cmd,
         set_localversion_cmd = stamp.set_localversion_cmd(ctx),
+        set_arch_cmd = _get_set_arch_cmd(ctx),
         setup_env = setup_env.path,
         check_arch_cmd = _get_check_arch_cmd(ctx),
+        set_ndk_triple_cmd = _get_set_ndk_triple_cmd(),
         toolchains_setup_env_var_cmd = toolchains.kernel_setup_env_var_cmd,
         make_goals_deprecation_warning = make_goals_deprecation_warning,
         kconfig_werror_setup = kconfig_werror_setup,
@@ -550,15 +581,18 @@ def _get_run_env(ctx, srcs, toolchains, set_kernel_dir_ret):
 
         # Silence "git: command not found" and "date: bad date @"
           export SOURCE_DATE_EPOCH=0
-
+          {set_arch_cmd}
           source {setup_env}
+          {set_ndk_triple_cmd}
         # Variables from resolved toolchain
           {toolchains_setup_env_var_cmd}
     """.format(
         build_utils_sh = ctx.file._build_utils_sh.short_path,
         build_config = ctx.file.build_config.short_path,
         set_kernel_dir_cmd = set_kernel_dir_ret.run_cmd,
+        set_arch_cmd = _get_set_arch_cmd(ctx),
         setup_env = ctx.file.setup_env.short_path,
+        set_ndk_triple_cmd = _get_set_ndk_triple_cmd(),
         toolchains_setup_env_var_cmd = toolchains.kernel_setup_env_var_cmd,
     )
     tools = [
