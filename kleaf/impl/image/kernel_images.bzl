@@ -538,13 +538,13 @@ def kernel_images(
         **private_kwargs
     )
 
-    kernel_images_filegroup(
+    _kernel_images(
         name = name,
         srcs = all_rules,
         **kwargs
     )
 
-def _kernel_images_filegroup_impl(ctx):
+def _kernel_images_impl(ctx):
     # buildifier: disable=print
     print("""
 WARNING: kernel_images() is deprecated. Run the following command to print skeleton equivalent code:
@@ -582,9 +582,8 @@ WARNING: kernel_images() is deprecated. Run the following command to print skele
         output_group_info,
     ]
 
-kernel_images_filegroup = rule(
-    doc = "Legacy, internal macro to provide output groups for individual images.",
-    implementation = _kernel_images_filegroup_impl,
+_kernel_images = rule(
+    implementation = _kernel_images_impl,
     attrs = {
         "srcs": attr.label_list(),
     },

@@ -23,8 +23,6 @@ load("//build/kernel/kleaf/artifact_tests:device_modules_test.bzl", "device_modu
 load("//build/kernel/kleaf/artifact_tests:kernel_test.bzl", "initramfs_modules_options_test")
 load("//build/kernel/kleaf/impl:abi/kernel_abi_dist.bzl", "kernel_abi_wrapped_dist_internal")
 load("//build/kernel/kleaf/impl:gki_artifacts.bzl", "gki_artifacts", "gki_artifacts_prebuilts")
-load("//build/kernel/kleaf/impl:image/initramfs.bzl", "initramfs")
-load("//build/kernel/kleaf/impl:image/kernel_images.bzl", "kernel_images_filegroup")
 load("//build/kernel/kleaf/impl:kernel_filegroup_declaration.bzl", "kernel_filegroup_declaration")
 load(
     "//build/kernel/kleaf/impl:kernel_prebuilt_utils.bzl",
@@ -38,9 +36,9 @@ load(
     "kernel_abi",
     "kernel_build",
     "kernel_build_config",
+    "kernel_images",
     "kernel_modules_install",
     "kernel_unstripped_modules_archive",
-    "system_dlkm_image",
 )
 load(":print_debug.bzl", "print_debug")
 
@@ -319,18 +317,16 @@ def common_kernel(
         kernel_build = name,
     )
 
-    system_dlkm_image(
-        name = name + "_system_dlkm_image",
-        kernel_modules_install = name + "_modules_install",
-        build_flatten = True,
-        modules_list = gki_system_dlkm_modules,
-        fs_types = ["erofs", "ext4"],
-    )
-
-    kernel_images_filegroup(
+    kernel_images(
         name = name + "_images",
-        srcs = [name + "_system_dlkm_image"],
-        deprecation = "Use {} instead".format(native.package_relative_label(name + "_system_dlkm_image")),
+        kernel_build = name,
+        kernel_modules_install = name + "_modules_install",
+        # Sync with CI_TARGET_MAPPING.*.download_configs.images
+        build_system_dlkm = True,
+        build_system_dlkm_flatten = True,
+        system_dlkm_fs_types = ["erofs", "ext4"],
+        # Keep in sync with build.config.gki* MODULES_LIST
+        modules_list = gki_system_dlkm_modules,
     )
 
     if build_gki_artifacts:
@@ -373,7 +369,7 @@ def common_kernel(
         srcs = [
             # Sync with additional_artifacts_items
             name + "_headers",
-            name + "_system_dlkm_image",
+            name + "_images",
             name + "_kmi_symbol_list",
             name + "_raw_kmi_symbol_list",
             name + "_gki_artifacts",
@@ -387,7 +383,7 @@ def common_kernel(
         name = name + "_filegroup_declaration",
         kernel_build = name,
         extra_deps = filegroup_extra_deps,
-        images = name + "_system_dlkm_image",
+        images = name + "_images",
         visibility = ["//visibility:private"],
     )
     target_mapping = CI_TARGET_MAPPING.get(name, {})
@@ -632,7 +628,7 @@ def define_prebuilts(**kwargs):
 
         additional_artifacts_items = [
             name + "_headers",
-            name + "_system_dlkm_image",
+            name + "_images",
             name + "_kmi_symbol_list",
             name + "_gki_artifacts",
         ]
@@ -659,15 +655,16 @@ def _define_common_kernels_additional_tests(
         arch):
     fake_modules_options = Label("//build/kernel/kleaf/artifact_tests:fake_modules_options.txt")
 
-    initramfs(
-        name = name + "_fake_initramfs",
+    kernel_images(
+        name = name + "_fake_images",
         kernel_modules_install = kernel_modules_install,
+        build_initramfs = True,
         modules_options = fake_modules_options,
     )
 
     initramfs_modules_options_test(
         name = name + "_fake",
-        kernel_images = name + "_fake_initramfs",
+        kernel_images = name + "_fake_images",
         expected_modules_options = fake_modules_options,
     )
 
@@ -677,15 +674,16 @@ def _define_common_kernels_additional_tests(
         content = [],
     )
 
-    initramfs(
-        name = name + "_empty_initramfs",
+    kernel_images(
+        name = name + "_empty_images",
         kernel_modules_install = kernel_modules_install,
+        build_initramfs = True,
         # Not specify module_options
     )
 
     initramfs_modules_options_test(
         name = name + "_empty",
-        kernel_images = name + "_empty_initramfs",
+        kernel_images = name + "_empty_images",
         expected_modules_options = name + "_empty_modules_options",
     )
 
