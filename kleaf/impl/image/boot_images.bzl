@@ -33,6 +33,7 @@ def _build_boot_or_vendor_boot(
         outs,
         mkbootimg,
         build_boot,
+        gki_ramdisk_prebuilt_binary,
         vendor_boot_name,
         vendor_ramdisk_binaries,
         vendor_ramdisk_dev_nodes,
@@ -85,8 +86,6 @@ def _build_boot_or_vendor_boot(
             initramfs_staging_archive,
         ]
 
-    if ctx.attr.gki_ramdisk_prebuilt_binary:
-        inputs += [ctx.file.gki_ramdisk_prebuilt_binary]
 
     transitive_inputs = [
         mkbootimg.files,
@@ -142,10 +141,10 @@ def _build_boot_or_vendor_boot(
             "vendor_ramdisk_binaries.txt",
         )
 
-    if ctx.attr.gki_ramdisk_prebuilt_binary:
+    if gki_ramdisk_prebuilt_binary:
         command += """
             GKI_RAMDISK_PREBUILT_BINARY="{gki_ramdisk_prebuilt_binary}"
-        """.format(gki_ramdisk_prebuilt_binary = ctx.file.gki_ramdisk_prebuilt_binary.path)
+        """.format(gki_ramdisk_prebuilt_binary = utils.optional_single_path(gki_ramdisk_prebuilt_binary.files.to_list()))
 
         # build_utils.sh uses singular VENDOR_RAMDISK_BINARY
         command += """
@@ -315,6 +314,7 @@ def _boot_images_impl(ctx):
         outs = ctx.attr.outs,
         mkbootimg = ctx.attr.mkbootimg,
         build_boot = ctx.attr.build_boot,
+        gki_ramdisk_prebuilt_binary = ctx.attr.gki_ramdisk_prebuilt_binary,
         vendor_boot_name = ctx.attr.vendor_boot_name,
         vendor_ramdisk_binaries = ctx.attr.vendor_ramdisk_binaries,
         vendor_ramdisk_dev_nodes = ctx.attr.vendor_ramdisk_dev_nodes,
