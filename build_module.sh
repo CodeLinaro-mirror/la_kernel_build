@@ -327,7 +327,7 @@ for EXT_MOD in ${EXT_MODULES}; do
 
     # The Module.symvers file is named "<target>_<variant>_Modules.symvers, but other modules are
     # looking for just "Module.symvers". Concatenate any of them into one Module.symvers file.
-    cat "${OUT_DIR}/${EXT_MOD_REL}/${TARGET_BOARD_PLATFORM}_${VARIANT/_/-}"_*_Module.symvers \
+    cat "${OUT_DIR}/${EXT_MOD_REL}/${btgt}_${VARIANT}"_*_Module.symvers \
       > "${OUT_DIR}/${EXT_MOD_REL}/Module.symvers"
 
     # Intermediate directories aren't generated automatically, so we need to create them manually
