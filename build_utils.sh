@@ -258,6 +258,7 @@ function create_modules_staging() {
     cp ${modules_blocklist_file} ${dest_dir}/modules.blocklist
   fi
 
+  TRIM_UNUSED_MODULES=1
   if [ -n "${TRIM_UNUSED_MODULES}" ]; then
     local used_blocklist_modules=$(mktemp)
     if [ -f ${dest_dir}/modules.blocklist ]; then

@@ -77,6 +77,10 @@ function rel_path() {
   python -c "import os.path; import sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))" "$1" "$2"
 }
 
+if [[ "$1" == "dtbs" ]];then
+  DTB_COMPILE=1
+fi
+
 export ROOT_DIR=$(readlink -f $(dirname $0)/..)
 
 source "${ROOT_DIR}/build/_setup_env.sh"
@@ -166,6 +170,7 @@ if [ -n "${DEPMOD}" ]; then
   TOOL_ARGS+=("DEPMOD=${DEPMOD}")
 fi
 
+DTC="${ROOT_DIR}/build/kernel/build-tools/path/linux-x86/dtc"
 if [ -n "${DTC}" ]; then
   TOOL_ARGS+=("DTC=${DTC}")
 fi
@@ -196,6 +201,13 @@ if [ ! -e "${KERNEL_KIT}/.config" ]; then
   exit 1
 fi
 
+KERNEL_SRC="${COMMON_OUT_DIR}/super_kernel"
+SOC_DIR="soc-repo"
+COMMON_DIR="common"
+mkdir -p ${KERNEL_SRC}
+cp -rf ${ROOT_DIR}/${COMMON_DIR}/* ${KERNEL_SRC}/ > /dev/null
+cp -rf ${ROOT_DIR}/${SOC_DIR}/* ${KERNEL_SRC}/ || true > /dev/null
+
 if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
   echo "========================================================"
   echo " Prepare to compile modules from ${KERNEL_KIT}"
@@ -212,9 +224,12 @@ if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
   fi
 
   # Install .config from kernel platform
+  cp ${KERNEL_KIT}/.config ${KERNEL_SRC}/
   (
-    cd "${KERNEL_DIR}"
-    make O="${OUT_DIR}" "${TOOL_ARGS[@]}" ${MAKE_ARGS} olddefconfig
+    if [[ "$DTB_COMPILE" == 1 ]];then
+      cd "${KERNEL_SRC}"
+      make O="${KERNEL_SRC}" "${TOOL_ARGS[@]}" ${MAKE_ARGS} olddefconfig
+    fi
   )
 
   # To guard against .config silently diverging from the one kernel platform created,
@@ -224,21 +239,26 @@ if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
   # then do the NOSILENTUPDATE check
   cp ${KERNEL_KIT}/.config ${OUT_DIR}/
   (
-    cd "${KERNEL_DIR}"
-    make O="${OUT_DIR}" "${TOOL_ARGS[@]}" ${MAKE_ARGS} modules_prepare
-    if ! d=$(diff -Naurp ${KERNEL_KIT}/.config ${OUT_DIR}/.config); then
-        echo "CONFIG diff between ${KERNEL_KIT}/.config ${OUT_DIR}/.config"
-        echo $d
+    if [[ "$DTB_COMPILE" == 1 ]];then
+      cd "${KERNEL_SRC}"
+      make O="${KERNEL_SRC}" "${TOOL_ARGS[@]}" KCONFIG=${KERNEL_KIT}/.config ${MAKE_ARGS} modules_prepare
+      if ! d=$(diff -Naurp ${KERNEL_KIT}/.config ${OUT_DIR}/.config); then
+          echo "CONFIG diff between ${KERNEL_KIT}/.config ${OUT_DIR}/.config"
+          echo $d
+      fi
     fi
   )
   set +x
 fi
+
+cp ${KERNEL_KIT}/.config ${OUT_DIR}/
 # Set KBUILD_MIXED_TREE in case an out-of-tree Makefile does "make all". This causes
 # kbuild to also want to compile vmlinux
-MAKE_ARGS+=" KBUILD_MIXED_TREE=${KERNEL_KIT}"
+MAKE_ARGS+=" KBUILD_MIXED_TREE=${KERNEL_KIT} KCONFIG=${KERNEL_KIT}/.config"
 
 echo "========================================================"
 echo " Building external modules and installing them into staging directory"
+echo $EXT_MODULES
 
 for EXT_MOD in ${EXT_MODULES}; do
   # The path that we pass in via the variable M needs to be a relative path
@@ -251,6 +271,7 @@ for EXT_MOD in ${EXT_MODULES}; do
   # The output directory must exist before we invoke make. Otherwise, the
   # build system behaves horribly wrong.
   set -x
+
   if [ -n "${MODULE_OUT}" ]; then
     mkdir -p $(dirname ${OUT_DIR}/${EXT_MOD_REL})
     mkdir -p ${MODULE_OUT}
@@ -260,11 +281,29 @@ for EXT_MOD in ${EXT_MODULES}; do
     mkdir -p ${OUT_DIR}/${EXT_MOD_REL}
   fi
 
+  STAG_EXT_MOD=${COMMON_OUT_DIR}/../staging_ext_mod_dir
+  STAG_EXT_MOD_REL="../../staging_ext_mod_dir"
+  mkdir -p $STAG_EXT_MOD
+  rm -rf ${STAG_EXT_MOD}/* || true
+  cp -rf ${EXT_MOD}/* ${STAG_EXT_MOD}/
+
+  if [[ "$DTB_COMPILE" == 1 ]];then
+    rm -rf ${ROOT_DIR}/Kbuild
+    python ${ROOT_DIR}/build/kernel/android/modify_dt_kbuild.py ${KERNEL_KIT}/.config ${STAG_EXT_MOD}/Kbuild
+    mv "${ROOT_DIR}/Kbuild" ${STAG_EXT_MOD}/Kbuild
+  fi
+
   module_path="$(echo "$EXT_MOD" | sed -e 's/^[\.\/]*//')"
   top_dir="$(echo "$module_path" | cut -d '/' -f 1)"
 
+  # Count the number of levels EXT_MOD relative to the kernel source directory
+    levels=$(echo "$EXT_MOD" | grep -o '^\(\.\./\)*' | awk '{print gsub(/\.\.\//,"")}')
+
+  # Construct the path to go back the required number of levels
+    back_path=$(printf '../%.0s' $(seq 1 $levels))
+
   # Create a link to the module's tree within kernel_platform
-  (cd "$ROOT_DIR" && ln -fs "../${top_dir}")
+    (cd "$ROOT_DIR" && ln -fs "${back_path}${top_dir}")
 
   # Search for the module package by looking up from the module_path
   pkg_path="$module_path"
@@ -305,8 +344,8 @@ for EXT_MOD in ${EXT_MODULES}; do
 
     # Make sure Bazel extensions are linked properly
     if [ ! -f "build/msm_kernel_extensions.bzl" ] \
-          && [ -f "msm-kernel/msm_kernel_extensions.bzl" ]; then
-      ln -fs "../msm-kernel/msm_kernel_extensions.bzl" "build/msm_kernel_extensions.bzl"
+          && [ -f "soc-repo/msm_kernel_extensions.bzl" ]; then
+      ln -fs "../soc-repo/msm_kernel_extensions.bzl" "build/msm_kernel_extensions.bzl"
     fi
     if [ ! -f "build/abl_extensions.bzl" ] \
           && [ -f "bootable/bootloader/edk2/abl_extensions.bzl" ]; then
@@ -359,12 +398,15 @@ for EXT_MOD in ${EXT_MODULES}; do
     done
   else
     # Fall back on legacy make if Bazel build is not present
-    if [[ ! $EXT_MOD =~ devicetree ]]; then
-      echo "warning - building kernel modules with legacy make. Please migrate to DDK."
+    if [[ $EXT_MOD =~ devicetree ]]; then
+      echo "INFO - building $EXT_MOD (devicetree) with legacy make which is expected behavior."
+      make -C ${STAG_EXT_MOD} M=${STAG_EXT_MOD_REL} VPATH=${KERNEL_SRC} \
+                          KERNEL_SRC=${KERNEL_SRC} \
+                          O=${KERNEL_SRC} "${TOOL_ARGS[@]}" ${MAKE_ARGS}
+      cp -rf ${STAG_EXT_MOD}/* ${OUT_DIR}/${EXT_MOD_REL}
+    else
+      echo "WARNING - Skipping compilation of $EXT_MOD with legacy make. Please migrate to DDK."
     fi
-    make -C ${EXT_MOD} M=${EXT_MOD_REL} VPATH=${ROOT_DIR}/${KERNEL_DIR}	\
-                        KERNEL_SRC=${ROOT_DIR}/${KERNEL_DIR}		\
-                        O=${OUT_DIR} "${TOOL_ARGS[@]}" ${MAKE_ARGS}
   fi
 
   if [ -n "${INSTALL_MODULE_HEADERS}" ]; then
@@ -379,4 +421,3 @@ for EXT_MOD in ${EXT_MODULES}; do
   fi
   set +x
 done
-
