@@ -362,7 +362,8 @@ for EXT_MOD in ${EXT_MODULES}; do
     if [[ ! $EXT_MOD =~ devicetree ]]; then
       echo "warning - building kernel modules with legacy make. Please migrate to DDK."
     fi
-    make -C ${EXT_MOD} M=${EXT_MOD_REL} KERNEL_SRC=${ROOT_DIR}/${KERNEL_DIR}  \
+    make -C ${EXT_MOD} M=${EXT_MOD_REL} VPATH=${ROOT_DIR}/${KERNEL_DIR}	\
+                        KERNEL_SRC=${ROOT_DIR}/${KERNEL_DIR}		\
                         O=${OUT_DIR} "${TOOL_ARGS[@]}" ${MAKE_ARGS}
   fi
 
@@ -370,9 +371,10 @@ for EXT_MOD in ${EXT_MODULES}; do
     echo "========================================================"
     echo " Installing UAPI module headers:"
     mkdir -p "${KERNEL_UAPI_HEADERS_DIR}/usr"
-    make -C ${EXT_MOD} M=${EXT_MOD_REL} KERNEL_SRC=${ROOT_DIR}/${KERNEL_DIR}  \
-                      O=${OUT_DIR} "${TOOL_ARGS[@]}"                         \
-                      INSTALL_HDR_PATH="${KERNEL_UAPI_HEADERS_DIR}/usr"      \
+    make -C ${EXT_MOD} M=${EXT_MOD_REL} VPATH=${ROOT_DIR}/${KERNEL_DIR}	\
+                      KERNEL_SRC=${ROOT_DIR}/${KERNEL_DIR}		\
+                      O=${OUT_DIR} "${TOOL_ARGS[@]}"			\
+                      INSTALL_HDR_PATH="${KERNEL_UAPI_HEADERS_DIR}/usr"	\
                       ${MAKE_ARGS} headers_install
   fi
   set +x
