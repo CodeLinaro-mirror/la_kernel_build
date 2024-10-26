@@ -29,6 +29,7 @@ load(
     ":common_providers.bzl",
     "DdkConfigInfo",
     "DdkSubmoduleInfo",
+    "GcovInfo",
     "KernelBuildExtModuleInfo",
     "KernelCmdsInfo",
     "KernelEnvAndOutputsInfo",
@@ -40,6 +41,7 @@ load(
 )
 load(":ddk/ddk_headers.bzl", "DdkHeadersInfo")
 load(":debug.bzl", "debug")
+load(":gcov_utils.bzl", "gcov_attrs", "get_grab_gcno_step")
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
 load(":kernel_build.bzl", "get_grab_cmd_step")
 load(":stamp.bzl", "stamp")
@@ -283,6 +285,7 @@ def _kernel_module_impl(ctx):
     tools = [
         ctx.executable._check_declared_output_list,
         ctx.executable._search_and_cp_output,
+        ctx.executable._print_gcno_mapping,
     ]
     transitive_tools = []
 
@@ -340,9 +343,17 @@ def _kernel_module_impl(ctx):
         common_config_tags = ctx.attr.kernel_build[KernelEnvAttrInfo].common_config_tags,
         symlink_name = "module_{}".format(ctx.attr.name),
     )
-    inputs += cache_dir_step.inputs
-    command_outputs += cache_dir_step.outputs
-    tools += cache_dir_step.tools
+    grab_cmd_step = get_grab_cmd_step(ctx, "${OUT_DIR}/${ext_mod_rel}")
+    grab_gcno_step = get_grab_gcno_step(ctx, "${COMMON_OUT_DIR}", is_kernel_build = False)
+
+    for step in (
+        cache_dir_step,
+        grab_cmd_step,
+        grab_gcno_step,
+    ):
+        inputs += step.inputs
+        command_outputs += step.outputs
+        tools += step.tools
 
     # Determine the proper script to set up environment
     if ctx.attr.internal_ddk_config:
@@ -389,10 +400,6 @@ def _kernel_module_impl(ctx):
             ext_mod = ext_mod,
             modules_staging_dir = modules_staging_dws.directory.path,
         )
-
-    grab_cmd_step = get_grab_cmd_step(ctx, "${OUT_DIR}/${ext_mod_rel}")
-    inputs += grab_cmd_step.inputs
-    command_outputs += grab_cmd_step.outputs
 
     scmversion_ret = stamp.ext_mod_write_localversion(ctx, ext_mod)
     inputs += scmversion_ret.deps
@@ -467,6 +474,8 @@ def _kernel_module_impl(ctx):
 
              # Grab unstripped modules
                {grab_unstripped_cmd}
+             # Grab *.gcno files
+               {grab_gcno_step_cmd}
              # Grab *.cmd
                {grab_cmd_cmd}
              # Move Module.symvers
@@ -491,6 +500,7 @@ def _kernel_module_impl(ctx):
         check_no_remaining = check_no_remaining.path,
         grab_modules_order_cmd = grab_modules_order_cmd,
         drop_modules_order_cmd = drop_modules_order_cmd,
+        grab_gcno_step_cmd = grab_gcno_step.cmd,
         grab_cmd_cmd = grab_cmd_step.cmd,
     )
 
@@ -607,7 +617,7 @@ def _kernel_module_impl(ctx):
     return [
         # Sync list of infos with kernel_module_group.
         DefaultInfo(
-            files = depset(output_files + [check_no_remaining, module_symvers]),
+            files = depset(output_files + [check_no_remaining, module_symvers] + grab_gcno_step.outputs),
             # For kernel_module_test
             runfiles = ctx.runfiles(files = output_files),
         ),
@@ -636,6 +646,10 @@ def _kernel_module_impl(ctx):
         ),
         ddk_headers_info,
         ddk_config_info,
+        GcovInfo(
+            gcno_mapping = grab_gcno_step.gcno_mapping,
+            gcno_dir = grab_gcno_step.gcno_dir,
+        ),
         KernelCmdsInfo(
             srcs = module_srcs,
             directories = depset([grab_cmd_step.cmd_dir]),
@@ -693,7 +707,7 @@ _kernel_module = rule(
         "_preserve_cmd": attr.label(default = "//build/kernel/kleaf/impl:preserve_cmd"),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
         "_debug_modpost_warn": attr.label(default = "//build/kernel/kleaf:debug_modpost_warn"),
-    } | _kernel_module_additional_attrs(),
+    } | _kernel_module_additional_attrs() | gcov_attrs(),
     toolchains = [hermetic_toolchain.type],
 )
 
