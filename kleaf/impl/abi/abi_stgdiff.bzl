@@ -108,7 +108,7 @@ EOF
         tools = hermetic_tools.deps,
         command = command,
         mnemonic = "KernelDiffAbiStg",
-        progress_message = "[stg] Comparing Kernel ABI {}".format(ctx.label),
+        progress_message = "[stg] Comparing Kernel ABI %{label}",
     )
 
     script = ctx.actions.declare_file("{}/print_results.sh".format(ctx.attr.name))
@@ -167,7 +167,7 @@ stgdiff = rule(
         "new": attr.label(allow_single_file = True),
         "kmi_enforced": attr.bool(),
         "_stgdiff": attr.label(
-            default = "//prebuilts/kernel-build-tools:linux-x86/bin/stgdiff",
+            default = "//build/kernel/kleaf/impl:stgdiff",
             allow_single_file = True,
             cfg = "exec",
             executable = True,

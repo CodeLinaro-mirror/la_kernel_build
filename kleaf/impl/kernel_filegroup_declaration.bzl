@@ -22,6 +22,7 @@ load(
     "FILEGROUP_DEF_BUILD_FRAGMENT_NAME",
 )
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
+load(":utils.bzl", "utils")
 
 visibility("//build/kernel/kleaf/...")
 
@@ -53,14 +54,23 @@ def _kernel_filegroup_declaration_impl(ctx):
         ))
     kernel_uapi_headers = kernel_uapi_headers_lst[0]
 
+    system_dlkm_staging_archive = utils.find_file(
+        name = "system_dlkm_staging_archive.tar.gz",
+        files = ctx.files.images,
+        what = "{}: images".format(ctx.label),
+        required = False,
+    )
+
     template_file = _write_template_file(
         ctx = ctx,
+        has_system_dlkm_staging_archive = bool(system_dlkm_staging_archive),
     )
     filegroup_decl_file = _write_filegroup_decl_file(
         ctx = ctx,
         info = info,
         deps_files = deps_files,
         kernel_uapi_headers = kernel_uapi_headers,
+        system_dlkm_staging_archive = system_dlkm_staging_archive,
         template_file = template_file,
     )
     filegroup_decl_archive = _create_archive(
@@ -72,8 +82,12 @@ def _kernel_filegroup_declaration_impl(ctx):
     )
     return DefaultInfo(files = depset([filegroup_decl_archive]))
 
-def _write_template_file(ctx):
+def _write_template_file(
+        ctx,
+        has_system_dlkm_staging_archive):
     template_content = """\
+_ALL_MODULE_NAMES = {all_module_names_repr}
+
 platform(
     name = {target_platform_repr},
     constraint_values = [
@@ -87,11 +101,20 @@ platform(
 
 platform(
     name = {exec_platform_repr},
+    parents = ["@platforms//host"],
     constraint_values = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
         # @kleaf//prebuilts/clang/host/linux-x86/kleaf:{toolchain_version}
         package_relative_label(_CLANG_KLEAF_PKG).same_package_label({toolchain_version_repr}),
+    ],
+    visibility = ["//visibility:private"],
+)
+
+platform(
+    name = {exec_musl_platform_repr},
+    parents = [{exec_platform_repr}],
+    constraint_values = [
+        # @kleaf//build/kernel/kleaf/platforms/libc:musl
+        _MUSL,
     ],
     visibility = ["//visibility:private"],
 )
@@ -103,7 +126,7 @@ kernel_filegroup(
     kernel_uapi_headers = {uapi_headers_repr},
     collect_unstripped_modules = {collect_unstripped_modules_repr},
     strip_modules = {strip_modules_repr},
-    all_module_names = {all_module_names_repr},
+    all_module_names = _ALL_MODULE_NAMES,
     kernel_release = {kernel_release_repr},
     protected_modules_list = {protected_modules_repr},
     ddk_module_defconfig_fragments = {ddk_module_defconfig_fragments_repr},
@@ -115,9 +138,30 @@ kernel_filegroup(
     outs = {outs_repr},
     internal_outs = {internal_outs_repr},
     target_platform = {target_platform_repr},
-    exec_platform = {exec_platform_repr},
+    exec_platform = select({
+        _MUSL_KBUILD_IS_TRUE: {exec_musl_platform_repr},
+        "//conditions:default": {exec_platform_repr},
+    }),
     visibility = ["//visibility:public"],
 )
+"""
+
+    if has_system_dlkm_staging_archive:
+        template_content += """\
+
+extracted_system_dlkm_staging_archive(
+    name = {modules_repr},
+    src = {system_dlkm_staging_archive_repr},
+    outs = _ALL_MODULE_NAMES,
+    visibility = ["//visibility:public"],
+)
+
+[filegroup(
+    name = "{}/{}".format({name_repr}, module_name),
+    srcs = [{modules_repr}],
+    output_group = module_name,
+    visibility = ["//visibility:public"],
+) for module_name in _ALL_MODULE_NAMES]
 """
     template_file = ctx.actions.declare_file("{}/{}_template.txt".format(
         ctx.attr.kernel_build.label.name,
@@ -126,7 +170,13 @@ kernel_filegroup(
     ctx.actions.write(output = template_file, content = template_content)
     return template_file
 
-def _write_filegroup_decl_file(ctx, info, deps_files, kernel_uapi_headers, template_file):
+def _write_filegroup_decl_file(
+        ctx,
+        info,
+        deps_files,
+        kernel_uapi_headers,
+        system_dlkm_staging_archive,
+        template_file):
     ## Reused kwargs for TemplateDict: https://bazel.build/rules/lib/builtins/TemplateDict
     # For a list of files, represented in a list
     # Intentionally not adding comma for the last item so it works for the empty case.
@@ -215,7 +265,16 @@ def _write_filegroup_decl_file(ctx, info, deps_files, kernel_uapi_headers, templ
     sub.add("{toolchain_version_repr}", repr(info.toolchain_version))
     sub.add("{target_platform_repr}", repr(ctx.attr.kernel_build.label.name + "_platform_target"))
     sub.add("{exec_platform_repr}", repr(ctx.attr.kernel_build.label.name + "_platform_exec"))
+    sub.add("{exec_musl_platform_repr}", repr(ctx.attr.kernel_build.label.name + "_platform_exec_musl"))
     sub.add("{arch}", info.arch)
+
+    if system_dlkm_staging_archive:
+        sub.add("{modules_repr}", repr(ctx.attr.kernel_build.label.name + "_modules"))
+        sub.add_joined(
+            "{system_dlkm_staging_archive_repr}",
+            depset([system_dlkm_staging_archive]),
+            **(one | extra)
+        )
 
     filegroup_decl_file = ctx.actions.declare_file("{}/{}".format(
         ctx.attr.kernel_build.label.name,
@@ -273,7 +332,7 @@ def _create_archive(ctx, info, deps_files, kernel_uapi_headers, filegroup_decl_f
         outputs = [filegroup_decl_archive],
         command = command,
         arguments = [args],
-        progress_message = "Creating archive of kernel_filegroup declaration {}".format(ctx.label),
+        progress_message = "Creating archive of kernel_filegroup declaration %{label}",
         mnemonic = "KernelfilegroupDeclaration",
     )
     return filegroup_decl_archive
@@ -293,6 +352,10 @@ kernel_filegroup_declaration = rule(
 
                 These files are not included in the generated archive.
             """,
+            allow_files = True,
+        ),
+        "images": attr.label(
+            doc = "Labels to look up system_dlkm_staging_archive.tar.gz",
             allow_files = True,
         ),
     },

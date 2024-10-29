@@ -116,6 +116,7 @@ def _kernel_env_config_settings_raw():
         compile_commands_utils.config_settings_raw(),
         {
             "_kbuild_symtypes_flag": "//build/kernel/kleaf:kbuild_symtypes",
+            "_kconfig_werror": "//build/kernel/kleaf:kconfig_werror",
         },
     )
 
@@ -164,7 +165,7 @@ def _kernel_env_get_config_tags(ctx, mnemonic_prefix, defconfig_fragments):
         executable = ctx.executable._cache_dir_config_tags,
         arguments = [args],
         mnemonic = "{}CommonConfigTags".format(mnemonic_prefix),
-        progress_message = "Creating common_config_tags {}".format(ctx.label),
+        progress_message = "Creating common_config_tags %{label}",
     )
 
     # env: common + label of this kernel_env, prefixed with #
@@ -180,7 +181,7 @@ def _kernel_env_get_config_tags(ctx, mnemonic_prefix, defconfig_fragments):
         executable = ctx.executable._cache_dir_config_tags,
         arguments = [args],
         mnemonic = "{}ConfigTags".format(mnemonic_prefix),
-        progress_message = "Creating config_tags {}".format(ctx.label),
+        progress_message = "Creating config_tags %{label}",
     )
 
     return struct(
@@ -285,7 +286,7 @@ def _get_progress_message_note(ctx, defconfig_fragments):
     ret = sorted(sets.to_list(sets.make(ret)))
     ret = ";".join(ret)
     if ret:
-        ret = "({}) ".format(ret)
+        ret = " ({})".format(ret)
     return ret
 
 kernel_config_settings = struct(

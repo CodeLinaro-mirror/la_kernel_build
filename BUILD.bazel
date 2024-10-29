@@ -13,9 +13,17 @@
 # limitations under the License.
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("@kernel_toolchain_info//:dict.bzl", "VARS")
-load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_genrule", "hermetic_tools")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_tools")
 load("//build/kernel/kleaf/impl:bison_wrapper.bzl", "bison_wrapper")
+load("//build/kernel/kleaf/impl:native_binary_with_arg.bzl", "native_binary_with_arg")
+load("//build/kernel/kleaf/impl:swig_wrapper.bzl", "swig_wrapper")
+load(
+    "//build/kernel/kleaf/impl:transitioned_tool.bzl",
+    "prebuilt_transitioned_files",
+    "prebuilt_transitioned_tool",
+    "transitioned_tool_from_sources",
+)
 
 filegroup(
     name = "sysroot",
@@ -29,11 +37,38 @@ filegroup(
     ],
 )
 
+filegroup(
+    name = "sysroot_dir",
+    srcs = ["build-tools/sysroot"],
+    visibility = [
+        "@kleaf_clang_toolchain//:__subpackages__",
+    ],
+)
+
+native_binary_with_arg(
+    name = "rsync",
+    src = "@kleaf_host_tools//:rsync",
+    args = ["--no-group"],
+    visibility = ["//visibility:private"],
+)
+
+prebuilt_transitioned_tool(
+    name = "prebuilt_toybox",
+    src = "//prebuilts/build-tools:toybox",
+    visibility = ["//visibility:private"],
+)
+
+transitioned_tool_from_sources(
+    name = "toybox_from_sources",
+    src = "@toybox",
+    visibility = ["//visibility:private"],
+)
+
 alias(
     name = "toybox",
     actual = select({
-        "//build/kernel/kleaf:toolchain_from_sources_is_true": "@toybox",
-        "//conditions:default": "//prebuilts/build-tools:linux-x86/bin/toybox",
+        "//build/kernel/kleaf:toolchain_from_sources_is_true": ":toybox_from_sources",
+        "//conditions:default": ":prebuilt_toybox",
     }),
     visibility = ["//visibility:private"],
 )
@@ -44,63 +79,151 @@ alias(
     name = "toybox_%s" % tool,
     actual = ":toybox",
     visibility = ["//visibility:private"],
-) for tool in ("find", "flock", "gzip")]
+) for tool in ("find", "flock")]
+
+transitioned_tool_from_sources(
+    name = "pigz",
+    src = "@pigz",
+    visibility = ["//visibility:private"],
+)
+
+alias(
+    name = "gzip",
+    actual = select({
+        "//build/kernel/kleaf:gzip_is_pigz_is_true": ":pigz",
+        "//conditions:default": ":toybox",
+    }),
+    visibility = ["//visibility:private"],
+)
+
+native_binary_with_arg(
+    name = "tar",
+    src = ":toybox",
+    args = [
+        "--mtime=@0",
+        "--owner=0",
+        "--group=0",
+        "--numeric-owner",
+        "--sort=name",
+    ],
+    visibility = ["//visibility:private"],
+)
+
+prebuilt_transitioned_tool(
+    name = "m4",
+    src = "//prebuilts/build-tools:m4",
+    visibility = ["//visibility:private"],
+)
+
+prebuilt_transitioned_tool(
+    name = "prebuilt_bison",
+    src = "//prebuilts/build-tools:bison",
+    visibility = ["//visibility:private"],
+)
 
 bison_wrapper(
     name = "bison",
-    actual = "//prebuilts/build-tools:linux-x86/bin/bison",
+    actual = ":prebuilt_bison",
+    m4 = ":m4",
     pkgdata_dir = "//prebuilts/build-tools:bison.runfiles_dir",
     pkgdata_files = "//prebuilts/build-tools:bison.runfiles",
     visibility = ["//visibility:private"],
 )
 
+swig_wrapper(
+    name = "wrapped_swig",
+    src = "//prebuilts/kernel-build-tools:swig",
+    swig_lib = "//prebuilts/kernel-build-tools:swig_lib_dir",
+    visibility = ["//visibility:private"],
+)
+
+prebuilt_transitioned_tool(
+    name = "swig",
+    src = ":wrapped_swig",
+    visibility = ["//visibility:private"],
+)
+
+prebuilt_transitioned_tool(
+    name = "prebuilt_lz4",
+    src = "//prebuilts/kernel-build-tools:lz4",
+    visibility = ["//visibility:private"],
+)
+
+transitioned_tool_from_sources(
+    name = "lz4_from_sources",
+    src = "@lz4",
+    visibility = ["//visibility:private"],
+)
+
+alias(
+    name = "lz4",
+    actual = select({
+        "//build/kernel/kleaf:toolchain_from_sources_is_true": ":lz4_from_sources",
+        "//conditions:default": ":prebuilt_lz4",
+    }),
+    visibility = ["//visibility:private"],
+)
+
+# List of prebuilt tools where label names are used as the tool names
+_PREBUILT_TOOLS = [
+    # keep sorted
+    "//prebuilts/build-tools:awk",
+    "//prebuilts/build-tools:bc",
+    "//prebuilts/build-tools:flex",
+    "//prebuilts/build-tools:make",
+    "//prebuilts/build-tools:openssl",
+    "//prebuilts/build-tools:runextractor",
+    "//prebuilts/kernel-build-tools:avbtool",
+    "//prebuilts/kernel-build-tools:blk_alloc_to_base_fs",
+    "//prebuilts/kernel-build-tools:build_image",
+    "//prebuilts/kernel-build-tools:build_super_image",
+    "//prebuilts/kernel-build-tools:certify_bootimg",
+    "//prebuilts/kernel-build-tools:dtc",
+    "//prebuilts/kernel-build-tools:e2fsck",
+    "//prebuilts/kernel-build-tools:e2fsdroid",
+    "//prebuilts/kernel-build-tools:fec",
+    "//prebuilts/kernel-build-tools:img2simg",
+    "//prebuilts/kernel-build-tools:interceptor",
+    "//prebuilts/kernel-build-tools:interceptor_analysis",
+    "//prebuilts/kernel-build-tools:lpmake",
+    "//prebuilts/kernel-build-tools:mkbootfs",
+    "//prebuilts/kernel-build-tools:mkdtimg",
+    "//prebuilts/kernel-build-tools:mke2fs",
+    "//prebuilts/kernel-build-tools:mkfs.erofs",
+    "//prebuilts/kernel-build-tools:mkuserimg_mke2fs",
+    "//prebuilts/kernel-build-tools:pahole",
+    "//prebuilts/kernel-build-tools:simg2img",
+    "//prebuilts/kernel-build-tools:soong_zip",
+    "//prebuilts/kernel-build-tools:tune2fs",
+    "//prebuilts/kernel-build-tools:ufdt_apply_overlay",
+]
+
+[
+    prebuilt_transitioned_tool(
+        name = "prebuilt_" + paths.basename(package_relative_label(tool).name),
+        src = tool,
+        visibility = ["//visibility:private"],
+    )
+    for tool in _PREBUILT_TOOLS + [
+        "//prebuilts/kernel-build-tools:depmod",
+        "//prebuilts/build-tools:bzip2",
+        "//prebuilts/build-tools:xz",
+        "//prebuilts/build-tools:ziptool",
+    ]
+]
+
+# List of hermetic tools where label names are used as the tool names
 # TODO(b/274975942): Delete these symlinks once build.sh goes away.
 _HERMETIC_TOOLS = [
     # keep sorted
     ":bison",
-    "//prebuilts/build-tools:linux-x86/bin/flex",
-    "//prebuilts/build-tools:linux-x86/bin/m4",
-    "//prebuilts/build-tools:linux-x86/bin/make",
-    "//prebuilts/build-tools:linux-x86/bin/openssl",
-    "//prebuilts/build-tools:linux-x86/bin/runextractor",
-    "//prebuilts/build-tools:path/linux-x86/awk",
-    "//prebuilts/build-tools:path/linux-x86/bc",
-    "//prebuilts/build-tools:path/linux-x86/bzcat",
-    "//prebuilts/build-tools:path/linux-x86/bzip2",
-    "//prebuilts/build-tools:path/linux-x86/od",
-    "//prebuilts/build-tools:path/linux-x86/paste",
-    "//prebuilts/build-tools:path/linux-x86/pgrep",
-    "//prebuilts/build-tools:path/linux-x86/pkill",
-    "//prebuilts/build-tools:path/linux-x86/ps",
-    "//prebuilts/build-tools:path/linux-x86/pwd",
-    "//prebuilts/build-tools:path/linux-x86/xz",
-    "//prebuilts/build-tools:path/linux-x86/xzcat",
-    "//prebuilts/build-tools:path/linux-x86/zipinfo",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/avbtool",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/blk_alloc_to_base_fs",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/build_image",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/build_super_image",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/certify_bootimg",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/dtc",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/e2fsck",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/e2fsdroid",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/fec",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/img2simg",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/interceptor",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/interceptor_analysis",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/lpmake",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/mkbootfs",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/mkdtimg",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/mke2fs",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/mkfs.erofs",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/mkuserimg_mke2fs",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/pahole",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/simg2img",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/soong_zip",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/stgdiff",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/swig",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/tune2fs",
-    "//prebuilts/kernel-build-tools:linux-x86/bin/ufdt_apply_overlay",
+    ":gzip",
+    ":lz4",
+    ":m4",
+    ":swig",
+    ":tar",
+    # TODO: This is only used by abi_stgdiff. It should be fine to be removed from hermetic_tools.
+    "//build/kernel/kleaf/impl:stgdiff",
 ] + glob([
     # Intentionally glob here to test for existance of alias destination
     # buildifier: disable=constant-glob
@@ -141,6 +264,12 @@ _TOYS = [
     "mount",
     "mv",
     "nproc",
+    "od",
+    "paste",
+    "pgrep",
+    "pkill",
+    "ps",
+    "pwd",
     "readlink",
     "realpath",
     "rm",
@@ -155,7 +284,6 @@ _TOYS = [
     "sort",
     "stat",
     "tail",
-    "tar",
     "tee",
     "test",
     "timeout",
@@ -177,16 +305,6 @@ _TOYS = [
 
 hermetic_tools(
     name = "hermetic-tools",
-    extra_args = {
-        "rsync": ["--no-group"],
-        "tar": [
-            "--mtime=@0",
-            "--owner=0",
-            "--group=0",
-            "--numeric-owner",
-            "--sort=name",
-        ],
-    },
     symlinks = select({
         "//build/kernel/kleaf:debug_cache_dir_conflict_needs_flock": {
             ":toybox_flock": "flock",
@@ -199,25 +317,6 @@ hermetic_tools(
         "//conditions:default": {
             ":toybox_find": "find",
         },
-    }) | select({
-        "//build/kernel/kleaf:toolchain_from_sources_is_true": {
-            "@lz4": "lz4",
-        },
-        "//conditions:default": {
-            "//prebuilts/kernel-build-tools:linux-x86/bin/lz4": "lz4",
-        },
-    }) | select({
-        "//build/kernel/kleaf:gzip_is_pigz_is_true": {
-            "@pigz": "gzip",
-        },
-        "//conditions:default": {
-            ":toybox_gzip": "gzip",
-        },
-    }) | select({
-        "//build/kernel/kleaf:remove_strings_from_hermetic_tools_is_true": {},
-        "//conditions:default": {
-            "//prebuilts/clang/host/linux-x86/clang-{}:bin/llvm-strings".format(VARS["CLANG_VERSION"]): "llvm-strings",
-        },
     }) | {
         ":toybox": ":".join(_TOYS),
 
@@ -225,18 +324,30 @@ hermetic_tools(
         "@kleaf_host_tools//:bash": "bash",
         "@kleaf_host_tools//:sh": "sh",
         "@kleaf_host_tools//:perl": "perl",
-        "@kleaf_host_tools//:rsync": "rsync",
-
-        # Additional symlinks other than in //prebuilts/build-tools
-        "//prebuilts/kernel-build-tools:linux-x86/bin/depmod": ":".join([
+        ":rsync": "rsync",
+        ":prebuilt_depmod": ":".join([
             # keep sorted
             "depmod",
             "modinfo",
         ]),
-        "//prebuilts/build-tools:linux-x86/bin/ziptool": "unzip",
+        ":prebuilt_bzip2": ":".join([
+            # keep sorted
+            "bzcat",
+            "bzip2",
+        ]),
+        ":prebuilt_xz": ":".join([
+            # keep sorted
+            "xz",
+            "xzcat",
+        ]),
+        ":prebuilt_ziptool": ":".join([
+            # keep sorted
+            "unzip",
+            "zipinfo",
+        ]),
 
         # Python
-        "//build/kernel/kleaf/impl:python_interpreter_file": ":".join([
+        "//build/kernel/kleaf/impl:python_runtime_files": ":".join([
             # keep sorted
             "python",
             "python3",
@@ -244,15 +355,11 @@ hermetic_tools(
     } | {
         tool: paths.basename(package_relative_label(tool).name)
         for tool in _HERMETIC_TOOLS
+    } | {
+        ":prebuilt_" + paths.basename(package_relative_label(tool).name): paths.basename(package_relative_label(tool).name)
+        for tool in _PREBUILT_TOOLS
     },
     visibility = ["//visibility:public"],
-    deps = [
-        ":sysroot",
-        "//build/kernel/kleaf/impl:python_runtime_files",
-        "//prebuilts/build-tools:linux-x86",
-        "//prebuilts/kernel-build-tools:linux-x86",
-        "@prebuilt_ndk//:sysroot",
-    ],
 )
 
 toolchain_type(
@@ -410,25 +517,16 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
-_GKI_CERTIFICATION_BINARIES_PREFIX = "//prebuilts/kernel-build-tools:linux-x86/bin/"
+pkg_tar(
+    name = "gki_certification_tools_tar",
+    srcs = ["//prebuilts/kernel-build-tools:gki_certification_tools_pkg_files"],
+    out = "gki_certification_tools.tar.gz",
+    compressor = ":gzip",
+    visibility = ["//visibility:private"],
+)
 
-_GKI_CERTIFICATION_BINARIES = [
-    "avbtool",
-    "certify_bootimg",
-]
-
-hermetic_genrule(
+prebuilt_transitioned_files(
     name = "gki_certification_tools",
-    srcs = [_GKI_CERTIFICATION_BINARIES_PREFIX + tool for tool in _GKI_CERTIFICATION_BINARIES],
-    outs = ["gki_certification_tools.tar.gz"],
-    cmd = """
-        tar --mode=u=rwx,go=rx -czhf $@ \\
-            -C $$(dirname $$(dirname $(location {prefix}{first}))) \\
-            {files}
-    """.format(
-        files = " ".join(["bin/" + tool for tool in _GKI_CERTIFICATION_BINARIES]),
-        first = _GKI_CERTIFICATION_BINARIES[0],
-        prefix = _GKI_CERTIFICATION_BINARIES_PREFIX,
-    ),
+    srcs = [":gki_certification_tools_tar"],
     visibility = ["//visibility:public"],
 )

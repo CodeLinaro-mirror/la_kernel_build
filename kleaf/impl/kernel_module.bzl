@@ -44,12 +44,9 @@ load(
 load(":compile_commands_utils.bzl", "compile_commands_utils")
 load(":ddk/ddk_headers.bzl", "DdkHeadersInfo")
 load(":debug.bzl", "debug")
+load(":gcov_utils.bzl", "gcov_attrs", "get_grab_gcno_step")
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
-load(
-    ":kernel_build.bzl",
-    "get_grab_cmd_step",
-    "get_grab_gcno_step",
-)
+load(":kernel_build.bzl", "get_grab_cmd_step")
 load(":stamp.bzl", "stamp")
 load(":utils.bzl", "kernel_utils")
 
@@ -361,7 +358,7 @@ def _kernel_module_impl(ctx):
         symlink_name = "module_{}".format(ctx.attr.name),
     )
     grab_cmd_step = get_grab_cmd_step(ctx, "${OUT_DIR}/${ext_mod_rel}")
-    grab_gcno_step = get_grab_gcno_step(ctx, "${OUT_DIR}/${ext_mod_rel}", is_kernel_build = False)
+    grab_gcno_step = get_grab_gcno_step(ctx, "${COMMON_OUT_DIR}", is_kernel_build = False)
     compile_commands_step = compile_commands_utils.get_step(ctx, "${OUT_DIR}/${ext_mod_rel}")
 
     for step in (
@@ -465,7 +462,7 @@ def _kernel_module_impl(ctx):
                ext_mod_rel=$(realpath ${{ROOT_DIR}}/{ext_mod} --relative-to ${{KERNEL_DIR}})
 
              # Actual kernel module build
-               make -C {ext_mod} ${{TOOL_ARGS}} M=${{ext_mod_rel}} O=${{OUT_DIR}} KERNEL_SRC=${{ROOT_DIR}}/${{KERNEL_DIR}} {make_filter} {make_redirect}
+               make -C {ext_mod} ${{TOOL_ARGS}} M=${{ext_mod_rel}} VPATH=${{ROOT_DIR}}/${{KERNEL_DIR}} O=${{OUT_DIR}} KERNEL_SRC=${{ROOT_DIR}}/${{KERNEL_DIR}} {make_filter} {make_redirect}
     """.format(
         ext_mod = ext_mod,
         make_filter = make_filter,
@@ -475,7 +472,7 @@ def _kernel_module_impl(ctx):
     # TODO(b/291955924): make the `make` invocations parallel
     for goal in compile_commands_utils.additional_make_goals(ctx):
         command += """
-                make -C {ext_mod} ${{TOOL_ARGS}} M=${{ext_mod_rel}} O=${{OUT_DIR}} KERNEL_SRC=${{ROOT_DIR}}/${{KERNEL_DIR}} {goal} {make_filter} {make_redirect}
+                make -C {ext_mod} ${{TOOL_ARGS}} M=${{ext_mod_rel}} VPATH=${{ROOT_DIR}}/${{KERNEL_DIR}} O=${{OUT_DIR}} KERNEL_SRC=${{ROOT_DIR}}/${{KERNEL_DIR}} {goal} {make_filter} {make_redirect}
         """.format(
             ext_mod = ext_mod,
             goal = goal,
@@ -565,7 +562,7 @@ def _kernel_module_impl(ctx):
         tools = depset(tools, transitive = transitive_tools),
         outputs = command_outputs,
         command = command,
-        progress_message = "Building external kernel module {}{}".format(
+        progress_message = "Building external kernel module{} %{{label}}".format(
             ctx.attr.kernel_build[KernelEnvAttrInfo].progress_message_note,
             ctx.label,
         ),
@@ -609,7 +606,7 @@ def _kernel_module_impl(ctx):
             ),
             outputs = cp_cmd_outputs,
             command = command,
-            progress_message = "Copying outputs {}".format(ctx.label),
+            progress_message = "Copying outputs %{label}",
         )
 
     module_symvers_restore_path = paths.join(ext_mod, ctx.attr.internal_module_symvers_name)
@@ -681,7 +678,7 @@ def _kernel_module_impl(ctx):
         ddk_headers_info,
         ddk_config_info,
         GcovInfo(
-            gcno_mapping = grab_gcno_step.outputs,
+            gcno_mapping = grab_gcno_step.gcno_mapping,
             gcno_dir = grab_gcno_step.gcno_dir,
         ),
         KernelCmdsInfo(
@@ -744,22 +741,16 @@ _kernel_module = rule(
             executable = True,
             doc = "Label referring to the script to process outputs",
         ),
-        "_print_gcno_mapping": attr.label(
-            default = Label("//build/kernel/kleaf/impl:print_gcno_mapping"),
-            cfg = "exec",
-            executable = True,
-        ),
         "_check_declared_output_list": attr.label(
             default = Label("//build/kernel/kleaf:check_declared_output_list"),
             cfg = "exec",
             executable = True,
         ),
         "_config_is_stamp": attr.label(default = "//build/kernel/kleaf:config_stamp"),
-        "_gcov": attr.label(default = "//build/kernel/kleaf:gcov"),
         "_preserve_cmd": attr.label(default = "//build/kernel/kleaf/impl:preserve_cmd"),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
         "_debug_modpost_warn": attr.label(default = "//build/kernel/kleaf:debug_modpost_warn"),
-    } | _kernel_module_additional_attrs(),
+    } | _kernel_module_additional_attrs() | gcov_attrs(),
     toolchains = [hermetic_toolchain.type],
 )
 

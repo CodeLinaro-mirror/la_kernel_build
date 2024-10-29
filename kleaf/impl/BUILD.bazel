@@ -21,8 +21,11 @@ load(":kernel_platform_toolchain.bzl", "kernel_platform_toolchain")
 load(":kernel_toolchains.bzl", "kernel_toolchains")
 load(
     ":python.bzl",
-    "python_interpreter_file",
     "python_runtime_files",
+)
+load(
+    ":transitioned_tool.bzl",
+    "prebuilt_transitioned_tool",
 )
 
 bzl_library(
@@ -65,8 +68,11 @@ bzl_library(
         "declare_kernel_prebuilts.bzl",
         "declare_toolchain_constants.bzl",
         "default_host_tools.scl",
+        "diff.bzl",
+        "empty_binary.bzl",
         "file.bzl",
         "file_selector.bzl",
+        "gcov_utils.bzl",
         "gki_artifacts.bzl",
         "image/boot_images.bzl",
         "image/dtbo.bzl",
@@ -105,13 +111,18 @@ bzl_library(
         "merge_kzip.bzl",
         "merged_kernel_uapi_headers.bzl",
         "modules_prepare.bzl",
+        "native_binary_with_arg.bzl",
         "out_headers_allowlist_archive.bzl",
+        "platform_transition.bzl",
         "python.bzl",
         "raw_kmi_symbol_list.bzl",
         "scripts_config_arg_builder.bzl",
+        "set_kernel_dir.bzl",
         "srcs_aspect.bzl",
         "stamp.bzl",
         "status.bzl",
+        "swig_wrapper.bzl",
+        "transitioned_tool.bzl",
         "utils.bzl",
     ],
     visibility = ["//build/kernel/kleaf:__subpackages__"],
@@ -136,7 +147,7 @@ bzl_library(
     ],
     visibility = ["//build/kernel/kleaf:__subpackages__"],
     deps = [
-        "//build/bazel_common_rules/exec",
+        "//build/bazel_common_rules/exec/impl:exec",
     ],
 )
 
@@ -417,9 +428,12 @@ kernel_platform_toolchain(
 
 kernel_platform_toolchain(
     name = "kernel_toolchain_exec",
+    runpaths = [
+        "//prebuilts/kernel-build-tools:runpath",
+    ],
     visibility = ["//build/kernel/kleaf/tests:__subpackages__"],
     deps = [
-        "//prebuilts/kernel-build-tools:linux_x86_imported_libs",
+        "//prebuilts/kernel-build-tools:imported_libs",
     ],
 )
 
@@ -431,15 +445,26 @@ kernel_toolchains(
     visibility = ["//visibility:public"],
 )
 
+# Exposed for kernel_build()/kernel_filegroup(). Do not use it for other purposes; it is an
+# implementation detail and it may be deleted without notice.
+alias(
+    name = "musl",
+    actual = "//build/kernel/kleaf/platforms/libc:musl",
+    # All kernel_* from different packages can see this
+    visibility = ["//visibility:public"],
+)
+
 # Local build platforms
+## host constraints + musl
+## Note that this does not respect --host_platform.
 platform(
-    name = "linux_x86_64",
+    name = "host_musl",
     constraint_values = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
+        "//build/kernel/kleaf/platforms/libc:musl",
     ],
+    parents = ["@platforms//host"],
     visibility = [
-        "//build/kernel/kleaf/tests:__subpackages__",
+        "//build/kernel:__subpackages__",
     ],
 )
 
@@ -487,18 +512,30 @@ platform(
     ],
 )
 
-python_interpreter_file(
-    name = "python_interpreter_file",
-    visibility = ["//build/kernel:__pkg__"],
-)
-
 python_runtime_files(
     name = "python_runtime_files",
     visibility = ["//build/kernel:__pkg__"],
 )
 
-cc_binary(
-    name = "arg_wrapper",
-    srcs = ["arg_wrapper.cpp"],
-    visibility = ["//build/kernel:__pkg__"],
+prebuilt_transitioned_tool(
+    name = "stg",
+    src = "//prebuilts/kernel-build-tools:stg",
+    # All kernel_abi() can see this
+    visibility = ["//visibility:public"],
+)
+
+prebuilt_transitioned_tool(
+    name = "stgdiff",
+    src = "//prebuilts/kernel-build-tools:stgdiff",
+    # All kernel_abi() can see this
+    visibility = ["//visibility:public"],
+)
+
+exports_files(
+    [
+        "arg_wrapper.cpp",
+    ],
+    visibility = [
+        "//build/kernel:__subpackages__",
+    ],
 )
