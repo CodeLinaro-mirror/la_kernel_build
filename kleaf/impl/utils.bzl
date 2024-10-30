@@ -476,6 +476,11 @@ def _eval_restore_out_dir_cmd():
 def _setup_serialized_env_cmd(serialized_env_info, restore_out_dir_cmd):
     """Returns a command that sets up `KernelSerializedEnvInfo`.
 
+    The provided command line has a shebang at the first line, so in most cases when
+    setup_serialized_env_cmd is at the beginning, the user doesn't have to add a shebang. However,
+    if setup_serialized_env_cmd is not at the beginning of a script or a command line, the user
+    should manually add the shebang if necessary.
+
     Args:
         serialized_env_info: `KernelSerializedEnvInfo`
         restore_out_dir_cmd: The command to restore value of `OUT_DIR`.
@@ -484,13 +489,18 @@ def _setup_serialized_env_cmd(serialized_env_info, restore_out_dir_cmd):
     if not restore_out_dir_cmd:
         restore_out_dir_cmd = ":"
 
-    return """
+    return """#!/bin/bash -e
         KLEAF_RESTORE_OUT_DIR_CMD={quoted_restore_out_dir_cmd}
-        . {setup_script}
+        if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+            . {setup_script_short}
+        else
+            . {setup_script}
+        fi
         unset KLEAF_RESTORE_OUT_DIR_CMD
     """.format(
         quoted_restore_out_dir_cmd = shell.quote(restore_out_dir_cmd),
         setup_script = serialized_env_info.setup_script.path,
+        setup_script_short = serialized_env_info.setup_script.short_path,
     )
 
 kernel_utils = struct(

@@ -31,6 +31,14 @@ StepInfo = provider(
     },
 )
 
+DefconfigInfo = provider(
+    "Describes the value of kernel_build.defconfig. At most one of the fields is not None.",
+    fields = {
+        "file": "a single defconfig file",
+        "make_target": "a phony make target",
+    },
+)
+
 KernelCmdsInfo = provider(
     doc = """Provides a directory of `.cmd` files.""",
     fields = {
@@ -56,11 +64,6 @@ KernelEnvInfo = provider(
         "tools": """A [depset](https://bazel.build/extending/depsets) of tools associated with
             the execution platform.""",
         "setup": "setup script to initialize the environment",
-        "run_env": """Optional `KernelEnvInfo` to initialize the environment for `bazel run`.
-
-For `kernel_env`, the script only provides a bare-minimum environment after `source build.config`,
-without actually modifying any variables suitable for a proper kernel build.
-""",
         "toolchains": "See KernelEnvToolchainsInfo",
     },
 )

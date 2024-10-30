@@ -208,10 +208,12 @@ def _kernel_env_impl(ctx):
 
     # If multiple targets have the same KERNEL_DIR are built simultaneously
     # with --spawn_strategy=local, try to isolate their OUT_DIRs.
+    pre_defconfig_fragments = ctx.files.pre_defconfig_fragments
     post_defconfig_fragments = ctx.files.post_defconfig_fragments
     config_tags_out = kernel_config_settings.kernel_env_get_config_tags(
         ctx = ctx,
         mnemonic_prefix = "KernelEnv",
+        pre_defconfig_fragments = pre_defconfig_fragments,
         post_defconfig_fragments = post_defconfig_fragments,
     )
     inputs.append(config_tags_out.env)
@@ -317,6 +319,7 @@ def _kernel_env_impl(ctx):
 
     progress_message_note = kernel_config_settings.get_progress_message_note(
         ctx,
+        pre_defconfig_fragments,
         post_defconfig_fragments,
     )
 
@@ -352,18 +355,10 @@ def _kernel_env_impl(ctx):
         setup_inputs.append(kconfig_ext)
     setup_inputs += dtstree_srcs
 
-    run_env = _get_run_env(
-        ctx,
-        srcs,
-        toolchains,
-        set_kernel_dir_ret = set_kernel_dir_ret,
-    )
-
     env_info = KernelEnvInfo(
         inputs = depset(setup_inputs),
         tools = depset(setup_tools, transitive = setup_transitive_tools),
         setup = setup,
-        run_env = run_env,
         toolchains = toolchains,
     )
     return [
@@ -382,17 +377,28 @@ def _kernel_env_impl(ctx):
         DefaultInfo(files = depset([out_file])),
     ]
 
-def get_env_info_setup_command(hermetic_tools_setup, build_utils_sh, env_setup_script):
+def get_env_info_setup_command(
+        hermetic_tools_setup,
+        build_utils_sh,
+        env_setup_script):
     """Returns text for KernelEnvInfo.setup"""
 
-    return """
-        {hermetic_tools_setup}
-        source {build_utils_sh}
-        # source the build environment
-        source {env_setup_script}
+    return """{hermetic_tools_setup}
+
+        if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+            source {build_utils_sh_short}
+            # source the build environment
+            source {env_setup_script_short}
+        else
+            source {build_utils_sh}
+            # source the build environment
+            source {env_setup_script}
+        fi
     """.format(
         hermetic_tools_setup = hermetic_tools_setup,
+        build_utils_sh_short = build_utils_sh.short_path,
         build_utils_sh = build_utils_sh.path,
+        env_setup_script_short = env_setup_script.short_path,
         env_setup_script = env_setup_script.path,
     )
 
@@ -404,7 +410,6 @@ def _get_env_setup_cmds(ctx):
         pre_env += debug.trap()
 
     kleaf_repo_workspace_root = Label(":kernel_env.bzl").workspace_root
-    kleaf_repo_workspace_root_slash = (kleaf_repo_workspace_root + "/") if kleaf_repo_workspace_root else ""
 
     pre_env += """
         # KLEAF_REPO_WORKSPACE_ROOT: workspace_root of the Kleaf repository. See Label.workspace_root.
@@ -417,14 +422,22 @@ def _get_env_setup_cmds(ctx):
         # hermetic_base for hermetic tools, relative to execroot. This is
         # handled separately from bin_dir because hermetic_tools has a transition
         # attached to it.
-        KLEAF_HERMETIC_BASE=${{KLEAF_HERMETIC_BASE:-{hermetic_base}}}
+        if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+            KLEAF_HERMETIC_BASE=${{KLEAF_HERMETIC_BASE:-{run_hermetic_base}}}
+        else
+            KLEAF_HERMETIC_BASE=${{KLEAF_HERMETIC_BASE:-{hermetic_base}}}
+        fi
 
         # bin_dir for Kleaf repository, relative to execroot
         # This is:
         # - either bazel-out/k8-fastbuild/bin if @kleaf is the root module;
         # - or bazel-out/k8-fastbuild/bin/external/kleaf (or some variations of it)
         #   if @kleaf is a dependent module
-        KLEAF_BIN_DIR_AND_WORKSPACE_ROOT="{bin_dir}${{KLEAF_REPO_WORKSPACE_ROOT:+/$KLEAF_REPO_WORKSPACE_ROOT}}"
+        if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+            KLEAF_BIN_DIR_AND_WORKSPACE_ROOT="${{KLEAF_REPO_WORKSPACE_ROOT}}"
+        else
+            KLEAF_BIN_DIR_AND_WORKSPACE_ROOT="{bin_dir}${{KLEAF_REPO_WORKSPACE_ROOT:+/$KLEAF_REPO_WORKSPACE_ROOT}}"
+        fi
 
         # Root of Kleaf repository (under execroot aka PWD)
         # This is:
@@ -433,6 +446,7 @@ def _get_env_setup_cmds(ctx):
         KLEAF_REPO_DIR="$PWD${{KLEAF_REPO_WORKSPACE_ROOT:+/$KLEAF_REPO_WORKSPACE_ROOT}}"
     """.format(
         hermetic_base = hermetic_tools.internal_hermetic_base,
+        run_hermetic_base = hermetic_tools.internal_run_hermetic_base,
         bin_dir = ctx.bin_dir.path,
         kleaf_repo_workspace_root = kleaf_repo_workspace_root,
     )
@@ -461,8 +475,27 @@ def _get_env_setup_cmds(ctx):
         fi
 
         # Redeclare KERNEL_DIR to be under $KLEAF_REPO_WORKSPACE_ROOT.
-        if [ -n "${{KLEAF_REPO_WORKSPACE_ROOT}}" ]; then
-            export KERNEL_DIR=${{KLEAF_REPO_WORKSPACE_ROOT:+$KLEAF_REPO_WORKSPACE_ROOT/}}${{KERNEL_DIR#{kleaf_repo_workspace_root_slash}}}
+        # Only do that if all of the following is true:
+        #   - We are setting up the variables for a kernel_filegroup with prebuilt scripts
+        #     (KLEAF_FIX_KERNEL_DIR == 1)
+        #   - The kernel_build() that originally built these prebuilts was declared at the
+        #     root Bazel module in its workspace (we may relax this requirement in the future if
+        #     there's a use case)
+        # A typical use case for this is that KERNEL_DIR=common in prebuilt scripts, but if @kleaf
+        #    is a dependent module and common/ is below @kleaf, then kernel_filegroup need to fix
+        #    the value so that KERNEL_DIR=external/kleaf~/common.
+        if [ "${{KLEAF_FIX_KERNEL_DIR}}" = 1 ]; then
+
+            if [ -n "{kernel_build_workspace_root}" ]; then
+                echo "ERROR: The original kernel_build() that built these prebuilts was " >&2
+                echo "    {kernel_build_label}" >&2
+                echo "  It is currently not supported to use these prebuilts within a kernel_filegroup." >&2
+                echo "  Instead, the kernel_build() should have been built at the root Bazel module." >&2
+                echo "  Please contact the provider for these prebuilts to resolve this error." >&2
+                exit 1
+            fi
+
+            export KERNEL_DIR=${{KLEAF_REPO_WORKSPACE_ROOT:+$KLEAF_REPO_WORKSPACE_ROOT/}}${{KERNEL_DIR}}
         fi
 
         ## Set up KCPPFLAGS and KCPPFLAGS_COMPAT
@@ -495,8 +528,10 @@ def _get_env_setup_cmds(ctx):
     """.format(
         get_make_jobs_cmd = status.get_volatile_status_cmd(ctx, "MAKE_JOBS"),
         get_make_keep_going_cmd = status.get_volatile_status_cmd(ctx, "MAKE_KEEP_GOING"),
-        kleaf_repo_workspace_root_slash = kleaf_repo_workspace_root_slash,
+        kernel_build_workspace_root = ctx.label.workspace_root,
+        kernel_build_label = str(ctx.label).removesuffix("_env"),
     )
+
     return struct(
         pre_env = pre_env,
         post_env = post_env,
@@ -534,65 +569,6 @@ def _get_make_verbosity_command(ctx):
 
     return command
 
-def _get_run_env(ctx, srcs, toolchains, set_kernel_dir_ret):
-    """Returns setup script for execution phase.
-
-    Unlike the setup script for regular builds, this doesn't modify variables from build.config for
-    a proper build, e.g.:
-
-    - It doesn't respect `MAKE_JOBS`
-    - It doesn't set `KCONFIG_EXT_PREFIX` or `dtstree`
-    - It doesn't set `SOURCE_DATE_EPOCH` or scmversion properly
-    """
-
-    toolchains = kernel_toolchains_utils.get(ctx)
-    hermetic_tools = hermetic_toolchain.get(ctx)
-
-    setup = hermetic_tools.run_setup
-    if ctx.attr._debug_annotate_scripts[BuildSettingInfo].value:
-        setup += debug.trap()
-    setup += _get_make_verbosity_command(ctx)
-
-    setup += """
-        # create a build environment
-          source {build_utils_sh}
-          export BUILD_CONFIG={build_config}
-          {set_kernel_dir_cmd}
-
-        # Silence "git: command not found" and "date: bad date @"
-          export SOURCE_DATE_EPOCH=0
-          {set_arch_cmd}
-          source {setup_env}
-          {set_ndk_triple_cmd}
-        # Variables from resolved toolchain
-          {toolchains_setup_env_var_cmd}
-    """.format(
-        build_utils_sh = ctx.file._build_utils_sh.short_path,
-        build_config = ctx.file.build_config.short_path,
-        set_kernel_dir_cmd = set_kernel_dir_ret.run_cmd,
-        set_arch_cmd = _get_set_arch_cmd(ctx),
-        setup_env = ctx.file.setup_env.short_path,
-        set_ndk_triple_cmd = _get_set_ndk_triple_cmd(),
-        toolchains_setup_env_var_cmd = toolchains.kernel_setup_env_var_cmd,
-    )
-    tools = [
-        ctx.file.setup_env,
-        ctx.file._build_utils_sh,
-    ]
-    transitive_tools = [
-        toolchains.all_files,
-        hermetic_tools.deps,
-    ]
-    inputs = srcs + [
-        ctx.file.build_config,
-    ]
-
-    return KernelEnvInfo(
-        setup = setup,
-        inputs = depset(inputs),
-        tools = depset(tools, transitive = transitive_tools),
-    )
-
 def _kernel_env_additional_attrs():
     return dicts.add(
         kernel_config_settings.of_kernel_env(),
@@ -627,6 +603,10 @@ kernel_env = rule(
             allow_files = True,
             doc = """labels that this build config refers to, including itself.
             E.g. ["build.config.gki.aarch64", "build.config.gki"]""",
+        ),
+        "pre_defconfig_fragments": attr.label_list(
+            doc = "**pre** defconfig fragments",
+            allow_files = True,
         ),
         "post_defconfig_fragments": attr.label_list(
             doc = "**post** defconfig fragments",

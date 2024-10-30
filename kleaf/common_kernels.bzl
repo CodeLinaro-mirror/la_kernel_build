@@ -32,6 +32,7 @@ load(
 )
 load("//build/kernel/kleaf/impl:kernel_sbom.bzl", "kernel_sbom")
 load("//build/kernel/kleaf/impl:out_headers_allowlist_archive.bzl", "out_headers_allowlist_archive")
+load("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragments_menuconfig_test.bzl", "pre_defconfig_fragments_menuconfig_test")
 load(
     ":kernel.bzl",
     "kernel_abi",
@@ -49,8 +50,9 @@ _COLLECT_UNSTRIPPED_MODULES = True
 # Always strip modules for common kernels.
 _STRIP_MODULES = True
 
-# Always keep a copy of Module.symvers for common kernels.
+# Always keep a copy of Module.symvers and .config for common kernels.
 _KEEP_MODULE_SYMVERS = True
+_KEEP_DOT_CONFIG = True
 
 # This transition is not needed for GKI
 _GKI_ADD_VMLINUX = False
@@ -63,6 +65,8 @@ def common_kernel(
         arch = None,
         visibility = None,
         toolchain_version = None,
+        check_defconfig_minimized = None,
+        defconfig = None,
         enable_interceptor = None,
         kmi_symbol_list = None,
         additional_kmi_symbol_lists = None,
@@ -125,6 +129,8 @@ def common_kernel(
         build_config: See [kernel_build.build_config](kernel.md#kernel_build-build_config)
         makefile: See [kernel_build.makefile](kernel.md#kernel_build-makefile)
         toolchain_version: See [kernel_build.toolchain_version](kernel.md#kernel_build-toolchain_version)
+        check_defconfig_minimized: See [kernel_build.check_defconfig_minimized](kernel.md#kernel_build-check_defconfig_minimized)
+        defconfig: See [kernel_build.defconfig](kernel.md#kernel_build-defconfig)
         enable_interceptor: See [kernel_build.enable_interceptor](kernel.md#kernel_build-enable_interceptor)
         kmi_symbol_list: See [kernel_build.kmi_symbol_list](kernel.md#kernel_build-kmi_symbol_list)
         additional_kmi_symbol_lists: See [kernel_build.additional_kmi_symbol_lists](kernel.md#kernel_build-additional_kmi_symbol_lists)
@@ -154,6 +160,8 @@ def common_kernel(
         arch = arch,
         build_config = build_config,
         makefile = makefile,
+        check_defconfig_minimized = check_defconfig_minimized,
+        defconfig = defconfig,
         toolchain_version = toolchain_version,
         visibility = visibility,
         enable_interceptor = enable_interceptor,
@@ -231,12 +239,15 @@ def common_kernel(
         ],
         build_config = name + "_build_config",
         makefile = makefile,
+        check_defconfig_minimized = check_defconfig_minimized,
+        defconfig = defconfig,
         enable_interceptor = enable_interceptor,
         visibility = visibility,
         collect_unstripped_modules = _COLLECT_UNSTRIPPED_MODULES,
         strip_modules = _STRIP_MODULES,
         toolchain_version = toolchain_version,
         keep_module_symvers = _KEEP_MODULE_SYMVERS,
+        keep_dot_config = _KEEP_DOT_CONFIG,
         kmi_symbol_list = kmi_symbol_list,
         additional_kmi_symbol_lists = additional_kmi_symbol_lists,
         trim_nonlisted_kmi = trim_nonlisted_kmi,
@@ -454,6 +465,8 @@ def common_kernel(
         kernel_modules_install = name + "_modules_install",
         modules = (module_implicit_outs or []),
         arch = arch,
+        makefile = makefile,
+        defconfig = defconfig,
     )
 
     native.test_suite(
@@ -635,6 +648,8 @@ def define_prebuilts(**kwargs):
 def _define_common_kernels_additional_tests(
         name,
         kernel_build_name,
+        makefile,
+        defconfig,
         kernel_modules_install,
         modules,
         arch):
@@ -678,12 +693,38 @@ def _define_common_kernels_additional_tests(
         arch = arch,
     )
 
+    kernel_build(
+        name = name + "_test_device_kernel",
+        arch = arch,
+        makefile = makefile,
+        defconfig = defconfig,
+        pre_defconfig_fragments = [Label("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragment")],
+        base_kernel = native.package_relative_label(kernel_build_name),
+        build_config = Label("//build/kernel/kleaf/tests/defconfig_test:build.config.{}".format(arch)),
+        make_goals = ["modules"],
+        # We don't actually build the kernel_build target, so we don't care about outputs
+        outs = [],
+        testonly = True,
+        tags = ["manual"],
+        visibility = ["//visibility:private"],
+    )
+
+    # Tests that, if the menuconfig command does not edit anything, the pre_defconfig_fragment
+    # should still stay the same.
+    pre_defconfig_fragments_menuconfig_test(
+        name = name + "_pre_defconfig_fragments_menuconfig_test",
+        kernel_build = name + "_test_device_kernel",
+        pre_defconfig_fragment = Label("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragment"),
+        visibility = ["//visibility:private"],
+    )
+
     native.test_suite(
         name = name,
         tests = [
             name + "_empty",
             name + "_fake",
             name + "_device_modules_test",
+            name + "_pre_defconfig_fragments_menuconfig_test",
         ],
     )
 

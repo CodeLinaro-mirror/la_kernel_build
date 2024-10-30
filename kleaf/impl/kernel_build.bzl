@@ -98,6 +98,7 @@ def kernel_build(
         outs,
         makefile = None,
         keep_module_symvers = None,
+        keep_dot_config = None,
         srcs = None,
         module_outs = None,
         implicit_outs = None,
@@ -123,7 +124,11 @@ def kernel_build(
         module_signing_key = None,
         system_trusted_key = None,
         modules_prepare_force_generate_headers = None,
+        defconfig = None,
+        pre_defconfig_fragments = None,
+        post_defconfig_fragments = None,
         defconfig_fragments = None,
+        check_defconfig_minimized = None,
         page_size = None,
         pack_module_env = None,
         sanitizers = None,
@@ -206,6 +211,10 @@ def kernel_build(
         keep_module_symvers: If set to True, a copy of the default output `Module.symvers` is kept.
           * To avoid collisions in mixed build distribution packages, the file is renamed
             as `$(name)_Module.symvers`.
+          * Default is False.
+        keep_dot_config: If set to True, a copy of the default output `.config` is kept.
+          * To avoid collisions in mixed build distribution packages, the file is renamed
+            as `$(name)_dot_config`.
           * Default is False.
         srcs: The kernel sources (a `glob()`). If unspecified or `None`, it is the following:
           ```
@@ -470,20 +479,77 @@ def kernel_build(
         dtstree: Device tree support.
         modules_prepare_force_generate_headers: If `True` it forces generation of
           additional headers as part of modules_prepare.
-        defconfig_fragments: A list of targets that are applied to the defconfig.
+        defconfig: Label to the base defconfig.
 
-          As a convention, files should usually be named `<prop>_defconfig`
-          (e.g. `kasan_defconfig`) or `<prop>_<value>_defconfig` (e.g. `lto_none_defconfig`)
-          to provide human-readable hints during the build. The prefix should
-          describe what the defconfig does. However, this is not a requirement.
-          These configs are also applied to external modules, including
-          `kernel_module`s and `ddk_module`s.
+            As a convention, files should usually be named `<device>_defconfig`
+            (e.g. `tuna_defconfig`) to provide human-readable hints during the build. The prefix
+            should be the name of the `kernel_build`. However, this is not a requirement.
+            These configs are also applied to external modules, including
+            `kernel_module`s and `ddk_module`s.
 
-          **NOTE**: `defconfig_fragments` are applied **after** `make defconfig`, similar
-          to `POST_DEFCONFIG_CMDS`. If you migrate from `PRE_DEFCONFIG_CMDS`
-          to `defconfig_fragments`, certain values may change; double check
-          by building the `<target_name>_config` target and examining the
-          generated `.config` file.
+            For mixed builds (`base_kernel` is set), this is usually set to the `defconfig`
+            of the `base_kernel`, e.g. `//common:arch/arm64/configs/gki_defconfig`.
+
+            Items must be present in the intermediate `.config` before `post_defconfig_fragments`
+            are applied. See `build/kernel/kleaf/docs/kernel_config.md` for details.
+
+            As a special case, if this is evaluated to `//build/kernel/kleaf:allmodconfig`, Kleaf
+            builds all modules except those exluded in `post_defconfig_fragments`. In this case,
+            `pre_defconfig_fragments` must not be set.
+
+            See [`build/kernel/kleaf/docs/kernel_config.md`](../kernel_config.md) for details.
+        pre_defconfig_fragments: A list of fragments that are applied to the defconfig
+            **before** `make defconfig`.
+
+            Even though this is a list, it is highly recommended that the list contains
+            **at most one item**. This is so that `tools/bazel run <name>_config` applies to
+            the single pre defconfig fragment correctly.
+
+            As a convention, files should usually be named `<prop>_defconfig`
+            (e.g. `16k_defconfig`) or `<prop>_<value>_defconfig` (e.g. `page_size_16k_defconfig`)
+            to provide human-readable hints during the build. The prefix should
+            describe what the defconfig does. However, this is not a requirement.
+            These configs are also applied to external modules, including
+            `kernel_module`s and `ddk_module`s.
+
+            For mixed builds (`base_kernel` is set), the file usually contains additional
+            in-tree modules to build on top of `gki_defconfig`, e.g. `CONFIG_FOO=m`.
+
+            **NOTE**: `pre_defconfig_fragments` are applied **before** `make defconfig`, similar
+            to `PRE_DEFCONFIG_CMDS`. If you had `POST_DEFCONFIG_CMDS` applying fragments in your
+            build configs, consider using `post_defconfig_fragments` instead.
+
+            **NOTE**: **Order matters**, unlike `post_defconfig_fragments`. If there are conflicting
+            items, later items overrides earlier items.
+
+            Items must be present in the intermediate `.config` before `post_defconfig_fragments`
+            are applied. See `build/kernel/kleaf/docs/kernel_config.md` for details.
+        post_defconfig_fragments: A list of fragments that are applied to the defconfig
+            **after** `make defconfig`.
+
+            As a convention, files should usually be named `<prop>_defconfig`
+            (e.g. `kasan_defconfig`) or `<prop>_<value>_defconfig` (e.g. `lto_none_defconfig`)
+            to provide human-readable hints during the build. The prefix should
+            describe what the defconfig does. However, this is not a requirement.
+            These configs are also applied to external modules, including
+            `kernel_module`s and `ddk_module`s.
+
+            Files usually contain debug options. If you want to build in-tree modules, adding them
+            to `pre_defconfig_fragments` may be a better choice.
+
+            **NOTE**: `post_defconfig_fragments` are applied **after** `make defconfig`, similar
+            to `POST_DEFCONFIG_CMDS`. If you had `PRE_DEFCONFIG_CMDS` applying fragments in your
+            build configs, consider using `pre_defconfig_fragments` instead.
+
+            Items must be present in the final `.config`. See
+            `build/kernel/kleaf/docs/kernel_config.md` for details.
+        defconfig_fragments: **Deprecated**. Same as `post_defconfig_fragments`.
+        check_defconfig_minimized: If `True`, checks `.config` against the result of
+            `make savedefconfig` right after `make defconfig`, but before
+            `post_defconfig_fragments` are applied.
+
+            This can be set to true **only if** `defconfig` is set and `pre_defconfig_fragments`
+            is not set.
         page_size: Default is `"default"`. Page size of the kernel build.
 
           Value may be one of `"default"`, `"4k"`, `"16k"` or `"64k"`. If
@@ -503,7 +569,7 @@ def kernel_build(
             - `["kcsan"]`
         ddk_module_defconfig_fragments: A list of additional defconfigs, to be used
           in `ddk_module`s building against this kernel.
-          Unlike `defconfig_fragments`, `ddk_module_defconfig_fragments` is not applied
+          Unlike `post_defconfig_fragments`, `ddk_module_defconfig_fragments` is not applied
           to this `kernel_build` target, nor dependent legacy `kernel_module`s.
         ddk_module_headers: A list of `ddk_headers`, to be used in `ddk_module`s
           building against this kernel.
@@ -565,9 +631,24 @@ def kernel_build(
         Label("//build/kernel/kleaf:lto_is_default"): "default",
     })
 
+    if defconfig_fragments:
+        if post_defconfig_fragments:
+            fail("""{}: defconfig_fragments and post_defconfig_fragments cannot be set simultaneously.
+    Please merge defconfig_fragments into post_defconfig_fragments and delete defconfig_fragments.""".format(
+                native.package_relative_label(name),
+            ))
+
+        # buildifier: disable=print
+        print("""
+WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments instead.
+    If you want to apply defconfig fragments before `make defconfig`, use pre_defconfig_fragments instead.""".format(
+            native.package_relative_label(name),
+        ))
+        post_defconfig_fragments = defconfig_fragments
+
     post_defconfig_fragments = _get_post_defconfig_fragments(
         kernel_build_name = name,
-        kernel_build_defconfig_fragments = defconfig_fragments,
+        kernel_build_post_defconfig_fragments = post_defconfig_fragments,
         kernel_build_arch = arch,
         kernel_build_page_size = page_size,
         kernel_build_sanitizers = sanitizers,
@@ -630,6 +711,7 @@ def kernel_build(
             Label("//build/kernel/kleaf:musl_kbuild_is_true"): name + "_platform_exec_musl",
             "//conditions:default": name + "_platform_exec",
         }),
+        pre_defconfig_fragments = pre_defconfig_fragments,
         post_defconfig_fragments = post_defconfig_fragments,
         **internal_kwargs
     )
@@ -676,7 +758,10 @@ def kernel_build(
         module_signing_key = module_signing_key,
         system_trusted_key = system_trusted_key,
         lto = lto,
+        defconfig = defconfig,
+        pre_defconfig_fragments = pre_defconfig_fragments,
         post_defconfig_fragments = post_defconfig_fragments,
+        check_defconfig_minimized = check_defconfig_minimized,
         **internal_kwargs
     )
 
@@ -694,6 +779,7 @@ def kernel_build(
         name = name,
         config = config_target_name,
         keep_module_symvers = keep_module_symvers,
+        keep_dot_config = keep_dot_config,
         srcs = srcs,
         outs = kernel_utils.transform_kernel_build_outs(name, "outs", outs),
         module_outs = kernel_utils.transform_kernel_build_outs(name, "module_outs", module_outs),
@@ -834,14 +920,14 @@ IGNORED because kernel_build.sanitizers is set!".format(this_label = ctx.label, 
 
 def _get_post_defconfig_fragments(
         kernel_build_name,
-        kernel_build_defconfig_fragments,
+        kernel_build_post_defconfig_fragments,
         kernel_build_arch,
         kernel_build_page_size,
         kernel_build_sanitizers,
         kernel_build_trim_nonlisted_kmi,
         **internal_kwargs):
     # Use a separate list to avoid .append on the provided object directly.
-    # kernel_build_defconfig_fragments could be a list or a select() expression.
+    # kernel_build_post_defconfig_fragments could be a list or a select() expression.
     additional_fragments = [
         Label("//build/kernel/kleaf:defconfig_fragment"),
         Label("//build/kernel/kleaf/impl/defconfig:debug"),
@@ -946,13 +1032,12 @@ def _get_post_defconfig_fragments(
     )
     additional_fragments.append(sanitizer_target)
 
-    if kernel_build_defconfig_fragments == None:
-        kernel_build_defconfig_fragments = []
+    if kernel_build_post_defconfig_fragments == None:
+        kernel_build_post_defconfig_fragments = []
 
-    # Do not call kernel_build_defconfig_fragments += ... to avoid
-    # modifying the incoming object from kernel_build.defconfig_fragments.
-    defconfig_fragments = kernel_build_defconfig_fragments + additional_fragments
-    return defconfig_fragments
+    # Do not call kernel_build_post_defconfig_fragments += ... to avoid
+    # modifying the incoming object from kernel_build.post_defconfig_fragments.
+    return kernel_build_post_defconfig_fragments + additional_fragments
 
 def _uniq(lst):
     """Deduplicates items in lst."""
@@ -1371,6 +1456,38 @@ def _get_copy_module_symvers_step(ctx):
         outputs = outputs,
     )
 
+def _get_dot_config_impl(subrule_ctx, config_out_dir, hermetic_tools):
+    """Gets .config from kernel_config's out_dir.
+
+    Args:
+        subrule_ctx: subrule_ctx
+        config_out_dir: out_dir from kernel_config()
+        hermetic_tools: the hermetic toolchain
+    """
+
+    # Automatic Exec Groups needs to be enabled in kernel_build() so the subrule can use toolchain
+    # resolution. For now, just let kernel_build gives us the hermetic tools.
+    output = subrule_ctx.actions.declare_file("{name}/{name}_dot_config".format(name = subrule_ctx.label.name))
+    command = hermetic_tools.setup + """
+        cp {config_out_dir}/.config {output}
+    """.format(
+        config_out_dir = config_out_dir.path,
+        output = output.path,
+    )
+    subrule_ctx.actions.run_shell(
+        inputs = [config_out_dir],
+        outputs = [output],
+        tools = hermetic_tools.deps,
+        command = command,
+        mnemonic = "KernelBuildDotConfig",
+        progress_message = "Copying .config %{label}",
+    )
+    return output
+
+_get_dot_config = subrule(
+    implementation = _get_dot_config_impl,
+)
+
 def _get_modinst_step(ctx, modules_staging_dir):
     module_strip_flag = "INSTALL_MOD_STRIP="
     if ctx.attr.strip_modules:
@@ -1742,10 +1859,15 @@ def create_serialized_env_info(
 
     setup_script = ctx.actions.declare_file(setup_script_name)
     setup_script_cmd = """
-        . {pre_setup_script}
+        if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+            . {pre_setup_script_short}
+        else
+            . {pre_setup_script}
+        fi
         {restore_outputs_cmd}
     """.format(
         pre_setup_script = pre_info.setup_script.path,
+        pre_setup_script_short = pre_info.setup_script.short_path,
         restore_outputs_cmd = restore_outputs_cmd,
     )
     ctx.actions.write(
@@ -2069,6 +2191,11 @@ def _create_infos(
     if kmi_strict_mode_out:
         default_info_files.append(kmi_strict_mode_out)
     default_info_files.extend(main_action_ret.module_symvers_outputs)
+    if ctx.attr.keep_dot_config:
+        default_info_files.append(_get_dot_config(
+            config_out_dir = ctx.file.config,
+            hermetic_tools = hermetic_toolchain.get(ctx),
+        ))
     default_info_files.extend(main_action_ret.gcno_outputs)
     if kmi_symbol_list_violations_check_out:
         default_info_files.append(kmi_symbol_list_violations_check_out)
@@ -2182,6 +2309,9 @@ _kernel_build = rule(
         "keep_module_symvers": attr.bool(
             doc = "If true, a copy of `Module.symvers` is kept, with the name `{name}_Module.symvers`",
         ),
+        "keep_dot_config": attr.bool(
+            doc = "If true, a copy of `.config` is kept, with the name `{name}_dot_config`",
+        ),
         "srcs": attr.label_list(mandatory = True, doc = "kernel sources", allow_files = True),
         "outs": attr.string_list(),
         "module_outs": attr.string_list(doc = "output *.ko files"),
@@ -2261,6 +2391,9 @@ _kernel_build = rule(
         "arch": attr.string(),
     } | _kernel_build_additional_attrs() | gcov_attrs(),
     toolchains = [hermetic_toolchain.type],
+    subrules = [
+        _get_dot_config,
+    ],
 )
 
 def _kernel_build_check_toolchain(ctx):
