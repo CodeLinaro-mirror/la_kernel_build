@@ -63,7 +63,7 @@ def _ddk_config_impl(ctx):
 def _create_merge_dot_config_step(defconfig_depset_written):
     defconfig_depset_file = defconfig_depset_written.depset_file
     cmd = """
-        if [[ -s {defconfig_depset_file} ]]; then
+        if grep -q '\\S' {defconfig_depset_file} ; then
             {merge_dot_config_cmd}
         fi
     """.format(
@@ -110,7 +110,7 @@ def _create_kconfig_ext_step(ctx, kconfig_depset_written):
         KCONFIG_EXT_PREFIX=$(realpath ${{ROOT_DIR}} --relative-to ${{ROOT_DIR}}/${{KERNEL_DIR}})/${{intermediates_dir}}/
 
         # Source Kconfig from depending modules
-        if [[ -s ${{kconfig_depset_file}} ]]; then
+        if grep -q '\\S' < ${{kconfig_depset_file}} ; then
             (
                 for kconfig in $(cat ${{kconfig_depset_file}}); do
                     mod_kconfig_rel=$(realpath ${{ROOT_DIR}} --relative-to ${{ROOT_DIR}}/${{KERNEL_DIR}})/${{kconfig}}
@@ -134,7 +134,7 @@ def _create_kconfig_ext_step(ctx, kconfig_depset_written):
 
 def _create_oldconfig_step(ctx, defconfig_depset_written, kconfig_depset_written):
     cmd = """
-        if [[ -s {defconfig_depset_file} ]] || [[ -s {kconfig_depset_file} ]]; then
+        if grep -q '\\S' < {defconfig_depset_file} || grep -q '\\S' < {kconfig_depset_file} ; then
             # Regenerate include/.
             # We could also run `make syncconfig` but syncconfig is an implementation detail
             # of Kbuild. Hence, just wipe out include/ to force it to be re-regenerated.
@@ -297,7 +297,7 @@ def _create_ddk_config_info(ctx):
     return ddk_config_subrule(
         kconfig_targets = [ctx.attr.kconfig] if ctx.attr.kconfig else [],
         defconfig_targets = [ctx.attr.defconfig] if ctx.attr.defconfig else [],
-        deps = ctx.attr.module_deps + ctx.attr.module_hdrs + ctx.attr.module_textual_hdrs,
+        deps = ctx.attr.module_deps + ctx.attr.module_hdrs,
         extra_defconfigs = ctx.attr.kernel_build[KernelBuildExtModuleInfo].ddk_module_defconfig_fragments,
     )
 
@@ -471,8 +471,8 @@ for its format.
         ),
         # Needed to compose DdkConfigInfo
         "module_deps": attr.label_list(),
-        "module_hdrs": attr.label_list(allow_files = [".h"]),
-        "module_textual_hdrs": attr.label_list(allow_files = True),
+        # allow_files = True because https://github.com/bazelbuild/bazel/issues/7516
+        "module_hdrs": attr.label_list(allow_files = True),
         "generate_btf": attr.bool(
             default = False,
             doc = "See [kernel_module.generate_btf](#kernel_module-generate_btf)",
