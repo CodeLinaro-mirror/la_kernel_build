@@ -53,10 +53,18 @@
 #     Space separated list of modules to be copied to <DIST_DIR>/unstripped
 #     for debugging purposes.
 #
+#   INPLACE_COMPILE
+#     Conditional flag for in-place compilation. When set to 'y', the intermediate
+#     files and final module output will be stored in the module source directory.
+#     In-place compilation is tot supported in DDK build.
+#
 #   MODULE_OUT
 #     Location to place compiled module output. When this option is specified,
 #     Only one EXT_MODULES may be specified. A symlink is created from the
 #     output Kbuild will use to MODULE_OUT.
+#
+#   OUT_DIR
+#     Location to store the intermediate kernel environemnt for module compilation.
 #
 # Environment variables to influence the stages of the kernel build.
 #
@@ -232,23 +240,33 @@ echo "========================================================"
 echo " Building external modules and installing them into staging directory"
 
 for EXT_MOD in ${EXT_MODULES}; do
-  # The path that we pass in via the variable M needs to be a relative path
-  # relative to the kernel source directory. The source files will then be
-  # looked for in ${KERNEL_DIR}/${EXT_MOD_REL} and the object files (i.e. .o
-  # and .ko) files will be stored in ${OUT_DIR}/${EXT_MOD_REL}. If we
-  # instead set M to an absolute path, then object (i.e. .o and .ko) files
-  # are stored in the module source directory which is not what we want.
-  EXT_MOD_REL=$(rel_path ${ROOT_DIR}/${EXT_MOD} ${KERNEL_DIR})
-  # The output directory must exist before we invoke make. Otherwise, the
-  # build system behaves horribly wrong.
+
   set -x
-  if [ -n "${MODULE_OUT}" ]; then
-    mkdir -p $(dirname ${OUT_DIR}/${EXT_MOD_REL})
-    mkdir -p ${MODULE_OUT}
-    rm -rf ${OUT_DIR}/${EXT_MOD_REL}
-    ln -srT ${MODULE_OUT} ${OUT_DIR}/${EXT_MOD_REL}
+  if [ -n "${INPLACE_COMPILE}" ]; then
+    if [ "$ENABLE_DDK_BUILD" == "true" ]; then
+      echo "error - inplace compilation is not supported in DDK build."
+      exit 1
+    fi
+    EXT_MOD_REL="$(realpath ${EXT_MOD})"
   else
-    mkdir -p ${OUT_DIR}/${EXT_MOD_REL}
+    # The path that we pass in via the variable M needs to be a relative path
+    # relative to the kernel source directory. The source files will then be
+    # looked for in ${KERNEL_DIR}/${EXT_MOD_REL} and the object files (i.e. .o
+    # and .ko) files will be stored in ${OUT_DIR}/${EXT_MOD_REL}. If we
+    # instead set M to an absolute path, then object (i.e. .o and .ko) files
+    # are stored in the module source directory which is not what we want.
+    EXT_MOD_REL="$(rel_path ${ROOT_DIR}/${EXT_MOD} ${KERNEL_DIR})"
+    # The output directory must exist before we invoke make. Otherwise, the
+    # build system behaves horribly wrong.
+
+    if [ -n "${MODULE_OUT}" ]; then
+      mkdir -p "$(dirname ${OUT_DIR}/${EXT_MOD_REL})"
+      mkdir -p "${MODULE_OUT}"
+      rm -rf "${OUT_DIR:?}/${EXT_MOD_REL:?}"
+      ln -srT "${MODULE_OUT}" "${OUT_DIR}/${EXT_MOD_REL}"
+    else
+      mkdir -p "${OUT_DIR}/${EXT_MOD_REL}"
+    fi
   fi
 
   module_path="$(echo "$EXT_MOD" | sed -e 's/^[\.\/]*//')"
