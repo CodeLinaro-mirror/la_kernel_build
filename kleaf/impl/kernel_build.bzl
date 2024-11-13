@@ -51,6 +51,7 @@ load(
     "KernelSerializedEnvInfo",
     "KernelToolchainInfo",
     "KernelUnstrippedModulesInfo",
+    "ModuleSymversFileInfo",
 )
 load(":compile_commands_utils.bzl", "compile_commands_utils")
 load(
@@ -629,15 +630,6 @@ def kernel_build(
     kwargs_with_manual = dict(kwargs)
     kwargs_with_manual["tags"] = ["manual"]
 
-    lto = select({
-        Label("//build/kernel/kleaf:lto_is_none"): "none",
-        Label("//build/kernel/kleaf:lto_is_thin"): "thin",
-        Label("//build/kernel/kleaf:lto_is_full"): "full",
-        Label("//build/kernel/kleaf:lto_is_fast"): "fast",
-        # TODO(b/229662633): Allow kernel_build() macro to set this value.
-        Label("//build/kernel/kleaf:lto_is_default"): "default",
-    })
-
     if defconfig_fragments:
         if post_defconfig_fragments:
             fail("""{}: defconfig_fragments and post_defconfig_fragments cannot be set simultaneously.
@@ -718,7 +710,6 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         dtstree = dtstree,
         srcs = srcs,
         kbuild_symtypes = kbuild_symtypes,
-        lto = lto,
         make_goals = make_goals,
         target_platform = name + "_platform_target",
         exec_platform = select({
@@ -771,7 +762,6 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         raw_kmi_symbol_list = raw_kmi_symbol_list_target_name,
         module_signing_key = module_signing_key,
         system_trusted_key = system_trusted_key,
-        lto = lto,
         defconfig = defconfig,
         pre_defconfig_fragments = pre_defconfig_fragments,
         post_defconfig_fragments = post_defconfig_fragments,
@@ -944,6 +934,7 @@ def _get_post_defconfig_fragments(
         Label("//build/kernel/kleaf:defconfig_fragment"),
         Label("//build/kernel/kleaf/impl/defconfig:debug"),
         Label("//build/kernel/kleaf/impl/defconfig:gcov"),
+        Label("//build/kernel/kleaf/impl/defconfig:lto"),
         Label("//build/kernel/kleaf/impl/defconfig:rust"),
         Label("//build/kernel/kleaf/impl/defconfig:rust_ashmem"),
         Label("//build/kernel/kleaf/impl/defconfig:zstd_dwarf_compression"),
@@ -2230,6 +2221,9 @@ def _create_infos(
         # For kernel_build_test
         runfiles = ctx.runfiles(files = default_info_files),
     )
+    module_symvers_file_info = ModuleSymversFileInfo(
+        module_symvers = depset(main_action_ret.module_symvers_outputs),
+    )
 
     return [
         cmds_info,
@@ -2252,6 +2246,7 @@ def _create_infos(
         ctx.attr.config[KernelToolchainInfo],
         output_group_info,
         default_info,
+        module_symvers_file_info,
     ]
 
 def _kernel_build_impl(ctx):
