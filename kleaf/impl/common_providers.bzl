@@ -401,12 +401,28 @@ DdkSubmoduleInfo = provider(
 
             - `out` is the name of an output file
             - `src` is a label containing the label of the target declaring the output
-             file.""",
+             file.
+
+            For `ddk_submodule` and regular `ddk_module`, this contains a single struct.
+            For the top-level `ddk_module` with submodules, this contains all structs from its
+            submodules.""",
         "srcs": """A [depset](https://bazel.build/extending/depsets) of source files to build the
             submodule.""",
+        "out": """A single `out` of this `ddk_submodule` or regular `ddk_module`. None for the
+            top-level `ddk_module` with submodules""",
         "kernel_module_deps": """A [depset](https://bazel.build/extending/depsets) of
             `KernelModuleDepInfo` of dependent targets of this submodules that are
             kernel_module's.""",
+        "linux_includes_include_infos": """
+            For `ddk_submodule`, this is set to let the top-level `ddk_module` properly
+            generates the `LINUXINCLUDE` in the Kbuild file. This contains a
+            [depset](https://bazel.build/extending/depsets) of `DdkIncludeInfo` constructed from
+            deps, hdrs, texture_hdrs, kernel_build, etc, to build the top-level `ddk_module`.
+
+            Only `linux_includes` in this field should be read; hence the name. `includes` are set
+            in a per-submodule basis and handled within the implementation of `ddk_submodule`. Files
+            to build the submodule are sent to the top-level `ddk_module` via `srcs`.
+        """,
     },
 )
 
@@ -417,6 +433,32 @@ DdkConfigInfo = provider(
             of this and its dependencies. Uses `postorder` ordering (dependencies first).""",
         "defconfig": """A [depset](https://bazel.build/extending/depsets) containing the Kconfig
             file of this and its dependencies. Uses `postorder` ordering (dependencies first).""",
+    },
+)
+
+DdkIncludeInfo = provider(
+    """Describes include info of current target, excluding dependencies.
+
+    This info represents a list of include paths relative to execroot. It is
+    interpreted as follows:
+
+    ```
+    [prefix + include for include in includes]
+    ```
+
+    If there are generated files in `direct_files`, the list further expands to:
+
+    ```
+    [root + prefix + include for include in includes for root in
+        [file.root for file in <generated .h files in direct_files>]]
+    ```
+    """,
+    fields = {
+        "prefix": """When prepended to an item in `includes` or `linux_includes`,
+            the item becomes the path below execroot.""",
+        "direct_files": "depset of direct file dependencies of this target.",
+        "includes": "A list of `includes` attribute of this target. Not prefixed.",
+        "linux_includes": "Like `includes` but added to `LINUXINCLUDE`. Not prefixed.",
     },
 )
 

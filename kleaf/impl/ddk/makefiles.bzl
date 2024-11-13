@@ -17,20 +17,36 @@
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load(
     ":common_providers.bzl",
+    "DdkIncludeInfo",
     "DdkSubmoduleInfo",
     "ModuleSymversInfo",
 )
 load(":ddk/ddk_conditional_filegroup.bzl", "DdkConditionalFilegroupInfo")
 load(
     ":ddk/ddk_headers.bzl",
+    "DDK_INCLUDE_INFO_ORDER",
     "DdkHeadersInfo",
     "ddk_headers_common_impl",
+    "get_ddk_transitive_include_infos",
     "get_headers_depset",
-    "get_include_depset",
 )
 load(":utils.bzl", "kernel_utils")
 
 visibility("//build/kernel/kleaf/...")
+
+def _gather_prefixed_includes_common(ddk_include_info, info_attr_name):
+    ret = []
+    for include_dir in getattr(ddk_include_info, info_attr_name):
+        ret.append(paths.normalize(paths.join(ddk_include_info.prefix, include_dir)))
+    return ret
+
+def gather_prefixed_includes(ddk_include_info):
+    """Returns a list of ddk_include_info.includes prefixed with ddk_include_info.prefix"""
+    return _gather_prefixed_includes_common(ddk_include_info, "includes")
+
+def _gather_prefixed_linux_includes(ddk_include_info):
+    """Returns a list of ddk_include_info.linux_includes prefixed with ddk_include_info.prefix"""
+    return _gather_prefixed_includes_common(ddk_include_info, "linux_includes")
 
 def _handle_copt(ctx):
     # copt values contains prefixing "-", so we must use --copt=-x --copt=-y to avoid confusion.
@@ -196,19 +212,27 @@ def _makefiles_impl(ctx):
 
     _check_submodule_same_package(module_label, submodule_deps)
 
-    include_dirs = get_include_depset(
-        module_label,
-        ctx.attr.module_deps + ctx.attr.module_hdrs,
-        ctx.attr.module_includes,
-        "includes",
+    direct_include_infos = [DdkIncludeInfo(
+        prefix = paths.join(module_label.workspace_root, module_label.package),
+        direct_files = depset(),
+        includes = ctx.attr.module_includes,
+        linux_includes = ctx.attr.module_linux_includes,
+    )]
+    include_infos = depset(
+        direct_include_infos,
+        transitive = get_ddk_transitive_include_infos(
+            ctx.attr.module_deps + ctx.attr.module_hdrs + ctx.attr.module_textual_hdrs,
+        ),
+        order = DDK_INCLUDE_INFO_ORDER,
     )
 
-    linux_include_dirs = get_include_depset(
-        module_label,
-        ctx.attr.module_deps + ctx.attr.module_hdrs,
-        ctx.attr.module_linux_includes,
-        "linux_includes",
-    )
+    submodule_linux_includes = {}
+    for dep in submodule_deps:
+        out = dep[DdkSubmoduleInfo].out
+        if not out:
+            continue
+        dirname = paths.dirname(out)
+        submodule_linux_includes.setdefault(dirname, []).append(dep[DdkSubmoduleInfo].linux_includes_include_infos)
 
     module_symvers_depset = depset(transitive = [
         target[ModuleSymversInfo].restore_paths
@@ -239,9 +263,29 @@ def _makefiles_impl(ctx):
 
     if ctx.attr.top_level_makefile:
         args.add("--produce-top-level-makefile")
+    if ctx.attr.kbuild_has_linux_include:
+        args.add("--kbuild-has-linux-include")
 
-    args.add_all("--linux-include-dirs", linux_include_dirs, uniquify = True)
-    args.add_all("--include-dirs", include_dirs, uniquify = True)
+    for dirname, linux_includes_include_infos_list in submodule_linux_includes.items():
+        args.add("--submodule-linux-include-dirs", dirname)
+        args.add_all(
+            depset(transitive = linux_includes_include_infos_list),
+            map_each = _gather_prefixed_linux_includes,
+            uniquify = True,
+        )
+
+    args.add_all(
+        "--linux-include-dirs",
+        include_infos,
+        map_each = _gather_prefixed_linux_includes,
+        uniquify = True,
+    )
+    args.add_all(
+        "--include-dirs",
+        include_infos,
+        map_each = gather_prefixed_includes,
+        uniquify = True,
+    )
 
     if ctx.attr.top_level_makefile:
         args.add_all("--module-symvers-list", module_symvers_depset)
@@ -301,11 +345,13 @@ def _makefiles_impl(ctx):
         DefaultInfo(files = depset([output_makefiles])),
         DdkSubmoduleInfo(
             outs = depset(outs_depset_direct, transitive = outs_depset_transitive),
+            out = ctx.attr.module_out,
             srcs = depset(transitive = srcs_depset_transitive),
             kernel_module_deps = depset(
                 [kernel_utils.create_kernel_module_dep_info(target) for target in kernel_module_deps],
                 transitive = [dep[DdkSubmoduleInfo].kernel_module_deps for dep in submodule_deps],
             ),
+            linux_includes_include_infos = include_infos,
         ),
         ModuleSymversInfo(
             restore_paths = module_symvers_depset,
@@ -329,6 +375,10 @@ makefiles = rule(
         "module_local_defines": attr.string_list(),
         "module_copts": attr.string_list(),
         "top_level_makefile": attr.bool(),
+        "kbuild_has_linux_include": attr.bool(
+            doc = "Whether to add LINUXINCLUDE to Kbuild",
+            default = True,
+        ),
         "internal_target_fail_message": attr.string(
             doc = "For testing only. Assert that this target to fail to build with the given message.",
         ),

@@ -12,21 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Tests ddk_headers."""
+
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("//build/kernel/kleaf/impl:ddk/ddk_headers.bzl", "DdkHeadersInfo", "ddk_headers")
+load("//build/kernel/kleaf/impl:ddk/makefiles.bzl", "gather_prefixed_includes")
 load("//build/kernel/kleaf/tests:failure_test.bzl", "failure_test")
 
 def check_ddk_headers_info(ctx, env):
-    """Check that the target implements DdkHeadersInfo with the expected `includes` and `hdrs`."""
+    """Check that the target implements DdkHeadersInfo with the expected `includes` and `hdrs`.
+
+    Args:
+        ctx: ctx
+        env: test environment
+    """
     target_under_test = analysistest.target_under_test(env)
 
     # Check content + ordering of include dirs, so do list comparison.
+    include_dirs = []
+    include_infos = target_under_test[DdkHeadersInfo].include_infos.to_list()
+    for include_info in include_infos:
+        include_dirs += gather_prefixed_includes(include_info)
     asserts.equals(
         env,
         ctx.attr.expected_includes,
-        target_under_test[DdkHeadersInfo].includes.to_list(),
+        include_dirs,
     )
     asserts.set_equals(
         env,
@@ -79,7 +91,11 @@ def _ddk_headers_bad_includes_test(name, includes, error_message):
     )
 
 def ddk_headers_test_suite(name):
-    """Defines analysis test for `ddk_headers`."""
+    """Defines analysis test for `ddk_headers`.
+
+    Args:
+        name: name of test suite
+    """
 
     tests = []
 
