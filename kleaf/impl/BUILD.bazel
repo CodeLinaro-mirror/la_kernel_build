@@ -114,6 +114,7 @@ bzl_library(
         "kmi_symbol_list.bzl",
         "local_repository.bzl",
         "merge_kzip.bzl",
+        "merge_module_symvers.bzl",
         "merged_kernel_uapi_headers.bzl",
         "modules_prepare.bzl",
         "native_binary_with_arg.bzl",
@@ -122,6 +123,7 @@ bzl_library(
         "platform_transition.bzl",
         "python.bzl",
         "raw_kmi_symbol_list.bzl",
+        "rustavailable.bzl",
         "scripts_config_arg_builder.bzl",
         "set_kernel_dir.bzl",
         "srcs_aspect.bzl",
@@ -496,18 +498,6 @@ alias(
 )
 
 # Local build platforms
-## host constraints + musl
-## Note that this does not respect --host_platform.
-platform(
-    name = "host_musl",
-    constraint_values = [
-        "//build/kernel/kleaf/platforms/libc:musl",
-    ],
-    parents = ["@platforms//host"],
-    visibility = [
-        "//build/kernel:__subpackages__",
-    ],
-)
 
 ## host constraints + glibc
 ## Note that this does not respect --host_platform and kernel_build.toolchain_version.
@@ -519,6 +509,8 @@ platform(
     parents = ["@platforms//host"],
     visibility = ["//visibility:private"],
 )
+
+# LINT.IfChange(platforms)
 
 # 32-bit
 platform(
@@ -563,6 +555,8 @@ platform(
         "@platforms//cpu:x86_64",
     ],
 )
+
+# LINT.ThenChange(/kleaf/platforms/config_settings/BUILD.bazel)
 
 python_runtime_files(
     name = "python_runtime_files",

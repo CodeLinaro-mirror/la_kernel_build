@@ -49,9 +49,9 @@ def _check_defconfig_minimized_impl(
         subrule_ctx,
         defconfig_info,
         pre_defconfig_fragment_files,
-        attr_value):
+        check_defconfig_attr_value):
     """Checks that defconfig matches the result of savedefconfig. """
-    if not attr_value:
+    if check_defconfig_attr_value != "minimized":
         return StepInfo(
             inputs = depset(),
             cmd = "",
@@ -65,7 +65,7 @@ def _check_defconfig_minimized_impl(
         if defconfig_info:
             defconfig = defconfig_info.file.path if defconfig_info.file else defconfig_info.make_target
 
-        fail("""{kernel_build_label}: check_defconfig_minimized=True requires the following:
+        fail("""{kernel_build_label}: check_defconfig="minimized" requires the following:
 - defconfig is set and not phony_defconfig (but it is {defconfig})
 - pre_defconfig_fragments is not set (but it is {pre_defconfig_fragment_files})
 """.format(
@@ -75,8 +75,8 @@ def _check_defconfig_minimized_impl(
         ))
 
     cmd = """
-        if [[ "${{POST_DEFCONFIG_CMDS}}" =~ check_defconfig_minimized ]]; then
-            echo "ERROR: Please delete check_defconfig_minimized from POST_DEFCONFIG_CMDS." >&2
+        if [[ "${{POST_DEFCONFIG_CMDS}}" =~ check_defconfig ]]; then
+            echo "ERROR: Please delete check_defconfig from POST_DEFCONFIG_CMDS." >&2
             exit 1
         fi
 
@@ -93,93 +93,23 @@ _check_defconfig_minimized = subrule(
     implementation = _check_defconfig_minimized_impl,
 )
 
-def _config_lto_impl(_subrule_ctx, lto_config_flag):
-    """Return configs for LTO.
-
-    Args:
-        _subrule_ctx: subrule_ctx
-        lto_config_flag: value of lto attr
-    Returns:
-        a list of arguments to `scripts/config`
-    """
-
-    lto_configs = []
-
-    if lto_config_flag == "fast":
-        # buildifier: disable=print
-        print("\nWARNING: --lto=fast is deprecated. Falling back to none.")
-        lto_config_flag = "none"
-
-    if lto_config_flag == "none":
-        lto_configs += [
-            _config.disable("LTO_CLANG"),
-            _config.enable("LTO_NONE"),
-            _config.disable("LTO_CLANG_THIN"),
-            _config.disable("LTO_CLANG_FULL"),
-            _config.disable("THINLTO"),
-            _config.set_val("FRAME_WARN", 0),
-        ]
-    elif lto_config_flag == "thin":
-        lto_configs += [
-            _config.enable("LTO_CLANG"),
-            _config.disable("LTO_NONE"),
-            _config.enable("LTO_CLANG_THIN"),
-            _config.disable("LTO_CLANG_FULL"),
-            _config.enable("THINLTO"),
-        ]
-    elif lto_config_flag == "full":
-        lto_configs += [
-            _config.enable("LTO_CLANG"),
-            _config.disable("LTO_NONE"),
-            _config.disable("LTO_CLANG_THIN"),
-            _config.enable("LTO_CLANG_FULL"),
-            _config.disable("THINLTO"),
-        ]
-
-    return lto_configs
-
-_config_lto = subrule(implementation = _config_lto_impl)
-
-def _config_trim_impl(subrule_ctx, trim_attr_value, raw_kmi_symbol_list_file, *, _debug, _kgdb):
+def _config_trim_impl(subrule_ctx, trim_attr_value, raw_kmi_symbol_list_file):
     """Return configs for trimming.
 
     Args:
         subrule_ctx: subrule_ctx
         trim_attr_value: value of trim_nonlisted_kmi_utils.get_value(ctx)
         raw_kmi_symbol_list_file: the raw_kmi_symbol_list file
-        _debug: --debug
-        _kgdb: --kgdb
     Returns:
         a list of arguments to `scripts/config`
     """
     if trim_attr_value and not raw_kmi_symbol_list_file:
         fail("{}: trim_nonlisted_kmi is set but raw_kmi_symbol_list is empty.".format(subrule_ctx.label))
 
-    if not trim_attr_value:
-        return []
-
-    if _kgdb[BuildSettingInfo].value:
-        # buildifier: disable=print
-        print("\nWARNING: {this_label}: Symbol trimming \
-              IGNORED because --kgdb is set!".format(this_label = subrule_ctx.label))
-        return []
-
-    if _debug[BuildSettingInfo].value:
-        # buildifier: disable=print
-        print("\nWARNING: {this_label}: Symbol trimming \
-              IGNORED because --debug is set!".format(this_label = subrule_ctx.label))
-        return []
-
-    return [
-        _config.enable("TRIM_UNUSED_KSYMS"),
-    ]
+    return []
 
 _config_trim = subrule(
     implementation = _config_trim_impl,
-    attrs = {
-        "_debug": attr.label(default = "//build/kernel/kleaf:debug"),
-        "_kgdb": attr.label(default = "//build/kernel/kleaf:kgdb"),
-    },
 )
 
 def _config_symbol_list_impl(_subrule_ctx, raw_kmi_symbol_list_file):
@@ -267,7 +197,6 @@ _check_trimming_disabled = subrule(
 
 def _reconfig_impl(
         _subrule_ctx,
-        lto_config_flag,
         trim_attr_value,
         raw_kmi_symbol_list_file,
         module_signing_key_file,
@@ -277,7 +206,6 @@ def _reconfig_impl(
 
     Args:
         _subrule_ctx: subrule_ctx
-        lto_config_flag: value of lto attr
         trim_attr_value: value of trim_nonlisted_kmi_utils.get_value(ctx)
         raw_kmi_symbol_list_file: the raw_kmi_symbol_list file
         module_signing_key_file: file of module_signing_key
@@ -290,9 +218,6 @@ def _reconfig_impl(
     configs = []
     apply_post_defconfig_fragments_cmd = ""
 
-    configs += _config_lto(
-        lto_config_flag = lto_config_flag,
-    )
     configs += _config_trim(
         trim_attr_value = trim_attr_value,
         raw_kmi_symbol_list_file = raw_kmi_symbol_list_file,
@@ -351,7 +276,6 @@ _reconfig = subrule(
     implementation = _reconfig_impl,
     subrules = [
         _check_trimming_disabled,
-        _config_lto,
         _config_trim,
         _config_symbol_list,
         _config_keys,
@@ -479,7 +403,6 @@ _make_defconfig = subrule(
 
 def _post_defconfig_impl(
         _subrule_ctx,
-        lto_config_flag,
         trim_attr_value,
         raw_kmi_symbol_list_file,
         module_signing_key_file,
@@ -489,7 +412,6 @@ def _post_defconfig_impl(
 
     Args:
         _subrule_ctx: subrule_ctx
-        lto_config_flag: value of lto attr
         trim_attr_value: value of trim_nonlisted_kmi_utils.get_value(ctx)
         raw_kmi_symbol_list_file: the raw_kmi_symbol_list file
         module_signing_key_file: file of module_signing_key
@@ -502,7 +424,6 @@ def _post_defconfig_impl(
     """
 
     reconfig_ret = _reconfig(
-        lto_config_flag = lto_config_flag,
         trim_attr_value = trim_attr_value,
         raw_kmi_symbol_list_file = raw_kmi_symbol_list_file,
         module_signing_key_file = module_signing_key_file,
@@ -525,10 +446,19 @@ _post_defconfig = subrule(
 
 def _check_dot_config_against_defconfig_impl(
         _subrule_ctx,
+        check_defconfig_attr_value,
         defconfig_info,
         pre_defconfig_fragment_files,
         post_defconfig_fragment_files):
     """Checks .config against defconfig and fragments."""
+
+    if check_defconfig_attr_value == "disabled":
+        return StepInfo(
+            inputs = depset(),
+            cmd = "",
+            outputs = [],
+            tools = [],
+        )
 
     check_defconfig_step = None
     transitive_inputs = []
@@ -603,7 +533,7 @@ def _kernel_config_impl(ctx):
     ]
 
     check_defconfig_minimized_ret = _check_defconfig_minimized(
-        attr_value = ctx.attr.check_defconfig_minimized,
+        check_defconfig_attr_value = ctx.attr.check_defconfig,
         defconfig_info = defconfig_info,
         pre_defconfig_fragment_files = ctx.files.pre_defconfig_fragments,
     )
@@ -615,6 +545,7 @@ def _kernel_config_impl(ctx):
     if not check_defconfig_minimized_ret.cmd:
         step_returns.append(
             _check_dot_config_against_defconfig(
+                check_defconfig_attr_value = ctx.attr.check_defconfig,
                 defconfig_info = defconfig_info,
                 pre_defconfig_fragment_files = ctx.files.pre_defconfig_fragments,
                 post_defconfig_fragment_files = [],
@@ -623,7 +554,6 @@ def _kernel_config_impl(ctx):
 
     step_returns += [
         _post_defconfig(
-            lto_config_flag = ctx.attr.lto,
             trim_attr_value = trim_nonlisted_kmi_utils.get_value(ctx),
             raw_kmi_symbol_list_file = utils.optional_file(ctx.files.raw_kmi_symbol_list),
             module_signing_key_file = ctx.file.module_signing_key,
@@ -631,6 +561,7 @@ def _kernel_config_impl(ctx):
             post_defconfig_fragment_files = ctx.files.post_defconfig_fragments,
         ),
         _check_dot_config_against_defconfig(
+            check_defconfig_attr_value = ctx.attr.check_defconfig,
             defconfig_info = DefconfigInfo(file = None, make_target = None),
             pre_defconfig_fragment_files = [],
             post_defconfig_fragment_files = ctx.files.post_defconfig_fragments,
@@ -982,6 +913,7 @@ def get_config_setup_command(
 def _kernel_config_additional_attrs():
     return dicts.add(
         kernel_config_settings.of_kernel_config(),
+        trim_nonlisted_kmi_utils.attrs(),
         cache_dir.attrs(),
     )
 
@@ -1026,7 +958,11 @@ kernel_config = rule(
             doc = "**post** defconfig fragments",
             allow_files = True,
         ),
-        "check_defconfig_minimized": attr.bool(doc = "Checks defconfig against savedefconfig"),
+        "check_defconfig": attr.string(
+            doc = "minimized: Checks defconfig against savedefconfig. match: check values only.",
+            default = "match",
+            values = ["disabled", "minimized", "match"],
+        ),
         "_config_is_stamp": attr.label(default = "//build/kernel/kleaf:config_stamp"),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
     } | _kernel_config_additional_attrs(),

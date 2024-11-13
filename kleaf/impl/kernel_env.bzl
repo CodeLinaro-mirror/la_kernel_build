@@ -248,6 +248,9 @@ def _kernel_env_impl(ctx):
         bin_dir_and_workspace_root = ctx.bin_dir.path
 
     command += """
+          export DEPMOD=depmod
+          export DTC=$(command -v dtc)
+          export LLVM=1
         # create a build environment
           source {build_utils_sh}
           export BUILD_CONFIG={build_config}
@@ -430,11 +433,15 @@ def _get_env_setup_cmds(ctx):
 
         # bin_dir for Kleaf repository, relative to execroot
         # This is:
+        # For `bazel build`:
         # - either bazel-out/k8-fastbuild/bin if @kleaf is the root module;
         # - or bazel-out/k8-fastbuild/bin/external/kleaf (or some variations of it)
         #   if @kleaf is a dependent module
+        # For `bazel run`:
+        # - either . if @kleaf is the root module
+        # - or external/kleaf (or some variations of it) if @kleaf is a dependent module
         if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
-            KLEAF_BIN_DIR_AND_WORKSPACE_ROOT="${{KLEAF_REPO_WORKSPACE_ROOT}}"
+            KLEAF_BIN_DIR_AND_WORKSPACE_ROOT="${{KLEAF_REPO_WORKSPACE_ROOT:-.}}"
         else
             KLEAF_BIN_DIR_AND_WORKSPACE_ROOT="{bin_dir}${{KLEAF_REPO_WORKSPACE_ROOT:+/$KLEAF_REPO_WORKSPACE_ROOT}}"
         fi

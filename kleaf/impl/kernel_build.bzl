@@ -51,6 +51,7 @@ load(
     "KernelSerializedEnvInfo",
     "KernelToolchainInfo",
     "KernelUnstrippedModulesInfo",
+    "ModuleSymversFileInfo",
 )
 load(":compile_commands_utils.bzl", "compile_commands_utils")
 load(
@@ -77,6 +78,7 @@ load(":kgdb.bzl", "kgdb")
 load(":kmi_symbol_list.bzl", _kmi_symbol_list = "kmi_symbol_list")
 load(":modules_prepare.bzl", "modules_prepare")
 load(":raw_kmi_symbol_list.bzl", "raw_kmi_symbol_list")
+load(":rustavailable.bzl", "rustavailable")
 load(":utils.bzl", "kernel_utils", "utils")
 
 visibility("//build/kernel/kleaf/...")
@@ -128,7 +130,7 @@ def kernel_build(
         pre_defconfig_fragments = None,
         post_defconfig_fragments = None,
         defconfig_fragments = None,
-        check_defconfig_minimized = None,
+        check_defconfig = None,
         page_size = None,
         pack_module_env = None,
         sanitizers = None,
@@ -142,8 +144,7 @@ def kernel_build(
     via srcs (using a `glob()`). outs declares the output files that are surviving
     the build. The effective output file names will be
     `$(name)/$(output_file)`. Any other artifact is not guaranteed to be
-    accessible after the rule has run. The default `toolchain_version` is defined
-    with the value in `common/build.config.constants`, but can be overriden.
+    accessible after the rule has run.
 
     A few additional labels are generated.
     For example, if name is `"kernel_aarch64"`:
@@ -462,7 +463,7 @@ def kernel_build(
           [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes).
           The toolchain version to depend on.
 
-          It is deprecated to specify `toolchain_version`. Instead, delete the attribute, so it
+          It is an error to specify `toolchain_version`. Instead, delete the attribute, so it
           uses the default clang toolchain. The default clang toolchain version is specified in the
           `@kernel_toolchain_info` repository, usually containing the content of
           `common/build.config.constants`.
@@ -490,6 +491,7 @@ def kernel_build(
             For mixed builds (`base_kernel` is set), this is usually set to the `defconfig`
             of the `base_kernel`, e.g. `//common:arch/arm64/configs/gki_defconfig`.
 
+            If `check_defconfig` is not `disabled`,
             Items must be present in the intermediate `.config` before `post_defconfig_fragments`
             are applied. See `build/kernel/kleaf/docs/kernel_config.md` for details.
 
@@ -522,6 +524,7 @@ def kernel_build(
             **NOTE**: **Order matters**, unlike `post_defconfig_fragments`. If there are conflicting
             items, later items overrides earlier items.
 
+            If `check_defconfig` is not `disabled`,
             Items must be present in the intermediate `.config` before `post_defconfig_fragments`
             are applied. See `build/kernel/kleaf/docs/kernel_config.md` for details.
         post_defconfig_fragments: A list of fragments that are applied to the defconfig
@@ -541,14 +544,21 @@ def kernel_build(
             to `POST_DEFCONFIG_CMDS`. If you had `PRE_DEFCONFIG_CMDS` applying fragments in your
             build configs, consider using `pre_defconfig_fragments` instead.
 
+            If `check_defconfig` is not `disabled`,
             Items must be present in the final `.config`. See
             `build/kernel/kleaf/docs/kernel_config.md` for details.
         defconfig_fragments: **Deprecated**. Same as `post_defconfig_fragments`.
-        check_defconfig_minimized: If `True`, checks `.config` against the result of
+        check_defconfig: Default is `match`.
+
+            If `disabled`, no check is performed.
+
+            If `match`, checks `.config` against the `defconfig`, `pre_defconfig_fragments`
+            and ` post_defconfig_fragments`.
+
+            If `minimized`, checks `.config` against the result of
             `make savedefconfig` right after `make defconfig`, but before
             `post_defconfig_fragments` are applied.
-
-            This can be set to true **only if** `defconfig` is set and `pre_defconfig_fragments`
+            This can be set to `minimized` **only if** `defconfig` is set and `pre_defconfig_fragments`
             is not set.
         page_size: Default is `"default"`. Page size of the kernel build.
 
@@ -614,22 +624,11 @@ def kernel_build(
     if arch == None:
         arch = "arm64"
 
-    trim_nonlisted_kmi = trim_nonlisted_kmi_utils.selected_attr(trim_nonlisted_kmi)
-
     internal_kwargs = dict(kwargs)
     internal_kwargs.pop("visibility", None)
 
     kwargs_with_manual = dict(kwargs)
     kwargs_with_manual["tags"] = ["manual"]
-
-    lto = select({
-        Label("//build/kernel/kleaf:lto_is_none"): "none",
-        Label("//build/kernel/kleaf:lto_is_thin"): "thin",
-        Label("//build/kernel/kleaf:lto_is_full"): "full",
-        Label("//build/kernel/kleaf:lto_is_fast"): "fast",
-        # TODO(b/229662633): Allow kernel_build() macro to set this value.
-        Label("//build/kernel/kleaf:lto_is_default"): "default",
-    })
 
     if defconfig_fragments:
         if post_defconfig_fragments:
@@ -652,18 +651,26 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         kernel_build_arch = arch,
         kernel_build_page_size = page_size,
         kernel_build_sanitizers = sanitizers,
+        **internal_kwargs
+    )
+    trim_post_defconfig_fragment = _get_trim_post_defconfig_fragment_target(
+        kernel_build_name = name,
         kernel_build_trim_nonlisted_kmi = trim_nonlisted_kmi,
         **internal_kwargs
     )
 
+    # Do not use append because the returned value may not be a list.
+    # buildifier: disable=list-append
+    post_defconfig_fragments += [trim_post_defconfig_fragment]
+
+    # Prevent accidental usage
+    trim_nonlisted_kmi = struct(message = "DO NOT USE ME! Use trim_post_defconfig_fragment instead.")
+
     toolchain_constraints = []
     if toolchain_version != None:
-        # buildifier: disable=print
-        print("\nWARNING: {}: kernel_build.toolchain_version is deprecated. Please delete it.".format(
+        fail("{}: kernel_build.toolchain_version is deprecated. Please delete it.".format(
             native.package_relative_label(name),
         ))
-        toolchain_constraint = Label("//prebuilts/clang/host/linux-x86/kleaf:{}".format(toolchain_version))
-        toolchain_constraints.append(Label(toolchain_constraint))
     else:
         # use default toolchain, e.g.
         # //prebuilts/clang/host/linux-x86/kleaf:android_arm64_clang_toolchain
@@ -703,8 +710,6 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         dtstree = dtstree,
         srcs = srcs,
         kbuild_symtypes = kbuild_symtypes,
-        trim_nonlisted_kmi = trim_nonlisted_kmi,
-        lto = lto,
         make_goals = make_goals,
         target_platform = name + "_platform_target",
         exec_platform = select({
@@ -753,15 +758,14 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         name = config_target_name,
         env = env_target_name,
         srcs = srcs,
-        trim_nonlisted_kmi = trim_nonlisted_kmi,
+        trim_nonlisted_kmi = trim_post_defconfig_fragment,
         raw_kmi_symbol_list = raw_kmi_symbol_list_target_name,
         module_signing_key = module_signing_key,
         system_trusted_key = system_trusted_key,
-        lto = lto,
         defconfig = defconfig,
         pre_defconfig_fragments = pre_defconfig_fragments,
         post_defconfig_fragments = post_defconfig_fragments,
-        check_defconfig_minimized = check_defconfig_minimized,
+        check_defconfig = check_defconfig,
         **internal_kwargs
     )
 
@@ -770,7 +774,6 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         config = config_target_name,
         srcs = srcs,
         outdir_tar_gz = modules_prepare_target_name + "/" + _MODULES_PREPARE_ARCHIVE,
-        trim_nonlisted_kmi = trim_nonlisted_kmi,
         force_generate_headers = modules_prepare_force_generate_headers,
         **internal_kwargs
     )
@@ -799,7 +802,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         src_protected_exports_list = protected_exports_list,
         src_protected_modules_list = protected_modules_list,
         src_kmi_symbol_list = kmi_symbol_list,
-        trim_nonlisted_kmi = trim_nonlisted_kmi,
+        trim_nonlisted_kmi = trim_post_defconfig_fragment,
         pack_module_env = pack_module_env,
         sanitizers = sanitizers,
         ddk_module_defconfig_fragments = ddk_module_defconfig_fragments,
@@ -924,7 +927,6 @@ def _get_post_defconfig_fragments(
         kernel_build_arch,
         kernel_build_page_size,
         kernel_build_sanitizers,
-        kernel_build_trim_nonlisted_kmi,
         **internal_kwargs):
     # Use a separate list to avoid .append on the provided object directly.
     # kernel_build_post_defconfig_fragments could be a list or a select() expression.
@@ -932,6 +934,7 @@ def _get_post_defconfig_fragments(
         Label("//build/kernel/kleaf:defconfig_fragment"),
         Label("//build/kernel/kleaf/impl/defconfig:debug"),
         Label("//build/kernel/kleaf/impl/defconfig:gcov"),
+        Label("//build/kernel/kleaf/impl/defconfig:lto"),
         Label("//build/kernel/kleaf/impl/defconfig:rust"),
         Label("//build/kernel/kleaf/impl/defconfig:rust_ashmem"),
         Label("//build/kernel/kleaf/impl/defconfig:zstd_dwarf_compression"),
@@ -981,30 +984,6 @@ def _get_post_defconfig_fragments(
     )
     additional_fragments.append(page_size_target)
 
-    module_protection_target = kernel_build_name + "_defconfig_fragment_module_protection"
-
-    file_selector_bool(
-        name = module_protection_target,
-        first_selector = select({
-            Label("//build/kernel/kleaf/impl:force_disable_trim_is_true"): False,
-            Label("//build/kernel/kleaf:debug_is_true"): False,
-            Label("//build/kernel/kleaf:gcov_is_true"): False,
-            Label("//build/kernel/kleaf:kasan_is_true"): False,
-            Label("//build/kernel/kleaf:kcsan_is_true"): False,
-            Label("//build/kernel/kleaf:kgdb_is_true"): False,
-            "//conditions:default": None,
-        }),
-        second_selector = kernel_build_trim_nonlisted_kmi,
-        # When the value is not specified in the kernel_build rule, do nothing.
-        third_selector = True,
-        files = {
-            Label("//build/kernel/kleaf/impl/defconfig:gki_module_protection_disabled_defconfig"): "False",
-            Label("//build/kernel/kleaf/impl:empty_filegroup"): "True",
-        },
-        **internal_kwargs
-    )
-    additional_fragments.append(module_protection_target)
-
     kernel_build_sanitizer = "default"
     if kernel_build_sanitizers:
         kernel_build_sanitizer = kernel_build_sanitizers[0]
@@ -1038,6 +1017,35 @@ def _get_post_defconfig_fragments(
     # Do not call kernel_build_post_defconfig_fragments += ... to avoid
     # modifying the incoming object from kernel_build.post_defconfig_fragments.
     return kernel_build_post_defconfig_fragments + additional_fragments
+
+def _get_trim_post_defconfig_fragment_target(
+        kernel_build_name,
+        kernel_build_trim_nonlisted_kmi,
+        **internal_kwargs):
+    trim_target = kernel_build_name + "_defconfig_fragment_trim"
+
+    file_selector_bool(
+        name = trim_target,
+        first_selector = select({
+            Label("//build/kernel/kleaf/impl:force_disable_trim_is_true"): False,
+            Label("//build/kernel/kleaf:debug_is_true"): False,
+            Label("//build/kernel/kleaf:gcov_is_true"): False,
+            Label("//build/kernel/kleaf:kasan_is_true"): False,
+            Label("//build/kernel/kleaf:kcsan_is_true"): False,
+            Label("//build/kernel/kleaf:kgdb_is_true"): False,
+            "//conditions:default": None,
+        }),
+        second_selector = kernel_build_trim_nonlisted_kmi,
+        # When the value is not specified in the kernel_build rule, do nothing (the "" case)
+        third_selector = None,
+        files = {
+            Label("//build/kernel/kleaf/impl/defconfig:notrim_defconfig"): "False",
+            Label("//build/kernel/kleaf/impl/defconfig:trim_defconfig"): "True",
+            Label("//build/kernel/kleaf/impl:empty_filegroup"): "",
+        },
+        **internal_kwargs
+    )
+    return trim_target
 
 def _uniq(lst):
     """Deduplicates items in lst."""
@@ -2130,6 +2138,14 @@ def _create_infos(
         gcno_dir = main_action_ret.gcno_dir,
     )
 
+    rustavailable_out = rustavailable(
+        serialized_env_info = ctx.attr.config[KernelSerializedEnvInfo],
+        inputs = depset(
+            transitive =
+                [target.files for target in ctx.attr.srcs] + [target.files for target in ctx.attr.deps],
+        ),
+    )
+
     output_group_kwargs = {}
     for d in all_output_files.values():
         output_group_kwargs.update({name: depset([file]) for name, file in d.items()})
@@ -2137,6 +2153,7 @@ def _create_infos(
     # TODO(b/291918087): Drop after common_kernels no longer use kernel_filegroup.
     #   These files should already be in kernel_filegroup_declaration.
     output_group_kwargs["modules_staging_archive"] = depset([modules_staging_archive])
+    output_group_kwargs["rustavailable"] = depset([rustavailable_out])
     output_group_info = OutputGroupInfo(**output_group_kwargs)
 
     kbuild_mixed_tree_files = all_output_files["outs"].values() + all_output_files["module_outs"].values()
@@ -2204,6 +2221,9 @@ def _create_infos(
         # For kernel_build_test
         runfiles = ctx.runfiles(files = default_info_files),
     )
+    module_symvers_file_info = ModuleSymversFileInfo(
+        module_symvers = depset(main_action_ret.module_symvers_outputs),
+    )
 
     return [
         cmds_info,
@@ -2226,6 +2246,7 @@ def _create_infos(
         ctx.attr.config[KernelToolchainInfo],
         output_group_info,
         default_info,
+        module_symvers_file_info,
     ]
 
 def _kernel_build_impl(ctx):
@@ -2286,6 +2307,7 @@ def _kernel_build_impl(ctx):
 def _kernel_build_additional_attrs():
     return dicts.add(
         kernel_config_settings.of_kernel_build(),
+        trim_nonlisted_kmi_utils.attrs(),
         base_kernel_utils.non_config_attrs(),
         cache_dir.attrs(),
     )
@@ -2393,6 +2415,7 @@ _kernel_build = rule(
     toolchains = [hermetic_toolchain.type],
     subrules = [
         _get_dot_config,
+        rustavailable,
     ],
 )
 

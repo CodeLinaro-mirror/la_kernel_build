@@ -22,7 +22,8 @@ exports_files([
     "arm64_64k_defconfig",
     "btf_debug_info_disabled_defconfig",
     "btf_debug_info_enabled_defconfig",
-    "gki_module_protection_disabled_defconfig",
+    "notrim_defconfig",
+    "trim_defconfig",
 ])
 
 [[
@@ -188,6 +189,19 @@ filegroup(
     srcs = select({
         "//build/kernel/kleaf:gcov_is_true": ["gcov_defconfig"],
         "//conditions:default": [],
+    }),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "lto",
+    srcs = select({
+        "//build/kernel/kleaf:lto_is_none": ["lto_none_defconfig"],
+        "//build/kernel/kleaf:lto_is_thin": ["lto_thin_defconfig"],
+        "//build/kernel/kleaf:lto_is_full": ["lto_full_defconfig"],
+        # --lto=fast falls back to --lto=none.
+        "//build/kernel/kleaf:lto_is_fast": ["lto_none_defconfig"],
+        "//build/kernel/kleaf:lto_is_default": [],
     }),
     visibility = ["//visibility:public"],
 )
