@@ -49,6 +49,7 @@ bzl_library(
         "//build/bazel_common_rules/exec/impl:exec",
         "//build/kernel/kleaf/artifact_tests",
         "//build/kernel/kleaf/impl",
+        "//build/kernel/kleaf/tests/defconfig_test:bzl_lib",
         "//prebuilts/clang/host/linux-x86/kleaf:clang_toolchain_repository",
         "@bazel_skylib//:workspace",
         "@bazel_skylib//lib:dicts",
@@ -57,6 +58,9 @@ bzl_library(
         "@bazel_skylib//lib:unittest",
         "@bazel_skylib//rules:common_settings",
         "@kernel_toolchain_info//:dict",
+        "@rules_pkg//pkg:bzl_srcs",
+        # TODO(b/371596399): remove once https://github.com/bazelbuild/rules_pkg/pull/898 is taken in.
+        "@rules_python//python:defs_bzl",
     ] + _SRCS,
 )
 

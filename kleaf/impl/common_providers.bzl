@@ -16,6 +16,29 @@
 
 visibility("//build/kernel/kleaf/...")
 
+StepInfo = provider(
+    "Describes a step, part of a run_shell",
+    fields = {
+        "inputs": "depset of files",
+        "outputs": "list of files",
+        "tools": """list of any of the following
+
+            - File
+            - depset[File]
+            - FilesToRunProvider
+        """,
+        "cmd": "command line",
+    },
+)
+
+DefconfigInfo = provider(
+    "Describes the value of kernel_build.defconfig. At most one of the fields is not None.",
+    fields = {
+        "file": "a single defconfig file",
+        "make_target": "a phony make target",
+    },
+)
+
 KernelCmdsInfo = provider(
     doc = """Provides a directory of `.cmd` files.""",
     fields = {
@@ -41,11 +64,7 @@ KernelEnvInfo = provider(
         "tools": """A [depset](https://bazel.build/extending/depsets) of tools associated with
             the execution platform.""",
         "setup": "setup script to initialize the environment",
-        "run_env": """Optional `KernelEnvInfo` to initialize the environment for `bazel run`.
-
-For `kernel_env`, the script only provides a bare-minimum environment after `source build.config`,
-without actually modifying any variables suitable for a proper kernel build.
-""",
+        "toolchains": "See KernelEnvToolchainsInfo",
     },
 )
 
@@ -66,6 +85,9 @@ KernelPlatformToolchainInfo = provider(
         "ldflags": "flags for C linking",
         "ldexpr": "Extra shell expression appended to ldflags",
         "bin_path": "`PATH` relative to execroot.",
+        "runpaths": "RUNPATHs. Note this is already in ldexpr.",
+        "sysroot": "sysroot",
+        "libc": "The libc, one of musl or glibc.",
     },
 )
 
@@ -82,7 +104,10 @@ KernelEnvToolchainsInfo = provider(
         "compiler_version": "A string representing compiler version",
         "all_files": "A [depset](https://bazel.build/extending/depsets) of all files of all toolchains",
         "target_arch": "arch of target platform",
-        "setup_env_var_cmd": "A command to set up environment variables",
+        "setup_env_var_cmd": "A command to set up simple environment variables",
+        "kernel_setup_env_var_cmd": "A command to set up environment variables for kernel build",
+        "host_runpaths": "RUNPATHs for host progs.",
+        "host_sysroot": "sysroot for host progs",
     },
 )
 
@@ -388,11 +413,23 @@ KernelModuleDepInfo = provider(
 )
 
 ModuleSymversInfo = provider(
-    doc = "A provider that provides `Module.symvers` for `modpost`.",
+    doc = """A provider that provides `Module.symvers` for `modpost`.
+
+    This is  used for **external modules only** for correctly setting up these files.
+    """,
     fields = {
         "restore_paths": """A [depset](https://bazel.build/extending/depsets) of
             paths relative to `COMMON_OUT_DIR` where the `Module.symvers` files will be
             restored to by `KernelModuleSetupInfo`.""",
+    },
+)
+
+ModuleSymversFileInfo = provider(
+    doc = "A provider that provides generated `Module.symvers`",
+    fields = {
+        "module_symvers": """A [depset](https://bazel.build/extending/depsets) of
+            [`File`](https://bazel.build/rules/lib/File)s with generated
+            Module.symvers file.""",
     },
 )
 

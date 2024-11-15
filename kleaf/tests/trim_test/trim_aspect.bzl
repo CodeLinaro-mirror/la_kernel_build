@@ -15,6 +15,7 @@
 """Aspect that inspects `trim_nonlisted_kmi` attribute for some dependencies of `kernel_build`."""
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts")
+load("//build/kernel/kleaf/impl:file_selector.bzl", "FileSelectorInfo")
 
 TrimAspectInfo = provider(
     "Provides the value of `trim_nonlisted_kmi_setting`.",
@@ -23,8 +24,6 @@ TrimAspectInfo = provider(
         "value": "The tristate value of `trim_nonlisted_kmi_setting` of this target",
         "base_info": "The `TrimAspectInfo` of the `base_kernel`",
         "config_info": "The `TrimAspectInfo` of `kernel_config`",
-        "modules_prepare_info": "The `TrimAspectInfo` of `kernel_modules_prepare`",
-        "env_info": "The `TrimAspectInfo` of `kernel_env`",
     },
 )
 
@@ -35,27 +34,14 @@ def _trim_aspect_impl(_target, ctx):
 
         return TrimAspectInfo(
             label = ctx.label,
-            value = ctx.rule.attr.trim_nonlisted_kmi,
+            value = ctx.rule.attr.trim_nonlisted_kmi[FileSelectorInfo].value,
             config_info = ctx.rule.attr.config[TrimAspectInfo],
-            modules_prepare_info = ctx.rule.attr.modules_prepare[TrimAspectInfo],
             base_info = base_info,
         )
     elif ctx.rule.kind == "kernel_config":
         return TrimAspectInfo(
             label = ctx.label,
-            value = ctx.rule.attr.trim_nonlisted_kmi,
-            env_info = ctx.rule.attr.env[TrimAspectInfo],
-        )
-    elif ctx.rule.kind == "kernel_env":
-        return TrimAspectInfo(
-            label = ctx.label,
-            value = ctx.rule.attr.trim_nonlisted_kmi,
-        )
-    elif ctx.rule.kind == "modules_prepare":
-        return TrimAspectInfo(
-            label = ctx.label,
-            config_info = ctx.rule.attr.config[TrimAspectInfo],
-            value = ctx.rule.attr.trim_nonlisted_kmi,
+            value = ctx.rule.attr.trim_nonlisted_kmi[FileSelectorInfo].value,
         )
 
     fail("{label}: Unable to get `_trim_nonlisted_kmi_setting` because {kind} is not supported.".format(
@@ -69,8 +55,6 @@ trim_aspect = aspect(
     attr_aspects = [
         "base_kernel",
         "config",
-        "env",
-        "modules_prepare",
     ],
 )
 
@@ -82,26 +66,19 @@ def _check_kernel_config_trim_attr(env, expect_trim, config_info):
         config_info.value,
         "trim_nonlisted_kmi is not of expected value: {}".format(config_info.label),
     )
-    asserts.equals(
-        env,
-        expect_trim,
-        config_info.env_info.value,
-        "trim_nonlisted_kmi is not of expected value: {}".format(config_info.env_info.label),
-    )
 
 def check_kernel_build_trim_attr(env, expect_trim, target_trim_info):
-    """Check trim_nonlisted_kmi_setting of all internal targets of kernel_build."""
+    """Check trim_nonlisted_kmi_setting of all internal targets of kernel_build.
+
+    Args:
+        env: the analysis test environment
+        expect_trim: expected value of trimming
+        target_trim_info: TrimAspectInfo of the tested target
+    """
     asserts.equals(
         env,
         expect_trim,
         target_trim_info.value,
         "trim_nonlisted_kmi is not of expected value: {}".format(target_trim_info.label),
     )
-    asserts.equals(
-        env,
-        expect_trim,
-        target_trim_info.modules_prepare_info.value,
-        "trim_nonlisted_kmi is not of expected value: {}".format(target_trim_info.modules_prepare_info.label),
-    )
     _check_kernel_config_trim_attr(env, expect_trim, target_trim_info.config_info)
-    _check_kernel_config_trim_attr(env, expect_trim, target_trim_info.modules_prepare_info.config_info)

@@ -74,7 +74,7 @@ else
   # If kernel_build.makefile is not set, print a warning
   echo "WARNING: kernel_build.makefile is not set, and KERNEL_DIR=${KERNEL_DIR}. " >&2
   echo "  To suppress this warning, set:" >&2
-  echo '    kernel_build(makefiles = "//'"${KERNEL_DIR}"':Makefile")' >&2
+  echo '    kernel_build(makefile = "//'"${KERNEL_DIR}"':Makefile")' >&2
   echo "  and delete KERNEL_DIR from build config if it is set explicitly." >&2
 fi
 
@@ -117,11 +117,8 @@ export KBUILD_BUILD_HOST=build-host
 export KBUILD_BUILD_USER=build-user
 export KBUILD_BUILD_VERSION=1
 
-# List of prebuilt directories shell variables to incorporate into PATH
-prebuilts_paths=(
-LINUX_GCC_CROSS_COMPILE_PREBUILTS_BIN
-LINUX_GCC_CROSS_COMPILE_ARM32_PREBUILTS_BIN
-LINUX_GCC_CROSS_COMPILE_COMPAT_PREBUILTS_BIN
+# List of dreprecated prebuilt directories that should not be used anywhere.
+deprecated_prebuilts_paths=(
 CLANG_PREBUILT_BIN
 CLANGTOOLS_PREBUILT_BIN
 RUST_PREBUILT_BIN
@@ -129,8 +126,16 @@ LZ4_PREBUILTS_BIN
 DTC_PREBUILTS_BIN
 LIBUFDT_PREBUILTS_BIN
 BUILDTOOLS_PREBUILT_BIN
-KLEAF_INTERNAL_BUILDTOOLS_PREBUILT_BIN
 )
+
+# List of prebuilt directories shell variables to incorporate into PATH
+# TODO(b/164420327): Remove these once uboot usage are cleaned up.
+prebuilts_paths=(
+LINUX_GCC_CROSS_COMPILE_PREBUILTS_BIN
+LINUX_GCC_CROSS_COMPILE_ARM32_PREBUILTS_BIN
+LINUX_GCC_CROSS_COMPILE_COMPAT_PREBUILTS_BIN
+)
+prebuilts_paths+=("${deprecated_prebuilts_paths[@]}")
 
 # Have host compiler use LLD and compiler-rt.
 LLD_COMPILER_RT="-fuse-ld=lld --rtlib=compiler-rt"
@@ -190,6 +195,14 @@ if [ "${HERMETIC_TOOLCHAIN:-0}" -eq 1 ]; then
   export HOSTLDFLAGS="$sysroot_flags $ldflags"
 
 fi
+
+for prebuilt_bin in "${deprecated_prebuilts_paths[@]}"; do
+    prebuilt_bin_value=\${${prebuilt_bin}}
+    eval prebuilt_bin_value="${prebuilt_bin_value}"
+    if [ -n "${prebuilt_bin_value}" ]; then
+        echo "WARNING: ${prebuilt_bin} should not be set (value: ${prebuilt_bin_value}). This will be an error in the future." >&2
+    fi
+done
 
 for prebuilt_bin in "${prebuilts_paths[@]}"; do
     prebuilt_bin=\${${prebuilt_bin}}
@@ -288,22 +301,29 @@ else
   RAMDISK_EXT="lz4"
 fi
 
-# verifies that defconfig matches the DEFCONFIG
-function check_defconfig() {
+# Checks .config against the result of savedefconfig.
+# $1: source defconfig file
+function kleaf_internal_check_defconfig_minimized() {
+    local source_config="$1"
+
     (cd ${OUT_DIR} && \
      make ${TOOL_ARGS} O=${OUT_DIR} savedefconfig)
-    [ "$ARCH" = "x86_64" -o "$ARCH" = "i386" ] && local ARCH=x86
     RES=0
-    if [[ -f ${KERNEL_DIR}/arch/${ARCH}/configs/${DEFCONFIG} ]]; then
-      diff -u ${KERNEL_DIR}/arch/${ARCH}/configs/${DEFCONFIG} ${OUT_DIR}/defconfig >&2 ||
-        RES=$?
-    else
-      diff -u ${OUT_DIR}/arch/${ARCH}/configs/${DEFCONFIG} ${OUT_DIR}/defconfig >&2 ||
-        RES=$?
-    fi
+    diff -u "${source_config}" ${OUT_DIR}/defconfig >&2 || RES=$?
     if [ ${RES} -ne 0 ]; then
-        echo ERROR: savedefconfig does not match ${KERNEL_DIR}/arch/${ARCH}/configs/${DEFCONFIG} >&2
+        echo ERROR: savedefconfig does not match "${source_config}" >&2
     fi
     return ${RES}
+}
+export -f kleaf_internal_check_defconfig_minimized
+
+# verifies that defconfig matches the DEFCONFIG
+function check_defconfig() {
+    [ "$ARCH" = "x86_64" -o "$ARCH" = "i386" ] && local ARCH=x86
+    if [[ -f "${KERNEL_DIR}/arch/${ARCH}/configs/${DEFCONFIG}" ]]; then
+        kleaf_internal_check_defconfig_minimized "${KERNEL_DIR}/arch/${ARCH}/configs/${DEFCONFIG}"
+    else
+        kleaf_internal_check_defconfig_minimized "${OUT_DIR}/arch/${ARCH}/configs/${DEFCONFIG}"
+    fi
 }
 export -f check_defconfig

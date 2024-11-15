@@ -638,7 +638,9 @@ function build_boot_images() {
   fi
 
   DTB_FILE_LIST=$(find ${DIST_DIR} -name "*.dtb" | sort)
-  if [ -z "${DTB_FILE_LIST}" ]; then
+  if [ -n "${DTB_IMAGE}" ]; then
+    MKBOOTIMG_ARGS+=("--dtb" "${DTB_IMAGE}")
+  elif [ -z "${DTB_FILE_LIST}" ]; then
     if [ -z "${SKIP_VENDOR_BOOT}" ]; then
       echo "ERROR: No *.dtb files found in ${DIST_DIR}" >&2
       exit 1
@@ -894,7 +896,7 @@ function gki_dry_run_certify_bootimg() {
 
   certify_bootimg --boot_img "$1" \
     --algorithm SHA256_RSA4096 \
-    --key tools/mkbootimg/gki/testdata/testkey_rsa4096.pem \
+    --key ${KLEAF_INTERNAL_GKI_BOOT_IMG_CERTIFICATION_KEY} \
     --gki_info "$2" \
     --output "$1" \
     "${additional_props[@]}"
@@ -1007,10 +1009,37 @@ function build_gki_artifacts() {
 
 function sort_config() {
   # Normal sort won't work because all the "# CONFIG_.. is not set" would come
-  # before all the "CONFIG_..=m". Use sed to extract the CONFIG_ option and prefix
-  # the line in front of the line to create a key (e.g. CONFIG_.. # CONFIG_.. is not set),
-  # sort, then remove the key
-  sed -E -e 's/.*(CONFIG_[^ =]+).*/\1 \0/' $1 | sort -k1 | cut -F2-
+  # before all the "CONFIG_..=m".
+
+  python3 -c '
+import re, sys
+PATTERN_UNSET=re.compile(r"^# (?P<key>CONFIG_\w+) is not set$")
+PATTERN_SET=re.compile(r"^(?P<key>CONFIG_\w+)=.*$")
+current_lines = {}
+for line in sys.stdin:
+  if not line.strip():
+    # Put new lines at the end. "Z" > "CONFIG_xxx"
+    current_lines["Z"] = line
+    continue
+
+  mo = None
+  for pattern in (PATTERN_UNSET, PATTERN_SET):
+    mo = pattern.match(line)
+    if mo:
+      current_lines[mo.group("key")] = line
+      break
+  if mo:
+    continue
+
+  # conclude section
+  sys.stdout.write("".join(value for _, value in sorted(current_lines.items())))
+  current_lines.clear()
+  sys.stdout.write(line)
+
+# conclude the last section
+sys.stdout.write("".join(value for _, value in sorted(current_lines.items())))
+current_lines.clear()
+' < $1
 }
 
 function menuconfig() {

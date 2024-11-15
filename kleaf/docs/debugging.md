@@ -12,10 +12,6 @@ This is a non exhaustive list of options to help debugging compilation issues:
     *   `--debug_print_scripts`: Prints the content of the (generated) command
         scripts during rule execution.
 
-    *   `--debug_cache_dir_conflict={detect,resolve}`: Attempt to detect or
-        resolve any conflicts if multiple actions uses the same subdirectory
-        within `--cache_dir` simultaneously.
-
 *   Customise Kbuild:
 
     *   `--debug_make_verbosity`: Controls verbosity of `make` executions.
@@ -195,3 +191,20 @@ approximate steps:
 6. Run commands from step 4 to get into sandboxed environment, then from step 5
    to have toolchain binaries in your path, and then from step 3 to reproduce
    compiler invocation.
+
+## Checking if Rust is available
+
+To check `make rustavailable`, run the following:
+
+```
+tools/bazel build --output_groups=rustavailable //common:kernel_aarch64
+```
+
+If Rust is available, you should see:
+
+```
+INFO: From Checking rustavailable:
+Rust is available!
+```
+
+Otherwise, a build error is raised indicating why is Rust not available.

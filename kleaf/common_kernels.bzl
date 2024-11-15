@@ -17,10 +17,14 @@
 load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
-load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
+load("@rules_pkg//pkg:install.bzl", "pkg_install")
+load("@rules_pkg//pkg:mappings.bzl", "pkg_files", "strip_prefix")
 load("//build/kernel/kleaf/artifact_tests:device_modules_test.bzl", "device_modules_test")
 load("//build/kernel/kleaf/artifact_tests:kernel_test.bzl", "initramfs_modules_options_test")
+load("//build/kernel/kleaf/impl:abi/kernel_abi_dist.bzl", "kernel_abi_wrapped_dist_internal")
 load("//build/kernel/kleaf/impl:gki_artifacts.bzl", "gki_artifacts", "gki_artifacts_prebuilts")
+load("//build/kernel/kleaf/impl:image/initramfs.bzl", "initramfs")
+load("//build/kernel/kleaf/impl:image/kernel_images.bzl", "kernel_images_filegroup")
 load("//build/kernel/kleaf/impl:kernel_filegroup_declaration.bzl", "kernel_filegroup_declaration")
 load(
     "//build/kernel/kleaf/impl:kernel_prebuilt_utils.bzl",
@@ -28,15 +32,15 @@ load(
 )
 load("//build/kernel/kleaf/impl:kernel_sbom.bzl", "kernel_sbom")
 load("//build/kernel/kleaf/impl:out_headers_allowlist_archive.bzl", "out_headers_allowlist_archive")
+load("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragments_menuconfig_test.bzl", "pre_defconfig_fragments_menuconfig_test")
 load(
     ":kernel.bzl",
     "kernel_abi",
-    "kernel_abi_dist",
     "kernel_build",
     "kernel_build_config",
-    "kernel_images",
     "kernel_modules_install",
     "kernel_unstripped_modules_archive",
+    "system_dlkm_image",
 )
 load(":print_debug.bzl", "print_debug")
 
@@ -46,8 +50,9 @@ _COLLECT_UNSTRIPPED_MODULES = True
 # Always strip modules for common kernels.
 _STRIP_MODULES = True
 
-# Always keep a copy of Module.symvers for common kernels.
+# Always keep a copy of Module.symvers and .config for common kernels.
 _KEEP_MODULE_SYMVERS = True
+_KEEP_DOT_CONFIG = True
 
 # This transition is not needed for GKI
 _GKI_ADD_VMLINUX = False
@@ -60,7 +65,8 @@ def common_kernel(
         arch = None,
         visibility = None,
         toolchain_version = None,
-        defconfig_fragments = None,
+        defconfig = None,
+        post_defconfig_fragments = None,
         enable_interceptor = None,
         kmi_symbol_list = None,
         additional_kmi_symbol_lists = None,
@@ -123,7 +129,8 @@ def common_kernel(
         build_config: See [kernel_build.build_config](kernel.md#kernel_build-build_config)
         makefile: See [kernel_build.makefile](kernel.md#kernel_build-makefile)
         toolchain_version: See [kernel_build.toolchain_version](kernel.md#kernel_build-toolchain_version)
-        defconfig_fragments: See [kernel_build.defconfig_fragments](kernel.md#kernel_build-defconfig_fragments)
+        defconfig: See [kernel_build.defconfig](kernel.md#kernel_build-defconfig)
+        post_defconfig_fragments: See [kernel_build.post_defconfig_fragments](kernel.md#kernel_build-post_defconfig_fragments)
         enable_interceptor: See [kernel_build.enable_interceptor](kernel.md#kernel_build-enable_interceptor)
         kmi_symbol_list: See [kernel_build.kmi_symbol_list](kernel.md#kernel_build-kmi_symbol_list)
         additional_kmi_symbol_lists: See [kernel_build.additional_kmi_symbol_lists](kernel.md#kernel_build-additional_kmi_symbol_lists)
@@ -153,7 +160,8 @@ def common_kernel(
         arch = arch,
         build_config = build_config,
         makefile = makefile,
-        defconfig_fragments = defconfig_fragments,
+        defconfig = defconfig,
+        post_defconfig_fragments = post_defconfig_fragments,
         toolchain_version = toolchain_version,
         visibility = visibility,
         enable_interceptor = enable_interceptor,
@@ -231,13 +239,19 @@ def common_kernel(
         ],
         build_config = name + "_build_config",
         makefile = makefile,
-        defconfig_fragments = defconfig_fragments,
+        check_defconfig = select({
+            Label("//build/kernel/kleaf:gki_build_config_fragment_is_unset"): "minimized",
+            "//conditions:default": "disabled",
+        }),
+        defconfig = defconfig,
+        post_defconfig_fragments = post_defconfig_fragments,
         enable_interceptor = enable_interceptor,
         visibility = visibility,
         collect_unstripped_modules = _COLLECT_UNSTRIPPED_MODULES,
         strip_modules = _STRIP_MODULES,
         toolchain_version = toolchain_version,
         keep_module_symvers = _KEEP_MODULE_SYMVERS,
+        keep_dot_config = _KEEP_DOT_CONFIG,
         kmi_symbol_list = kmi_symbol_list,
         additional_kmi_symbol_lists = additional_kmi_symbol_lists,
         trim_nonlisted_kmi = trim_nonlisted_kmi,
@@ -305,16 +319,18 @@ def common_kernel(
         kernel_build = name,
     )
 
-    kernel_images(
-        name = name + "_images",
-        kernel_build = name,
+    system_dlkm_image(
+        name = name + "_system_dlkm_image",
         kernel_modules_install = name + "_modules_install",
-        # Sync with CI_TARGET_MAPPING.*.download_configs.images
-        build_system_dlkm = True,
-        build_system_dlkm_flatten = True,
-        system_dlkm_fs_types = ["erofs", "ext4"],
-        # Keep in sync with build.config.gki* MODULES_LIST
+        build_flatten = True,
         modules_list = gki_system_dlkm_modules,
+        fs_types = ["erofs", "ext4"],
+    )
+
+    kernel_images_filegroup(
+        name = name + "_images",
+        srcs = [name + "_system_dlkm_image"],
+        deprecation = "Use {} instead".format(native.package_relative_label(name + "_system_dlkm_image")),
     )
 
     if build_gki_artifacts:
@@ -357,7 +373,7 @@ def common_kernel(
         srcs = [
             # Sync with additional_artifacts_items
             name + "_headers",
-            name + "_images",
+            name + "_system_dlkm_image",
             name + "_kmi_symbol_list",
             name + "_raw_kmi_symbol_list",
             name + "_gki_artifacts",
@@ -371,7 +387,7 @@ def common_kernel(
         name = name + "_filegroup_declaration",
         kernel_build = name,
         extra_deps = filegroup_extra_deps,
-        images = name + "_images",
+        images = name + "_system_dlkm_image",
         visibility = ["//visibility:private"],
     )
     target_mapping = CI_TARGET_MAPPING.get(name, {})
@@ -420,33 +436,29 @@ def common_kernel(
 
     dist_targets.append(name + "_sbom")
 
-    copy_to_dist_dir(
+    pkg_files(
+        name = name + "_dist_files",
+        srcs = dist_targets,
+        strip_prefix = strip_prefix.files_only(),
+        visibility = ["//visibility:private"],
+    )
+    pkg_install(
         name = name + "_dist",
-        data = dist_targets,
-        flat = True,
-        dist_dir = "out/{name}/dist".format(name = name),
-        log = "info",
+        srcs = [name + "_dist_files"],
+        destdir = "out/{name}/dist".format(name = name),
     )
 
     kernel_abi_dist_name = name + "_abi_dist"
-    kernel_abi_dist(
+    _common_kernel_abi_dist(
         name = kernel_abi_dist_name,
         kernel_abi = name + "_abi",
-        kernel_build_add_vmlinux = _GKI_ADD_VMLINUX,
-        data = dist_targets,
-        flat = True,
-        dist_dir = "out_abi/{name}/dist".format(name = name),
-        log = "info",
+        dist_targets = dist_targets,
     )
 
-    kernel_abi_dist(
+    _common_kernel_abi_dist(
         name = name + "_abi_ignore_diff_dist",
         kernel_abi = name + "_abi",
-        kernel_build_add_vmlinux = _GKI_ADD_VMLINUX,
-        data = dist_targets,
-        flat = True,
-        dist_dir = "out_abi/{name}/dist".format(name = name),
-        log = "info",
+        dist_targets = dist_targets,
         ignore_diff = True,
         no_ignore_diff_target = kernel_abi_dist_name,
     )
@@ -457,6 +469,8 @@ def common_kernel(
         kernel_modules_install = name + "_modules_install",
         modules = (module_implicit_outs or []),
         arch = arch,
+        makefile = makefile,
+        defconfig = defconfig,
     )
 
     native.test_suite(
@@ -618,7 +632,7 @@ def define_prebuilts(**kwargs):
 
         additional_artifacts_items = [
             name + "_headers",
-            name + "_images",
+            name + "_system_dlkm_image",
             name + "_kmi_symbol_list",
             name + "_gki_artifacts",
         ]
@@ -638,21 +652,22 @@ def define_prebuilts(**kwargs):
 def _define_common_kernels_additional_tests(
         name,
         kernel_build_name,
+        makefile,
+        defconfig,
         kernel_modules_install,
         modules,
         arch):
     fake_modules_options = Label("//build/kernel/kleaf/artifact_tests:fake_modules_options.txt")
 
-    kernel_images(
-        name = name + "_fake_images",
+    initramfs(
+        name = name + "_fake_initramfs",
         kernel_modules_install = kernel_modules_install,
-        build_initramfs = True,
         modules_options = fake_modules_options,
     )
 
     initramfs_modules_options_test(
         name = name + "_fake",
-        kernel_images = name + "_fake_images",
+        kernel_images = name + "_fake_initramfs",
         expected_modules_options = fake_modules_options,
     )
 
@@ -662,25 +677,49 @@ def _define_common_kernels_additional_tests(
         content = [],
     )
 
-    kernel_images(
-        name = name + "_empty_images",
+    initramfs(
+        name = name + "_empty_initramfs",
         kernel_modules_install = kernel_modules_install,
-        build_initramfs = True,
         # Not specify module_options
     )
 
     initramfs_modules_options_test(
         name = name + "_empty",
-        kernel_images = name + "_empty_images",
+        kernel_images = name + "_empty_initramfs",
         expected_modules_options = name + "_empty_modules_options",
     )
 
     device_modules_test(
         name = name + "_device_modules_test",
         srcs = [kernel_build_name + "_sources"],
-        base_kernel_label = Label("{}//{}:{}".format(native.repository_name(), native.package_name(), kernel_build_name)),
+        base_kernel_label = native.package_relative_label(kernel_build_name),
         base_kernel_module = min(modules) if modules else None,
         arch = arch,
+    )
+
+    kernel_build(
+        name = name + "_test_device_kernel",
+        arch = arch,
+        makefile = makefile,
+        defconfig = defconfig,
+        pre_defconfig_fragments = [Label("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragment")],
+        base_kernel = native.package_relative_label(kernel_build_name),
+        build_config = Label("//build/kernel/kleaf/tests/defconfig_test:build.config.{}".format(arch)),
+        make_goals = ["modules"],
+        # We don't actually build the kernel_build target, so we don't care about outputs
+        outs = [],
+        testonly = True,
+        tags = ["manual"],
+        visibility = ["//visibility:private"],
+    )
+
+    # Tests that, if the menuconfig command does not edit anything, the pre_defconfig_fragment
+    # should still stay the same.
+    pre_defconfig_fragments_menuconfig_test(
+        name = name + "_pre_defconfig_fragments_menuconfig_test",
+        kernel_build = name + "_test_device_kernel",
+        pre_defconfig_fragment = Label("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragment"),
+        visibility = ["//visibility:private"],
     )
 
     native.test_suite(
@@ -689,5 +728,37 @@ def _define_common_kernels_additional_tests(
             name + "_empty",
             name + "_fake",
             name + "_device_modules_test",
+            name + "_pre_defconfig_fragments_menuconfig_test",
         ],
+    )
+
+def _common_kernel_abi_dist(
+        name,
+        kernel_abi,
+        dist_targets,
+        ignore_diff = None,
+        no_ignore_diff_target = None):
+    """Defines a `kernel_abi_wrapped_dist` for a common kernel."""
+
+    pkg_files(
+        name = name + "_internal_files",
+        srcs = dist_targets + [kernel_abi],
+        strip_prefix = strip_prefix.files_only(),
+        visibility = ["//visibility:private"],
+    )
+
+    pkg_install(
+        name = name + "_internal",
+        srcs = [name + "_internal_files"],
+        destdir = "out_abi/{name}/dist".format(name = name),
+    )
+
+    # TODO(b/231647455): Clean up hard-coded name "_abi_diff_executable".
+    kernel_abi_wrapped_dist_internal(
+        name = name,
+        dist = name + "_internal",
+        diff_stg = kernel_abi + "_diff_executable",
+        enable_add_vmlinux = _GKI_ADD_VMLINUX,
+        ignore_diff = ignore_diff,
+        no_ignore_diff_target = no_ignore_diff_target,
     )

@@ -14,48 +14,71 @@
 
 """Runs `make modules_prepare` to prepare `$OUT_DIR` for modules."""
 
-load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load(":cache_dir.bzl", "cache_dir")
 load(
     ":common_providers.bzl",
+    "KernelBuildOriginalEnvInfo",
     "KernelEnvAttrInfo",
     "KernelSerializedEnvInfo",
 )
 load(":debug.bzl", "debug")
-load(":kernel_config_settings.bzl", "kernel_config_settings")
 load(":utils.bzl", "kernel_utils")
 
 visibility("//build/kernel/kleaf/...")
 
-def _modules_prepare_impl(ctx):
+def _modules_prepare_subrule_impl(
+        subrule_ctx,
+        *,
+        srcs,
+        outdir_tar_gz,
+        kernel_serialized_env_info,
+        force_generate_headers,
+        kernel_toolchains,
+        execution_requirements,
+        setup_script_name,
+        cache_dir_step,
+        progress_message_note):
+    """Common implementation to prepare for module build.
+
+    Args:
+        subrule_ctx: subrule_ctx
+        srcs: depset of sources
+        outdir_tar_gz: declared output file
+        kernel_serialized_env_info: KernelSerializedEnvInfo that has kernel properly configured
+            (make defconfig is executed)
+        force_generate_headers: If True it forces generation of additional headers after make modules_prepare
+        kernel_toolchains: KernelEnvToolchainsInfo
+        execution_requirements: arg to run_shell
+        setup_script_name: Name of setup script to declare.
+        cache_dir_step: See cache_dir.get_step, or a stub step if caching is not needed.
+        progress_message_note: suffix to be added to progress_message.
+
+    Returns:
+        dict of infos. Keys are info type names, values are infos.
+    """
     inputs = []
     tools = []
     transitive_tools = []
     transitive_inputs = []
 
-    transitive_inputs += [target.files for target in ctx.attr.srcs]
+    transitive_inputs.append(srcs)
 
-    outputs = [ctx.outputs.outdir_tar_gz]
+    outputs = [outdir_tar_gz]
 
-    transitive_tools.append(ctx.attr.config[KernelSerializedEnvInfo].tools)
-    transitive_inputs.append(ctx.attr.config[KernelSerializedEnvInfo].inputs)
+    transitive_tools.append(kernel_serialized_env_info.tools)
+    transitive_inputs.append(kernel_serialized_env_info.inputs)
 
-    cache_dir_step = cache_dir.get_step(
-        ctx = ctx,
-        common_config_tags = ctx.attr.config[KernelEnvAttrInfo].common_config_tags,
-        symlink_name = "modules_prepare",
-    )
     inputs += cache_dir_step.inputs
     outputs += cache_dir_step.outputs
     tools += cache_dir_step.tools
 
     command = kernel_utils.setup_serialized_env_cmd(
-        serialized_env_info = ctx.attr.config[KernelSerializedEnvInfo],
+        serialized_env_info = kernel_serialized_env_info,
         restore_out_dir_cmd = cache_dir_step.cmd,
     )
 
     force_gen_headers_cmd = ""
-    if ctx.attr.force_generate_headers:
+    if force_generate_headers:
         force_gen_headers_cmd += """
         # Workaround to force the creation of these missing files.
            mkdir -p ${OUT_DIR}/security/selinux/
@@ -75,51 +98,89 @@ def _modules_prepare_impl(ctx):
            {cache_dir_post_cmd}
     """.format(
         force_gen_headers_cmd = force_gen_headers_cmd,
-        outdir_tar_gz = ctx.outputs.outdir_tar_gz.path,
+        outdir_tar_gz = outdir_tar_gz.path,
         cache_dir_post_cmd = cache_dir_step.post_cmd,
     )
 
-    debug.print_scripts(ctx, command)
-    ctx.actions.run_shell(
+    debug.print_scripts_subrule(command)
+    subrule_ctx.actions.run_shell(
         mnemonic = "ModulesPrepare",
         inputs = depset(inputs, transitive = transitive_inputs),
         outputs = outputs,
         tools = depset(tools, transitive = transitive_tools),
         progress_message = "Preparing for module build{} %{{label}}".format(
-            ctx.attr.config[KernelEnvAttrInfo].progress_message_note,
+            progress_message_note,
         ),
         command = command,
-        execution_requirements = kernel_utils.local_exec_requirements(ctx),
+        execution_requirements = execution_requirements,
     )
 
     setup_script_cmd = modules_prepare_setup_command(
-        config_setup_script = ctx.attr.config[KernelSerializedEnvInfo].setup_script,
-        modules_prepare_outdir_tar_gz = ctx.outputs.outdir_tar_gz,
+        config_setup_script = kernel_serialized_env_info.setup_script,
+        modules_prepare_outdir_tar_gz = outdir_tar_gz,
+        kernel_toolchains = kernel_toolchains,
     )
 
     # <kernel_build>_modules_prepare_setup.sh
-    setup_script = ctx.actions.declare_file("{name}/{name}_setup.sh".format(name = ctx.attr.name))
-    ctx.actions.write(
+    setup_script = subrule_ctx.actions.declare_file(setup_script_name)
+    subrule_ctx.actions.write(
         output = setup_script,
         content = setup_script_cmd,
     )
 
-    return [
-        KernelSerializedEnvInfo(
+    # Use a dict() so the caller can select the provider the rule uses or returns.
+    return {
+        "KernelSerializedEnvInfo": KernelSerializedEnvInfo(
             setup_script = setup_script,
             inputs = depset(
-                [ctx.outputs.outdir_tar_gz, setup_script],
-                transitive = [ctx.attr.config[KernelSerializedEnvInfo].inputs],
+                [outdir_tar_gz, setup_script],
+                transitive = [kernel_serialized_env_info.inputs],
             ),
-            tools = ctx.attr.config[KernelSerializedEnvInfo].tools,
+            tools = kernel_serialized_env_info.tools,
         ),
-        DefaultInfo(files = depset([ctx.outputs.outdir_tar_gz, setup_script])),
-    ]
+        "DefaultInfo": DefaultInfo(files = depset([outdir_tar_gz, setup_script])),
+    }
+
+modules_prepare_subrule = subrule(
+    implementation = _modules_prepare_subrule_impl,
+    subrules = [debug.print_scripts_subrule],
+)
+
+def _modules_prepare_impl(ctx):
+    cache_dir_step = cache_dir.get_step(
+        ctx = ctx,
+        common_config_tags = ctx.attr.config[KernelEnvAttrInfo].common_config_tags,
+        symlink_name = "modules_prepare",
+    )
+
+    return modules_prepare_subrule(
+        srcs = depset(transitive = [target.files for target in ctx.attr.srcs]),
+        outdir_tar_gz = ctx.outputs.outdir_tar_gz,
+        kernel_serialized_env_info = ctx.attr.config[KernelSerializedEnvInfo],
+        force_generate_headers = ctx.attr.force_generate_headers,
+        kernel_toolchains = ctx.attr.config[KernelBuildOriginalEnvInfo].env_info.toolchains,
+        setup_script_name = "{name}/{name}_setup.sh".format(name = ctx.label.name),
+        execution_requirements = kernel_utils.local_exec_requirements(ctx),
+        cache_dir_step = cache_dir_step,
+        progress_message_note = ctx.attr.config[KernelEnvAttrInfo].progress_message_note,
+    ).values()
 
 def modules_prepare_setup_command(
         config_setup_script,
-        modules_prepare_outdir_tar_gz):
-    return """
+        modules_prepare_outdir_tar_gz,
+        kernel_toolchains):
+    """Set up environment for building modules.
+
+    Args:
+        config_setup_script: The script to set up environment after configuration
+        modules_prepare_outdir_tar_gz: the tarball of $OUT_DIR after make modules_prepare
+        kernel_toolchains: KernelEnvToolchainsInfo
+
+    Returns:
+        the command to set up environment
+    """
+
+    cmd = """
         source {config_setup_script}
         # Restore modules_prepare outputs. Assumes env setup.
         [ -z ${{OUT_DIR}} ] && echo "ERROR: modules_prepare setup run without OUT_DIR set!" >&2 && exit 1
@@ -130,11 +191,36 @@ def modules_prepare_setup_command(
         modules_prepare_outdir_tar_gz = modules_prepare_outdir_tar_gz.path,
     )
 
+    # HACK: The binaries in $OUT_DIR (e.g. fixdep) are built with @kleaf being the root Bazel module.
+    # But this is not necessarily the case when the archive is used, especially when using @kleaf
+    # as a dependent Bazel module to build kernel drivers. In that case, symlink
+    # prebuilts/kernel-build-tools so libc_musl.so etc. can be found properly.
+    # TODO(b/372807147): Clean this up by letting kernel_filegroup build modules_prepare after all
+    #   dependencies for modules_prepare is figured out.
+    kleaf_repo_workspace_root = Label(":modules_prepare.bzl").workspace_root
+    kleaf_repo_workspace_root_slash = kleaf_repo_workspace_root + "/"
+    if kleaf_repo_workspace_root:
+        for runpath in kernel_toolchains.host_runpaths:
+            if not runpath.startswith(kleaf_repo_workspace_root_slash):
+                continue
+            bare_runpath = runpath.removeprefix(kleaf_repo_workspace_root_slash)
+            cmd += """
+                if [[ ! -d {bare_runpath} ]]; then
+                    (
+                        linkdir="$(dirname {bare_runpath})"
+                        mkdir -p "${{linkdir}}"
+                        ln -s $(realpath {runpath} --relative-to "${{linkdir}}") {bare_runpath}
+                    )
+                fi
+            """.format(
+                runpath = runpath,
+                bare_runpath = bare_runpath,
+            )
+
+    return cmd
+
 def _modules_prepare_additional_attrs():
-    return dicts.add(
-        kernel_config_settings.of_modules_prepare(),
-        cache_dir.attrs(),
-    )
+    return cache_dir.attrs()
 
 modules_prepare = rule(
     doc = "Rule that runs `make modules_prepare` to prepare `$OUT_DIR` for modules.",
@@ -142,7 +228,11 @@ modules_prepare = rule(
     attrs = {
         "config": attr.label(
             mandatory = True,
-            providers = [KernelEnvAttrInfo, KernelSerializedEnvInfo],
+            providers = [
+                KernelEnvAttrInfo,
+                KernelSerializedEnvInfo,
+                KernelBuildOriginalEnvInfo,
+            ],
             doc = "the kernel_config target",
         ),
         "srcs": attr.label_list(mandatory = True, doc = "kernel sources", allow_files = True),
@@ -155,4 +245,7 @@ modules_prepare = rule(
         ),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
     } | _modules_prepare_additional_attrs(),
+    subrules = [
+        modules_prepare_subrule,
+    ],
 )

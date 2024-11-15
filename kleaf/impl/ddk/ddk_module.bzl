@@ -37,6 +37,8 @@ def ddk_module(
         kconfig = None,
         defconfig = None,
         generate_btf = None,
+        autofdo_profile = None,
+        debug_info_for_profiling = None,
         **kwargs):
     """
     Defines a DDK (Driver Development Kit) module.
@@ -331,7 +333,7 @@ def ddk_module(
             - [`ddk_module`](#ddk_module)
             - [`ddk_headers`](#ddk_headers).
         hdrs: See [`ddk_headers.hdrs`](#ddk_headers-hdrs)
-        textual_hdrs: See [`ddk_headers.textual_hdrs`](#ddk_headers-textual_hdrs)
+        textual_hdrs: See [`ddk_headers.textual_hdrs`](#ddk_headers-textual_hdrs). DEPRECATED. Use `hdrs`.
         includes: See [`ddk_headers.includes`](#ddk_headers-includes)
         linux_includes: See [`ddk_headers.linux_includes`](#ddk_headers-linux_includes)
 
@@ -395,17 +397,22 @@ def ddk_module(
           [`$(location)` substitution](https://bazel.build/reference/be/make-variables#predefined_label_variables).
           See "Implementation detail" section below.
 
-          Each `$(location)` expression should occupy its own token. For example:
+          Each `$(location)` expression should occupy its own token; optional argument key is
+          allowed as a prefix. For example:
 
           ```
           # Good
           copts = ["-include", "$(location //other:header.h)"]
+          copts = ["-include=$(location //other:header.h)"]
 
-          # BAD -- DON'T DO THIS!
+          # BAD - Don't do this! Split into two tokens.
           copts = ["-include $(location //other:header.h)"]
 
-          # BAD -- DON'T DO THIS!
-          copts = ["-include=$(location //other:header.h)"]
+          # BAD - Don't do this! Split into two tokens.
+          copts = ["$(location //other:header.h) -Werror"]
+
+          # BAD - Don't do this! Split into two tokens.
+          copts = ["$(location //other:header.h) $(location //other:header2.h)"]
           ```
 
           Unlike
@@ -475,10 +482,19 @@ def ddk_module(
           uses default value specified in `kconfig`.
         generate_btf: Allows generation of BTF type information for the module.
           See [kernel_module.generate_btf](#kernel_module-generate_btf)
+        autofdo_profile: Label to an AutoFDO profile.
+        debug_info_for_profiling: If true, enables extra debug information to be emitted to make
+            profile matching during AutoFDO more accurate.
         **kwargs: Additional attributes to the internal rule.
           See complete list
           [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
     """
+
+    if textual_hdrs:
+        # buildifier: disable=print
+        print("\nWARNING: textual_hdrs deprecated, use `hdrs` instead.")
+
+    module_hdrs = (hdrs or []) + (textual_hdrs or [])
 
     ddk_config(
         name = name + "_config",
@@ -486,8 +502,7 @@ def ddk_module(
         kconfig = kconfig,
         kernel_build = kernel_build,
         module_deps = deps,
-        module_hdrs = hdrs,
-        module_textual_hdrs = textual_hdrs,
+        module_hdrs = module_hdrs,
         generate_btf = generate_btf,
     )
 
@@ -521,14 +536,15 @@ def ddk_module(
         name = name + "_makefiles",
         kernel_build = kernel_build,
         module_srcs = (srcs or []) + flattened_conditional_srcs,
-        module_hdrs = hdrs,
-        module_textual_hdrs = textual_hdrs,
+        module_hdrs = module_hdrs,
         module_includes = includes,
         module_linux_includes = linux_includes,
         module_out = out,
         module_deps = deps,
         module_local_defines = local_defines,
         module_copts = copts,
+        module_autofdo_profile = autofdo_profile,
+        module_debug_info_for_profiling = debug_info_for_profiling,
         top_level_makefile = True,
         kbuild_has_linux_include = True,
         **private_kwargs

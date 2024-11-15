@@ -21,6 +21,8 @@ build --flag_alias=incompatible_kernel_use_resolved_toolchains=//build/kernel/kl
 build --flag_alias=noincompatible_kernel_use_resolved_toolchains=no//build/kernel/kleaf:incompatible_kernel_use_resolved_toolchains
 build --flag_alias=incompatible_disable_hermetic_tools_symlink_source=//build/kernel/kleaf:incompatible_disable_hermetic_tools_symlink_source
 build --flag_alias=noincompatible_disable_hermetic_tools_symlink_source=no//build/kernel/kleaf:incompatible_disable_hermetic_tools_symlink_source
+build --flag_alias=incompatible_kernel_module_fail=//build/kernel/kleaf:incompatible_kernel_module_fail
+build --flag_alias=noincompatible_kernel_module_fail=no//build/kernel/kleaf:incompatible_kernel_module_fail
 build --flag_alias=workaround_btrfs_b292212788=//build/kernel/kleaf:workaround_btrfs_b292212788
 build --flag_alias=experimental_gzip_is_pigz=//build/kernel/kleaf:gzip_is_pigz
 build --flag_alias=noexperimental_gzip_is_pigz=no//build/kernel/kleaf:gzip_is_pigz
@@ -42,6 +44,7 @@ build --flag_alias=nowarn_undeclared_modules=no//build/kernel/kleaf:warn_undecla
 build --flag_alias=nokmi_symbol_list_strict_mode=no//build/kernel/kleaf:kmi_symbol_list_strict_mode
 build --flag_alias=nokmi_symbol_list_violations_check=no//build/kernel/kleaf:kmi_symbol_list_violations_check
 build --flag_alias=user_kmi_symbol_lists=//build/kernel/kleaf:user_kmi_symbol_lists
+build --flag_alias=user_ddk_unsafe_headers=//build/kernel/kleaf:user_ddk_unsafe_headers
 
 # flags that control binary features
 build --flag_alias=gcov=//build/kernel/kleaf:gcov
@@ -59,6 +62,8 @@ build --flag_alias=defconfig_fragment=//build/kernel/kleaf:defconfig_fragment
 build --flag_alias=page_size=//build/kernel/kleaf:page_size
 build --flag_alias=rust=//build/kernel/kleaf:rust
 build --flag_alias=norust=no//build/kernel/kleaf:rust
+build --flag_alias=rust_ashmem=//build/kernel/kleaf:rust_ashmem
+build --flag_alias=norust_ashmem=no//build/kernel/kleaf:rust_ashmem
 build --flag_alias=nozstd_dwarf_compression=no//build/kernel/kleaf:zstd_dwarf_compression
 build --flag_alias=kconfig_werror=//build/kernel/kleaf:kconfig_werror
 build --flag_alias=nokconfig_werror=no//build/kernel/kleaf:kconfig_werror

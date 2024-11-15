@@ -20,6 +20,7 @@ load(
     ":common_providers.bzl",
     "DdkIncludeInfo",
     "DdkSubmoduleInfo",
+    "ModuleSymversFileInfo",
     "ModuleSymversInfo",
 )
 load(":ddk/ddk_conditional_filegroup.bzl", "DdkConditionalFilegroupInfo")
@@ -34,6 +35,14 @@ load(
 load(":utils.bzl", "kernel_utils")
 
 visibility("//build/kernel/kleaf/...")
+
+_DEBUG_INFO_FOR_PROFILING_COPTS = [
+    "-fdebug-info-for-profiling",
+    "-mllvm",
+    "-enable-npm-pgo-inline-deferral=false",
+    "-mllvm",
+    "-improved-fs-discriminator=true",
+]
 
 def _gather_prefixed_includes_common(ddk_include_info, info_attr_name):
     ret = []
@@ -69,30 +78,15 @@ def _handle_copt(ctx):
     expand_targets = []
     expand_targets += ctx.attr.module_srcs
     expand_targets += ctx.attr.module_hdrs
-    expand_targets += ctx.attr.module_textual_hdrs
     expand_targets += ctx.attr.module_deps
 
     copt_content = []
+    copt_content += _get_autofdo_copts(ctx)
     for copt in ctx.attr.module_copts:
         expanded = ctx.expand_location(copt, targets = expand_targets)
-
-        if copt != expanded:
-            if not copt.startswith("$(") or not copt.endswith(")") or \
-               copt.count("$(") > 1:
-                # This may be an item like "-include=$(location X)", which is
-                # not allowed. "$(location X) $(location Y)" is also not allowed.
-                # The predicate here may not be accurate, but it is a good heuristic.
-                fail(
-                    """{}: {} is not allowed. An $(location) expression must be its own item.
-                       For example, Instead of specifying "-include=$(location X)",
-                       specify two items ["-include", "$(location X)"] instead.""",
-                    ctx.label,
-                    copt,
-                )
-
         copt_content.append({
             "expanded": expanded,
-            "is_path": copt != expanded,
+            "orig": copt,
         })
     out = ctx.actions.declare_file("{}/copts.json".format(ctx.attr.name))
     ctx.actions.write(
@@ -100,6 +94,27 @@ def _handle_copt(ctx):
         content = json.encode_indent(copt_content, indent = "  "),
     )
     return out
+
+def _get_autofdo_copts(ctx):
+    """Returns content in copt_file for AutoFDO."""
+
+    copt_content = []
+    if ctx.attr.module_debug_info_for_profiling:
+        copt_content += [{
+            "expanded": flag,
+            "orig": flag,
+        } for flag in _DEBUG_INFO_FOR_PROFILING_COPTS]
+
+    if ctx.file.module_autofdo_profile:
+        copt_content += [{
+            "expanded": "-fprofile-sample-accurate",
+            "orig": "-fprofile-sample-accurate",
+        }, {
+            "expanded": "-fprofile-sample-use={}".format(ctx.file.module_autofdo_profile.path),
+            "orig": "-fprofile-sample-use=$(execpath {})".format(ctx.attr.module_autofdo_profile.label),
+        }]
+
+    return copt_content
 
 def _check_no_ddk_headers_in_srcs(ctx, module_label):
     for target in ctx.attr.module_srcs:
@@ -115,8 +130,8 @@ def _check_empty_with_submodules(ctx, module_label, kernel_module_deps):
 
     That is, the top level `ddk_module` should not declare any
 
-    - inputs (including srcs, textual_hdrs and hdrs),
-    - outputs (including out, textual_hdrs, hdrs, includes), or
+    - inputs (including srcs and hdrs),
+    - outputs (including out, hdrs, includes), or
     - copts (including includes and local_defines).
 
     They should all be declared in individual `ddk_submodule`'s.
@@ -136,7 +151,6 @@ def _check_empty_with_submodules(ctx, module_label, kernel_module_deps):
         "srcs",
         "out",
         "hdrs",
-        "textual_hdrs",
         "includes",
         "local_defines",
         "copts",
@@ -274,7 +288,7 @@ def _makefiles_impl(ctx):
 
     # Because of left-to-right ordering (DDK_INCLUDE_INFO_ORDER), kernel_build with
     # lowest priority is placed at the end of the list.
-    transitive_include_info_targets = ctx.attr.module_deps + ctx.attr.module_hdrs + ctx.attr.module_textual_hdrs
+    transitive_include_info_targets = ctx.attr.module_deps + ctx.attr.module_hdrs
     if ctx.attr.kernel_build:
         transitive_include_info_targets.append(ctx.attr.kernel_build)
 
@@ -382,20 +396,23 @@ def _makefiles_impl(ctx):
     # Add targets with DdkHeadersInfo in deps
     srcs_depset_transitive += [hdr[DdkHeadersInfo].files for hdr in hdr_deps]
 
-    # Add all files from hdrs and textual_hdrs (use DdkHeadersInfo if available,
+    # Add all files from hdrs (use DdkHeadersInfo if available,
     #  otherwise use default files).
-    srcs_depset_transitive.append(get_headers_depset(ctx.attr.module_hdrs + ctx.attr.module_textual_hdrs))
+    srcs_depset_transitive.append(get_headers_depset(ctx.attr.module_hdrs))
 
     # Add ddk_module_headers files from kernel_build
     if ctx.attr.kernel_build:
         srcs_depset_transitive.append(ctx.attr.kernel_build[DdkHeadersInfo].files)
+
+    if ctx.attr.module_autofdo_profile:
+        srcs_depset_transitive.append(ctx.attr.module_autofdo_profile.files)
 
     ddk_headers_info = ddk_headers_common_impl(
         ctx.label,
         # hdrs of the ddk_module + hdrs of submodules.
         # Don't export kernel_build[DdkHeadersInfo] to avoid raising its priority;
         # dependent makefiles() target will put kernel_build[DdkHeadersInfo] at the end.
-        ctx.attr.module_hdrs + ctx.attr.module_textual_hdrs + submodule_deps,
+        ctx.attr.module_hdrs + submodule_deps,
         # includes of the ddk_module. The includes of submodules are handled by adding
         # them to hdrs.
         ctx.attr.module_includes,
@@ -418,6 +435,12 @@ def _makefiles_impl(ctx):
         ModuleSymversInfo(
             restore_paths = module_symvers_depset,
         ),
+        ModuleSymversFileInfo(
+            module_symvers = depset(transitive = [
+                target[ModuleSymversFileInfo].module_symvers
+                for target in module_symvers_deps
+            ]),
+        ),
         ddk_headers_info,
     ]
 
@@ -433,14 +456,16 @@ makefiles = rule(
         # module_X is the X attribute of the ddk_module. Prefixed with `module_`
         # because they aren't real srcs / hdrs / deps to the makefiles rule.
         "module_srcs": attr.label_list(allow_files = [".c", ".h", ".S", ".rs"]),
-        "module_hdrs": attr.label_list(allow_files = [".h"]),
-        "module_textual_hdrs": attr.label_list(allow_files = True),
+        # allow_files = True because https://github.com/bazelbuild/bazel/issues/7516
+        "module_hdrs": attr.label_list(allow_files = True),
         "module_includes": attr.string_list(),
         "module_linux_includes": attr.string_list(),
         "module_deps": attr.label_list(),
         "module_out": attr.string(),
         "module_local_defines": attr.string_list(),
         "module_copts": attr.string_list(),
+        "module_autofdo_profile": attr.label(allow_single_file = True),
+        "module_debug_info_for_profiling": attr.bool(),
         "top_level_makefile": attr.bool(),
         "kbuild_has_linux_include": attr.bool(
             doc = "Whether to add LINUXINCLUDE to Kbuild",

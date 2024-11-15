@@ -111,6 +111,13 @@ def load_arguments():
 
                             If set, this script always has exit code 0.
                        """)
+    group.add_argument("-i", "--interactive", action="store_true",
+                       help="""For DdkWorkspaceSetupTest, start an interactive
+                               shell in the unshare mount namespace before
+                               building anything.
+
+                               Don't run two interactive shells in parellel;
+                               your workspace might be wiped out.""")
     return parser.parse_known_args()
 
 
@@ -490,6 +497,8 @@ class KleafIntegrationTestBase(unittest.TestCase):
                          for arg in arguments.bazel_wrapper_args)
         test_args.append(f"--mount-spec={_serialize_mount_spec(mount_spec)}")
         test_args.append(f"--link-spec={_serialize_link_spec(link_spec)}")
+        if arguments.interactive:
+            test_args.append("--interactive")
         test_args.append(self.id().removeprefix("__main__."))
         args.append(" ".join(shlex.quote(str(test_arg))
                              for test_arg in test_args))
@@ -625,7 +634,7 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
             self.real_kleaf_repo, self.ddk_workspace)
 
     def test_kleaf_module_below_ddk_workspace(self):
-        """Tests that @kelaf is below DDK workspace"""
+        """Tests that @kleaf is below DDK workspace"""
         kleaf_repo = self.ddk_workspace / "external/kleaf"
         if not arguments.mount_spec:
             mount_spec = {
@@ -634,6 +643,29 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
             self._unshare_mount_run(mount_spec=mount_spec, link_spec=LinkSpec())
             return
         self._run_ddk_workspace_setup_test(kleaf_repo, self.ddk_workspace)
+
+    def test_build_kernel_at_root_module(self):
+        """Tests that kernel_build() at the root module is still functional.
+
+        See b/375647893"""
+        kleaf_repo = self.ddk_workspace / "external/kleaf"
+        if not arguments.mount_spec:
+            common_build = pathlib.Path(self._common()) / "BUILD.bazel"
+            self.restore_file_after_test(common_build)
+            # pylint: disable=line-too-long
+            shutil.copy(
+                "build/kernel/kleaf/tests/integration_test/ddk_workspace_test/fake_common.BUILD",
+                common_build)
+            mount_spec = {
+                self.real_kleaf_repo: kleaf_repo,
+                self.real_kleaf_repo / self._common(): self.ddk_workspace / "forked_common",
+            }
+            self._unshare_mount_run(mount_spec=mount_spec, link_spec=LinkSpec())
+            return
+        self._run_ddk_workspace_setup_test(
+            kleaf_repo,
+            ddk_workspace=self.ddk_workspace,
+            build_targets=["//forked_common:fake_device"])
 
     def test_setup_with_local_prebuilts(self):
         """Tests that init_ddk --prebuilts_dir & --local works."""
@@ -720,7 +752,21 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
                                       local: bool = True,
                                       url_fmt: str | None = None,
                                       build_id: str | None = None,
-                                      sync: bool | None = None):
+                                      sync: bool | None = None,
+                                      build_targets: Iterable[str] = ()):
+        """Tests a DDKv2 workspace setup.
+
+        Args:
+            kleaf_repo: path to @kleaf module.
+            ddk_workspace: path to root of workspace.
+            prebuilts_dir: See init_ddk.py
+            local: See init_ddk.py
+            url_fmt: See init_ddk.py
+            build_id: See init_ddk.py
+            sync: See init_ddk.py
+            build_targets: If not empty, build the given list of targets below
+                the workspace. Otherwise run build tests.
+        """
         # kleaf_repo relative to ddk_workspace
         kleaf_repo_rel = self._force_relative_to(
             kleaf_repo, ddk_workspace)
@@ -736,9 +782,12 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
         # ddk_workspace, because the latter may be out of Git's version control.
         Exec.check_call(git_clean_args, cwd=self.ddk_workspace)
 
-        # Delete generated files at the end
-        self.addCleanup(Exec.check_call, git_clean_args,
-                        cwd=self.ddk_workspace)
+        # Don't call git clean in interactive mode. Be lenient about local
+        # changes that the developer made.
+        if not arguments.interactive:
+            # Delete generated files at the end
+            self.addCleanup(Exec.check_call, git_clean_args,
+                            cwd=self.ddk_workspace)
 
         self._mount(kleaf_repo)
 
@@ -770,15 +819,29 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
             f"--kleaf_repo_rel={kleaf_repo_rel}",
             f"--ddk_workspace={ddk_workspace}",
         ])
+        if arguments.interactive:
+            # Ignore exit code from the interactive shell.
+            Exec.popen(["bash"], cwd=ddk_workspace).communicate()
+            self.skipTest("Tests are skipped in interactive mode")
 
         self._check_call("clean", ["--expunge"], cwd=ddk_workspace)
 
         args = []
         # Switch base kernel when using prebuilts
+        # pylint: disable=line-too-long
         if prebuilts_dir:
             args.append("--//tests:kernel=@gki_prebuilts//kernel_aarch64")
-        args.append("//tests")
-        self._check_call("test", args, cwd=ddk_workspace)
+            args.append("--@kleaf//build/kernel/kleaf/tests/ddk_menuconfig_test:kernel_build=@gki_prebuilts//kernel_aarch64")
+        else:
+            # --//tests:kernel already this default value
+            args.append("--@kleaf//build/kernel/kleaf/tests/ddk_menuconfig_test:kernel_build=@kleaf//common:kernel_aarch64")
+
+        if build_targets:
+            args.extend(build_targets)
+            self._check_call("build", args, cwd=ddk_workspace)
+        else:
+            args.append("//tests")
+            self._check_call("test", args, cwd=ddk_workspace)
 
         # Delete generated files
         self._check_call("clean", ["--expunge"], cwd=ddk_workspace)
@@ -988,7 +1051,7 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
         _, stderr = popen.communicate()
         self.assertNotEqual(popen.returncode, 0)
         self.assertIn(
-            "CONFIG_DELETED_SET: actual '', expected 'CONFIG_DELETED_SET=y' from build/kernel/kleaf/tests/integration_test/ddk_negative_test/defconfig.",
+            "CONFIG_DELETED_SET: actual '', expected 'y' from build/kernel/kleaf/tests/integration_test/ddk_negative_test/defconfig",
             stderr)
         self.assertNotIn("DECLARED_SET", stderr)
         self.assertNotIn("DECLARED_UNSET", stderr)

@@ -39,6 +39,7 @@ load(
     "KernelModuleSetupInfo",
     "KernelSerializedEnvInfo",
     "KernelUnstrippedModulesInfo",
+    "ModuleSymversFileInfo",
     "ModuleSymversInfo",
 )
 load(":compile_commands_utils.bzl", "compile_commands_utils")
@@ -249,6 +250,17 @@ def _get_implicit_outs(ctx):
     return list(implicit_outs_to_srcs.keys())
 
 def _kernel_module_impl(ctx):
+    if not ctx.attr.internal_ddk_makefiles_dir:
+        message = """{}: kernel_module() is deprecated. Use ddk_module() instead.
+    See build/kernel/kleaf/docs/ddk/main.md for using the DDK.
+""".format(ctx.label)
+
+        if ctx.attr._kernel_module_fail[BuildSettingInfo].value:
+            fail(message)
+
+        # buildifier: disable=print
+        print("\nWARNING: {}".format(message))
+
     split_deps = kernel_utils.split_kernel_module_deps(ctx.attr.deps, ctx.label)
     kernel_module_deps = split_deps.kernel_modules
     kernel_module_deps = [kernel_utils.create_kernel_module_dep_info(target) for target in kernel_module_deps]
@@ -691,6 +703,9 @@ def _kernel_module_impl(ctx):
                 compile_commands_common_out_dir = compile_commands_step.compile_commands_common_out_dir,
             )]),
         ),
+        ModuleSymversFileInfo(
+            module_symvers = depset([module_symvers]),
+        ),
     ]
 
 def _kernel_module_additional_attrs():
@@ -750,6 +765,7 @@ _kernel_module = rule(
         "_preserve_cmd": attr.label(default = "//build/kernel/kleaf/impl:preserve_cmd"),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
         "_debug_modpost_warn": attr.label(default = "//build/kernel/kleaf:debug_modpost_warn"),
+        "_kernel_module_fail": attr.label(default = "//build/kernel/kleaf:incompatible_kernel_module_fail"),
     } | _kernel_module_additional_attrs() | gcov_attrs(),
     toolchains = [hermetic_toolchain.type],
 )

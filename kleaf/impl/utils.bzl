@@ -189,27 +189,28 @@ def _get_check_sandbox_cmd():
            fi
     """
 
-def _write_depset(ctx, d, out):
+def _write_depset_impl(subrule_ctx, d, out, *, _write_depset):
     """Writes a depset to a file.
 
     Requires `_write_depset` in attrs.
 
     Args:
-        ctx: ctx
+        subrule_ctx: subrule_ctx
         d: the depset
         out: name of the output file
+        _write_depset: the script to write a depset
     Returns:
         A struct with the following fields:
         - depset_file: the declared output file.
         - depset: a depset that contains `d` and `depset_file`
     """
-    out_file = ctx.actions.declare_file("{}/{}".format(ctx.attr.name, out))
+    out_file = subrule_ctx.actions.declare_file("{}/{}".format(subrule_ctx.label.name, out))
 
-    args = ctx.actions.args()
+    args = subrule_ctx.actions.args()
     args.add(out_file)
     args.add_all(d)
-    ctx.actions.run(
-        executable = ctx.executable._write_depset,
+    subrule_ctx.actions.run(
+        executable = _write_depset,
         arguments = [args],
         outputs = [out_file],
         mnemonic = "WriteDepset",
@@ -219,6 +220,46 @@ def _write_depset(ctx, d, out):
         depset_file = out_file,
         depset = depset([out_file], transitive = [d]),
     )
+
+_write_depset = subrule(
+    implementation = _write_depset_impl,
+    attrs = {
+        "_write_depset": attr.label(
+            default = ":write_depset",
+            executable = True,
+            cfg = "exec",
+        ),
+    },
+)
+
+def _optional_path(file):
+    """If file is None, return empty string. Otherwise return its path."""
+    if file == None:
+        return ""
+    return file.path
+
+def _optional_single_path(files, what = None):
+    """If files is empty, return empty string.
+
+    If more than one file, error.
+    Otherwise return its path.
+    """
+    file = _optional_file(files, what = what)
+    if not file:
+        return ""
+    return file.path
+
+def _optional_file(files, what = None):
+    """If files is empty, return None.
+
+    If more than one file, error.
+    Otherwise return the file.
+    """
+    if not files:
+        return None
+    if len(files) > 1:
+        fail("{}: expected a single file!".format(what or ""))
+    return files[0]
 
 # Utilities that applies to all Bazel stuff in general. These functions are
 # not Kleaf specific.
@@ -235,6 +276,9 @@ utils = struct(
     hash_hex = _hash_hex,
     get_check_sandbox_cmd = _get_check_sandbox_cmd,
     write_depset = _write_depset,
+    optional_path = _optional_path,
+    optional_single_path = _optional_single_path,
+    optional_file = _optional_file,
 )
 
 def _filter_module_srcs(files):
@@ -432,6 +476,11 @@ def _eval_restore_out_dir_cmd():
 def _setup_serialized_env_cmd(serialized_env_info, restore_out_dir_cmd):
     """Returns a command that sets up `KernelSerializedEnvInfo`.
 
+    The provided command line has a shebang at the first line, so in most cases when
+    setup_serialized_env_cmd is at the beginning, the user doesn't have to add a shebang. However,
+    if setup_serialized_env_cmd is not at the beginning of a script or a command line, the user
+    should manually add the shebang if necessary.
+
     Args:
         serialized_env_info: `KernelSerializedEnvInfo`
         restore_out_dir_cmd: The command to restore value of `OUT_DIR`.
@@ -440,13 +489,18 @@ def _setup_serialized_env_cmd(serialized_env_info, restore_out_dir_cmd):
     if not restore_out_dir_cmd:
         restore_out_dir_cmd = ":"
 
-    return """
+    return """#!/bin/bash -e
         KLEAF_RESTORE_OUT_DIR_CMD={quoted_restore_out_dir_cmd}
-        . {setup_script}
+        if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+            . {setup_script_short}
+        else
+            . {setup_script}
+        fi
         unset KLEAF_RESTORE_OUT_DIR_CMD
     """.format(
         quoted_restore_out_dir_cmd = shell.quote(restore_out_dir_cmd),
         setup_script = serialized_env_info.setup_script.path,
+        setup_script_short = serialized_env_info.setup_script.short_path,
     )
 
 kernel_utils = struct(

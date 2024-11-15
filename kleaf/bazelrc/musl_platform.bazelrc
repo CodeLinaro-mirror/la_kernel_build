@@ -15,4 +15,4 @@
 # --config=musl_platform: Experimental: Switch --host_platform to use musl libc.
 #    See build/kernel/kleaf/docs/musl.md
 
-common:musl_platform --host_platform=//build/kernel/kleaf/impl:host_musl
+common:musl_platform --host_platform=//build/kernel/kleaf/impl/platforms:host_musl

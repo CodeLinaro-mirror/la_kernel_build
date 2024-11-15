@@ -26,6 +26,17 @@ load(":debug.bzl", "debug")
 
 visibility("//build/kernel/kleaf/...")
 
+def _kernel_platform_toolchain_transition_impl(_settings, attrs):
+    if attrs.override_platform:
+        return {"//command_line_option:platforms": str(attrs.override_platform)}
+    return {}
+
+_kernel_platform_toolchain_transition = transition(
+    implementation = _kernel_platform_toolchain_transition_impl,
+    inputs = [],
+    outputs = ["//command_line_option:platforms"],
+)
+
 def _kernel_platform_toolchain_impl(ctx):
     should_print_platforms = debug.print_platforms(ctx)
     cc_info = cc_common.merge_cc_infos(
@@ -130,7 +141,17 @@ def _kernel_platform_toolchain_impl(ctx):
         ldflags = link_command_line,
         ldexpr = ldexpr,
         bin_path = bin_path,
+        runpaths = [runpath.path for runpath in ctx.files.runpaths],
+        sysroot = cc_toolchain.sysroot,
+        libc = _get_libc(ctx),
     )
+
+def _get_libc(ctx):
+    if ctx.target_platform_has_constraint(ctx.attr._glibc[platform_common.ConstraintValueInfo]):
+        return "glibc"
+    if ctx.target_platform_has_constraint(ctx.attr._musl[platform_common.ConstraintValueInfo]):
+        return "musl"
+    fail("{}: Cannot determine platform.".format(ctx.label))
 
 kernel_platform_toolchain = rule(
     doc = """Helper to resolve toolchain for a single platform.""",
@@ -138,10 +159,16 @@ kernel_platform_toolchain = rule(
     attrs = {
         "deps": attr.label_list(providers = [CcInfo]),
         "runpaths": attr.label_list(allow_files = True),
+        "_musl": attr.label(default = "//build/kernel/kleaf/platforms/libc:musl"),
+        "_glibc": attr.label(default = "//build/kernel/kleaf/platforms/libc:glibc"),
         # For using mandatory = False
         "_cc_toolchain": attr.label(default = "@bazel_tools//tools/cpp:optional_current_cc_toolchain"),
+        "override_platform": attr.label(
+            doc = "If set, force this target to use the given platform.",
+        ),
     },
     toolchains = use_cpp_toolchain(mandatory = False),
     fragments = ["cpp"],
     subrules = [debug.print_platforms],
+    cfg = _kernel_platform_toolchain_transition,
 )

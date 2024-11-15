@@ -15,6 +15,7 @@
 Build multiple kernel images.
 """
 
+load("@bazel_skylib//lib:shell.bzl", "shell")
 load(
     ":common_providers.bzl",
     "ImagesInfo",
@@ -23,6 +24,8 @@ load(":image/boot_images.bzl", "boot_images")
 load(":image/dtbo.bzl", "dtbo")
 load(":image/image_utils.bzl", "image_utils")
 load(":image/initramfs.bzl", "initramfs")
+load(":image/kernel_images_replace.bzl", "kernel_images_replace")
+load(":image/or_file.bzl", "or_file")
 load(":image/system_dlkm_image.bzl", "system_dlkm_image")
 load(":image/vendor_dlkm_image.bzl", "vendor_dlkm_image")
 
@@ -343,6 +346,10 @@ def kernel_images(
           See complete list
           [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
     """
+    private_kwargs = kwargs | {
+        "visibility": ["//visibility:private"],
+    }
+
     all_rules = []
 
     build_any_boot_image = build_boot or build_vendor_boot or build_vendor_kernel_boot or \
@@ -391,19 +398,7 @@ def kernel_images(
     elif build_vendor_kernel_boot:
         vendor_boot_name = "vendor_kernel_boot"
 
-    vendor_boot_modules_load = None
-    vendor_boot_modules_load_recovery = None
-    vendor_boot_modules_load_charger = None
     if build_initramfs:
-        if vendor_boot_name:
-            vendor_boot_modules_load = "{}_initramfs/{}.modules.load".format(name, vendor_boot_name)
-
-            if modules_recovery_list:
-                vendor_boot_modules_load_recovery = "{}_initramfs/{}.modules.load.recovery".format(name, vendor_boot_name)
-
-            if modules_charger_list:
-                vendor_boot_modules_load_charger = "{}_initramfs/{}.modules.load.charger".format(name, vendor_boot_name)
-
         if ramdisk_compression_args and ramdisk_compression != "lz4":
             fail(
                 "ramdisk_compress_args provided but ramdisk_compression={} is not lz4.".format(
@@ -415,9 +410,6 @@ def kernel_images(
             name = "{}_initramfs".format(name),
             kernel_modules_install = kernel_modules_install,
             deps = deps,
-            vendor_boot_modules_load = vendor_boot_modules_load,
-            vendor_boot_modules_load_recovery = vendor_boot_modules_load_recovery,
-            vendor_boot_modules_load_charger = vendor_boot_modules_load_charger,
             modules_list = modules_list,
             modules_recovery_list = modules_recovery_list,
             modules_charger_list = modules_charger_list,
@@ -426,50 +418,72 @@ def kernel_images(
             ramdisk_compression = ramdisk_compression,
             ramdisk_compression_args = ramdisk_compression_args,
             create_modules_order = create_modules_order,
+            vendor_boot_name = vendor_boot_name,
             **kwargs
         )
         all_rules.append(":{}_initramfs".format(name))
 
     if build_system_dlkm:
+        or_file(
+            name = "{}_system_dlkm_modules_list".format(name),
+            first = system_dlkm_modules_list,
+            second = modules_list,
+            **private_kwargs
+        )
+        or_file(
+            name = "{}_system_dlkm_modules_blocklist".format(name),
+            first = system_dlkm_modules_blocklist,
+            second = modules_blocklist,
+            **private_kwargs
+        )
+
+        if system_dlkm_fs_type and system_dlkm_fs_types:
+            fail("""{}: Both system_dlkm_fs_type="{}" and system_dlkm_fs_types={} are specified. system_dlkm_fs_type is deprecated, use system_dlkm_fs_types instead.""".format(
+                native.package_relative_label(name),
+                system_dlkm_fs_type,
+                system_dlkm_fs_types,
+            ))
+
+        # Build system_dlkm.img with ext4 fs as default
+        if not system_dlkm_fs_type and not system_dlkm_fs_types:
+            system_dlkm_fs_types = ["kleaf_internal_legacy_ext4_single"]
+
+        # if system_dlkm_fs_type: Build system_dlkm.img with given fs type
+        if system_dlkm_fs_type:
+            system_dlkm_fs_types = [system_dlkm_fs_type]
+
         system_dlkm_image(
             name = "{}_system_dlkm_image".format(name),
             # For GKI system_dlkm
             kernel_modules_install = kernel_modules_install,
             # For device system_dlkm, give GKI's system_dlkm_staging_archive.tar.gz
-            base_kernel_images = base_kernel_images,
-            build_system_dlkm_flatten_image = build_system_dlkm_flatten,
+            base = base_kernel_images,
+            build_flatten = build_system_dlkm_flatten,
             deps = deps,
-            modules_list = modules_list,
-            modules_blocklist = modules_blocklist,
-            system_dlkm_fs_type = system_dlkm_fs_type,
-            system_dlkm_fs_types = system_dlkm_fs_types,
-            system_dlkm_modules_list = system_dlkm_modules_list,
-            system_dlkm_modules_blocklist = system_dlkm_modules_blocklist,
-            system_dlkm_props = system_dlkm_props,
-            create_modules_order = False,
+            modules_list = ":{}_system_dlkm_modules_list".format(name),
+            modules_blocklist = ":{}_system_dlkm_modules_blocklist".format(name),
+            fs_types = system_dlkm_fs_types,
+            props = system_dlkm_props,
             **kwargs
         )
         all_rules.append(":{}_system_dlkm_image".format(name))
 
     if build_vendor_dlkm:
-        if vendor_dlkm_fs_type == None:
-            vendor_dlkm_fs_type = "ext4"
-
         vendor_dlkm_image(
             name = "{}_vendor_dlkm_image".format(name),
             kernel_modules_install = kernel_modules_install,
-            vendor_boot_modules_load = vendor_boot_modules_load,
-            build_vendor_dlkm_flatten_image = build_vendor_dlkm_flatten,
+            vendor_boot_modules_load = "{}_initramfs".format(name) if build_initramfs else None,
+            build_flatten = build_vendor_dlkm_flatten,
             deps = deps,
-            vendor_dlkm_archive = vendor_dlkm_archive,
-            vendor_dlkm_etc_files = vendor_dlkm_etc_files,
-            vendor_dlkm_fs_type = vendor_dlkm_fs_type,
-            vendor_dlkm_modules_list = vendor_dlkm_modules_list,
-            vendor_dlkm_modules_blocklist = vendor_dlkm_modules_blocklist,
-            vendor_dlkm_props = vendor_dlkm_props,
+            archive = vendor_dlkm_archive,
+            etc_files = vendor_dlkm_etc_files,
+            fs_type = vendor_dlkm_fs_type,
+            modules_list = vendor_dlkm_modules_list,
+            modules_blocklist = vendor_dlkm_modules_blocklist,
+            props = vendor_dlkm_props,
             dedup_dlkm_modules = dedup_dlkm_modules,
             system_dlkm_image = "{}_system_dlkm_image".format(name) if build_system_dlkm else None,
-            base_kernel_images = base_kernel_images,
+            base_system_dlkm_image = base_kernel_images,
             create_modules_order = create_modules_order,
             **kwargs
         )
@@ -479,7 +493,7 @@ def kernel_images(
         boot_images(
             name = "{}_boot_images".format(name),
             kernel_build = kernel_build,
-            outs = ["{}_boot_images/{}".format(name, out) for out in boot_image_outs],
+            outs = boot_image_outs,
             deps = deps,
             initramfs = ":{}_initramfs".format(name) if build_initramfs else None,
             mkbootimg = mkbootimg,
@@ -517,13 +531,33 @@ def kernel_images(
         )
         all_rules.append(":{}_dtbo".format(name))
 
-    _kernel_images(
+    kernel_images_replace(
+        name = name + "_replace",
+        selected_modules_list = name + "_system_dlkm_modules_list" if build_system_dlkm else None,
+        selected_modules_blocklist = name + "_system_dlkm_modules_blocklist" if build_system_dlkm else None,
+        **private_kwargs
+    )
+
+    kernel_images_filegroup(
         name = name,
         srcs = all_rules,
         **kwargs
     )
 
-def _kernel_images_impl(ctx):
+def _kernel_images_filegroup_impl(ctx):
+    # buildifier: disable=print
+    print("""
+WARNING: kernel_images() is deprecated. Run the following command to print skeleton equivalent code:
+    (Note: Use cquery if you need to evaluate the select() expressions)
+    (Note: add additional flags to both commands if you have them)
+
+    tools/bazel query --output=build {targets} | \\
+    tools/bazel run {replace}_replace
+    """.format(
+        replace = ctx.label,
+        targets = shell.quote(" union ".join([str(target.label) for target in ctx.attr.srcs])),
+    ))
+
     default_info = DefaultInfo(files = depset(transitive = [
         target.files
         for target in ctx.attr.srcs
@@ -548,8 +582,9 @@ def _kernel_images_impl(ctx):
         output_group_info,
     ]
 
-_kernel_images = rule(
-    implementation = _kernel_images_impl,
+kernel_images_filegroup = rule(
+    doc = "Legacy, internal macro to provide output groups for individual images.",
+    implementation = _kernel_images_filegroup_impl,
     attrs = {
         "srcs": attr.label_list(),
     },

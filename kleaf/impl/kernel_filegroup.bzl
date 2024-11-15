@@ -98,8 +98,7 @@ def _get_kernel_release(ctx):
     return kernel_release
 
 def _get_config_env(ctx):
-    """Returns a KernelSerializedEnvInfo analogous to that returned by kernel_config().
-    """
+    """Returns a KernelSerializedEnvInfo analogous to that returned by kernel_config()."""
 
     if not ctx.file.config_out_dir or not ctx.file.env_setup_script:
         return None
@@ -109,15 +108,27 @@ def _get_config_env(ctx):
 
     env_setup_command = """
         KLEAF_REPO_WORKSPACE_ROOT={kleaf_repo_workspace_root}
-        KLEAF_HERMETIC_BASE={hermetic_base}
+        if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+            KLEAF_HERMETIC_BASE={run_hermetic_base}
+        else
+            KLEAF_HERMETIC_BASE={hermetic_base}
+        fi
+        KLEAF_FIX_KERNEL_DIR=1
     """.format(
         kleaf_repo_workspace_root = Label(":kernel_filegroup.bzl").workspace_root,
         hermetic_base = hermetic_tools.internal_hermetic_base,
+        run_hermetic_base = hermetic_tools.internal_run_hermetic_base,
     )
     env_setup_command += get_env_info_setup_command(
         hermetic_tools_setup = hermetic_tools.setup,
         build_utils_sh = ctx.file._build_utils_sh,
         env_setup_script = ctx.file.env_setup_script,
+    )
+    env_setup_command += """
+        # Re-configure kernel toolchains because @kleaf may not be the root module any more.
+        {toolchains_setup_env_var_cmd}
+    """.format(
+        toolchains_setup_env_var_cmd = toolchains.kernel_setup_env_var_cmd,
     )
 
     config_env_setup_command = get_config_setup_command(
@@ -212,9 +223,12 @@ def _get_modules_prepare_env(ctx, ddk_config_env):
     if not ctx.file.modules_prepare_archive:
         return None
 
+    toolchains = kernel_toolchains_utils.get(ctx)
+
     modules_prepare_setup = modules_prepare_setup_command(
         config_setup_script = ddk_config_env.setup_script,
         modules_prepare_outdir_tar_gz = ctx.file.modules_prepare_archive,
+        kernel_toolchains = toolchains,
     )
 
     module_prepare_env_setup_script = ctx.actions.declare_file(
@@ -395,11 +409,13 @@ def _kernel_filegroup_impl(ctx):
     config_tags_out = kernel_config_settings.kernel_env_get_config_tags(
         ctx = ctx,
         mnemonic_prefix = "KernelFilegroup",
-        defconfig_fragments = [],
+        pre_defconfig_fragments = [],
+        post_defconfig_fragments = [],
     )
     progress_message_note = kernel_config_settings.get_progress_message_note(
         ctx,
-        defconfig_fragments = [],
+        pre_defconfig_fragments = [],
+        post_defconfig_fragments = [],
     )
     kernel_env_attr_info = KernelEnvAttrInfo(
         common_config_tags = config_tags_out.common,
