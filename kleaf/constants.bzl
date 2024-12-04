@@ -138,6 +138,15 @@ CI_TARGET_MAPPING = {
         "protected_modules": "gki_aarch64_protected_modules",
         "gki_prebuilts_outs": GKI_ARTIFACTS_AARCH64_OUTS,
     },
+    "kernel_aarch64_16k": {
+        "repo_name": "gki_prebuilts_aarch64_16k",
+        "ci_target_name": "kernel_aarch64_16k",
+        "outs": DEFAULT_GKI_OUTS + [
+            "kernel_aarch64_16k" + MODULE_OUTS_FILE_SUFFIX,
+        ],
+        "protected_modules": "gki_aarch64_protected_modules",
+        "gki_prebuilts_outs": GKI_ARTIFACTS_AARCH64_OUTS,
+    },
 }
 
 LTO_VALUES = (
