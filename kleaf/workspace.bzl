@@ -84,7 +84,7 @@ WARNING: define_kleaf_workspace() should be called with common_kernel_package={}
         },
     )
 
-    for target, mapping in CI_TARGET_MAPPING.items():
+    for _bazel_target_name, mapping in CI_TARGET_MAPPING.items():
         gki_prebuilts_files = {out: None for out in mapping["outs"]}
         gki_prebuilts_optional_files = {mapping["protected_modules"]: None}
         for config in GKI_DOWNLOAD_CONFIGS:
@@ -103,7 +103,7 @@ WARNING: define_kleaf_workspace() should be called with common_kernel_package={}
             name = mapping["repo_name"],
             files = gki_prebuilts_files,
             optional_files = gki_prebuilts_optional_files,
-            target = target,
+            target = mapping["ci_target_name"],
         )
 
     # TODO(b/200202912): Re-route this when rules_python is pulled into AOSP.
