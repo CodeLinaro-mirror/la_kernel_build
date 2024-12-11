@@ -298,6 +298,9 @@ for EXT_MOD in ${EXT_MODULES}; do
      btgt="anorak"
   elif [ "$TARGET_BOARD_PLATFORM" = "neo61" ]; then
      btgt="neo-la"
+  elif [ "$TARGET_BOARD_PLATFORM" = "mdm9607" ]; then
+     btgt="mdm9607"
+     VARIANT="${VARIANT/_/-}"
   else
      btgt="$TARGET_BOARD_PLATFORM"
   fi
