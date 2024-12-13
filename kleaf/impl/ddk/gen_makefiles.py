@@ -24,6 +24,7 @@ import logging
 import os
 import pathlib
 import shlex
+import shutil
 import sys
 import textwrap
 from typing import Optional, TextIO, Any
@@ -50,12 +51,12 @@ class DieException(SystemExit):
         if msg:
             if die_exception is None:
                 logging.error(
-                    f"Expect build failure %s, but there's no failure", msg)
+                    "Expect build failure %s, but there's no failure", msg)
                 sys.exit(1)
             if die_exception.msg != msg:
                 logging.error(*die_exception.args, **die_exception.kwargs)
                 logging.error(
-                    f"Expect build failure %s, but got a different failure", msg)
+                    "Expect build failure %s, but got a different failure", msg)
                 sys.exit(1)
             return
 
@@ -69,10 +70,10 @@ def die(*args, **kwargs):
 
 
 def _get_license_str():
-  return textwrap.dedent("""\
-    # SPDX-License-Identifier: GPL-2.0
+    return textwrap.dedent("""\
+        # SPDX-License-Identifier: GPL-2.0
 
-  """)
+    """)
 
 def _gen_makefile(
         module_symvers_list: list[pathlib.Path],
@@ -87,7 +88,7 @@ def _gen_makefile(
             """)
 
     content += textwrap.dedent("""\
-        modules modules_install clean:
+        modules modules_install clean compile_commands.json:
         \t$(MAKE) -C $(KERNEL_SRC) M=$(M) $(KBUILD_OPTIONS) KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)" $(@)
         """)
 
@@ -107,7 +108,7 @@ def _merge_directories(
     if not submodule_makefile_dir.is_dir():
         die("Can't find directory %s", submodule_makefile_dir)
 
-    for root, dirs, files in os.walk(submodule_makefile_dir):
+    for root, _, files in os.walk(submodule_makefile_dir):
         for file in files:
             submodule_file = pathlib.Path(root) / file
             file_rel = submodule_file.relative_to(submodule_makefile_dir)
@@ -115,8 +116,11 @@ def _merge_directories(
             dst_path.parent.mkdir(parents=True, exist_ok=True)
             with open(dst_path, "a") as dst, \
                     open(submodule_file, "r") as src:
-                # Comments are not allowed in .cflags files
-                if dst_path.suffix != ".cflags":
+                if dst_path.suffix in (".c", ".rs", ".h"):
+                    dst.write(f"// {submodule_file}\n")
+                elif dst_path.suffix == ".S":
+                    dst.write(f"/* {submodule_file} */\n")
+                elif dst_path.name in ("Kbuild", "Makefile"):
                     dst.write(f"# {submodule_file}\n")
                 dst.write(src.read())
                 dst.write("\n")
@@ -186,13 +190,30 @@ def _gen_ddk_makefile_for_module(
         **unused_kwargs
 ):
     kernel_module_srcs_json_content = json.load(kernel_module_srcs_json)
-    # List of JSON objects (dictionaries) with keys like "file", "config", "value", etc.
+    # List of JSON objects (dictionaries) with keys like "file", "config",
+    #  "value", etc.
     rel_srcs = []
     for kernel_module_srcs_json_item in kernel_module_srcs_json_content:
         rel_item = dict(kernel_module_srcs_json_item)
         rel_item["files"] = [pathlib.Path(src).relative_to(package)
-                             for src in rel_item["files"]
+                             for src in rel_item.get("files", [])
                              if pathlib.Path(src).is_relative_to(package)]
+
+        # Generated files example:
+        #   short_path = package/file.c
+        #   path = bazel-out/k8-fastbuild/bin/package/file.c
+        #   rel_package_path = file.c
+        for short_path, path in rel_item.get("gen", {}).items():
+            short_path = pathlib.Path(short_path)
+            path = pathlib.Path(path)
+            if not short_path.is_relative_to(package):
+                continue
+            rel_package_path = short_path.relative_to(package)
+            rel_item["files"].append(rel_package_path)
+            dest = output_makefiles / rel_package_path
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(path, dest)
+
         rel_srcs.append(rel_item)
 
     if kernel_module_out.suffix != ".ko":
@@ -225,7 +246,7 @@ def _gen_ddk_makefile_for_module(
             obj_suffix = "y"
 
             if config is not None:
-                if value == True:
+                if value == True: # pylint: disable=singleton-comparison
                     # The special value True means y or m.
                     obj_suffix = f"$({config})"
                 else:
@@ -237,11 +258,10 @@ def _gen_ddk_makefile_for_module(
                     src=src,
                     out_file=out_file,
                     kernel_module_out=kernel_module_out,
-                    package=package,
                     obj_suffix=obj_suffix,
                 )
 
-            if config is not None and value != True:
+            if config is not None and value != True: # pylint: disable=singleton-comparison
                 out_file.write(textwrap.dedent(f"""\
                     endif # {conditional}
                 """))
@@ -259,7 +279,7 @@ def _gen_ddk_makefile_for_module(
             config = src_item.get("config")
             value = src_item.get("value")
 
-            if config is not None and value != True:
+            if config is not None and value != True: # pylint: disable=singleton-comparison
                 conditional = f"ifeq ($({config}),{value})"
                 out_file.write(f"{conditional}\n")
 
@@ -275,7 +295,7 @@ def _gen_ddk_makefile_for_module(
                     CFLAGS_{out} += @$(ROOT_DIR)/{package / out_cflags_subpath}
                     """))
 
-            if config is not None and value != True:
+            if config is not None and value != True: # pylint: disable=singleton-comparison
                 out_file.write(f"endif # {conditional}\n\n")
 
     top_kbuild = output_makefiles / "Kbuild"
@@ -288,30 +308,34 @@ def _gen_ddk_makefile_for_module(
                 obj-y += {kernel_module_out.parent}/
                 """))
 
+def _get_rel_srcs_flat(rel_srcs: list[dict[str, Any]]) -> list[pathlib.Path] :
+    """List of source file paths(minus headers)."""
+    rel_srcs_flat: list[pathlib.Path] = []
+    for rel_item in rel_srcs:
+        files = rel_item["files"]
+        rel_srcs_flat.extend(
+            file for file in files if file.suffix in _SOURCE_SUFFIXES)
+    return rel_srcs_flat
 
 def _check_srcs_valid(rel_srcs: list[dict[str, Any]],
                       kernel_module_out: pathlib.Path):
     """Checks that the list of srcs is valid.
 
     Args:
-        rel_srcs: Like content in kernel_module_srcs_json, but only includes files
-          relative to the current package.
+        rel_srcs: Like content in kernel_module_srcs_json, but only includes
+         files relative to the current package.
         kernel_module_out: The `out` attribute.
     """
-    # List of paths of source files (minus headers)
-    rel_srcs_flat: list[pathlib.Path] = []
-    for rel_item in rel_srcs:
-        files = rel_item["files"]
-        rel_srcs_flat.extend(
-            file for file in files if file.suffix in _SOURCE_SUFFIXES)
+    rel_srcs_flat = _get_rel_srcs_flat(rel_srcs)
 
     source_files_with_name_of_kernel_module = \
         [src for src in rel_srcs_flat if src.with_suffix(
             ".ko") == kernel_module_out]
 
     if source_files_with_name_of_kernel_module and len(rel_srcs_flat) > 1:
-        die("Source files %s are not allowed to build %s when multiple source files exist. "
-            "Please change the name of the output file.",
+        die("Source files %s are not allowed to build %s when multiple source"
+            " files exist."
+            " Please change the name of the output file.",
             [str(e) for e in source_files_with_name_of_kernel_module],
             kernel_module_out)
 
@@ -320,7 +344,6 @@ def _handle_src(
         src: pathlib.Path,
         out_file: TextIO,
         kernel_module_out: pathlib.Path,
-        package: pathlib.Path,
         obj_suffix: str,
 ):
     # Ignore non-exported headers specified in srcs
@@ -340,7 +363,6 @@ def _handle_src(
                     """))
     else:
         out_file.write(textwrap.dedent(f"""\
-                        # Source: {package / src}
                         {kernel_module_out.with_suffix('').name}-{obj_suffix} += {out}
                     """))
 

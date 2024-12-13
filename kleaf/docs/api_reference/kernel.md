@@ -323,10 +323,10 @@ Create a build.config file by concatenating build config fragments.
 ## kernel_compile_commands
 
 <pre>
-kernel_compile_commands(<a href="#kernel_compile_commands-name">name</a>, <a href="#kernel_compile_commands-kernel_build">kernel_build</a>)
+kernel_compile_commands(<a href="#kernel_compile_commands-name">name</a>, <a href="#kernel_compile_commands-deps">deps</a>, <a href="#kernel_compile_commands-kernel_build">kernel_build</a>)
 </pre>
 
-Define an executable that creates `compile_commands.json` from a `kernel_build`.
+Define an executable that creates `compile_commands.json` from kernel targets.
 
 **ATTRIBUTES**
 
@@ -334,7 +334,8 @@ Define an executable that creates `compile_commands.json` from a `kernel_build`.
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="kernel_compile_commands-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="kernel_compile_commands-kernel_build"></a>kernel_build |  The `kernel_build` rule to extract from.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="kernel_compile_commands-deps"></a>deps |  The targets to extract from. The following are allowed:<br><br>- [`kernel_build`](#kernel_build) - [`kernel_module`](#kernel_module) - [`ddk_module`](#ddk_module) - [`kernel_module_group`](#kernel_module_group)   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="kernel_compile_commands-kernel_build"></a>kernel_build |  The `kernel_build` rule to extract from.<br><br>Deprecated:     Use `deps` instead.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 
 
 <a id="kernel_filegroup"></a>
@@ -869,7 +870,7 @@ $(LINUXINCLUDE)
 | :------------- | :------------- | :------------- |
 | <a id="ddk_module-name"></a>name |  Name of target. This should usually be name of the output `.ko` file without the suffix.   |  none |
 | <a id="ddk_module-kernel_build"></a>kernel_build |  [`kernel_build`](#kernel_build)   |  none |
-| <a id="ddk_module-srcs"></a>srcs |  sources and local headers.   |  `None` |
+| <a id="ddk_module-srcs"></a>srcs |  sources and local headers.<br><br>Source files (`.c`, `.S`, `.rs`) must be in the package of this `ddk_module` target, or in subpackages.<br><br>Generated source files (`.c`, `.S`, `.rs`) are accepted as long as they are in the package of this `ddk_module` target, or in subpackages.<br><br>Header files specified here are only visible to this `ddk_module` target, but not dependencies. To export a header so dependencies can use it, put it in `hdrs` and set `includes` accordingly.<br><br>Generated header files are accepted.   |  `None` |
 | <a id="ddk_module-deps"></a>deps |  A list of dependent targets. Each of them must be one of the following:<br><br>- [`kernel_module`](#kernel_module) - [`ddk_module`](#ddk_module) - [`ddk_headers`](#ddk_headers).   |  `None` |
 | <a id="ddk_module-hdrs"></a>hdrs |  See [`ddk_headers.hdrs`](#ddk_headers-hdrs)   |  `None` |
 | <a id="ddk_module-textual_hdrs"></a>textual_hdrs |  See [`ddk_headers.textual_hdrs`](#ddk_headers-textual_hdrs)   |  `None` |
