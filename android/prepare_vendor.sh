@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
-# Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+# Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -203,8 +203,8 @@ cp "${ROOT_DIR}/build.config" "${ANDROID_KERNEL_OUT}/build.config"
 
 # Make sure Bazel extensions are linked properly
 if [ ! -f "${ROOT_DIR}/build/msm_kernel_extensions.bzl" ] \
-      && [ -f "${ROOT_DIR}/msm-kernel/msm_kernel_extensions.bzl" ]; then
-  ln -fs "../msm-kernel/msm_kernel_extensions.bzl" "${ROOT_DIR}/build/msm_kernel_extensions.bzl"
+      && [ -f "${ROOT_DIR}/soc-repo/msm_kernel_extensions.bzl" ]; then
+  ln -fs "../soc-repo/msm_kernel_extensions.bzl" "${ROOT_DIR}/build/msm_kernel_extensions.bzl"
 fi
 if [ ! -f "${ROOT_DIR}/build/abl_extensions.bzl" ] \
       && [ -f "${ROOT_DIR}/bootable/bootloader/edk2/abl_extensions.bzl" ]; then
@@ -221,7 +221,6 @@ fi
 if [ "${RECOMPILE_KERNEL}" == "1" ]; then
   echo
   echo "  Recompiling kernel"
-
   # shellcheck disable=SC2086
   "${ROOT_DIR}/build_with_bazel.py" \
     -t "$KERNEL_TARGET" "$KERNEL_VARIANT" $LTO_KBUILD_ARG $EXTRA_KBUILD_ARGS \
@@ -259,7 +258,7 @@ if [ "${RECOMPILE_ABL}" == "1" ] && [ -n "${TARGET_BUILD_VARIANT}" ] && \
 
       ./tools/bazel run \
         --"//bootable/bootloader/edk2:target_build_variant=${TARGET_BUILD_VARIANT}" \
-        "//msm-kernel:${KERNEL_TARGET}_${KERNEL_VARIANT}_abl_dist" \
+        "//soc-repo:${KERNEL_TARGET}_${KERNEL_VARIANT}_abl_dist" \
         -- --dist_dir "${ANDROID_KP_OUT_DIR}/dist"
     )
 
@@ -365,11 +364,25 @@ if [ "${COPY_NEEDED}" == "1" ]; then
       "${ANDROID_KERNEL_OUT}/extra_bootconfig"
   fi
 
+  if [ -e "${ANDROID_KP_OUT_DIR}/dist/${KERNEL_TARGET}_${KERNEL_VARIANT}_kernel-uapi-headers.tar.gz" ];
+  then
+    cp "${ANDROID_KP_OUT_DIR}/dist/${KERNEL_TARGET}_${KERNEL_VARIANT}_kernel-uapi-headers.tar.gz" \
+      "${ANDROID_KP_OUT_DIR}/dist/kernel-uapi-headers.tar.gz"
+  fi
+
+  rm -rf ${ANDROID_KP_OUT_DIR}/dist/Module.symvers
+  rm -rf ${ANDROID_KP_OUT_DIR}/dist/Module_staging.symvers
+  touch ${ANDROID_KP_OUT_DIR}/dist/Module_staging.symvers
+  for each_symver in $(ls ${ANDROID_KP_OUT_DIR}/dist/*Module\.symvers);do
+    cat $each_symver >> ${ANDROID_KP_OUT_DIR}/dist/Module_staging.symvers
+  done
+  mv ${ANDROID_KP_OUT_DIR}/dist/Module_staging.symvers ${ANDROID_KP_OUT_DIR}/dist/Module.symvers
+
   files=(
     "Image"
     "vmlinux"
     "System.map"
-    ".config"
+    "out_dir/.config"
     "Module.symvers"
     "kernel-uapi-headers.tar.gz"
     "build_opts.txt"
@@ -450,7 +463,7 @@ if [ -n "${ANDROID_PRODUCT_OUT}" ] && [ -n "${ANDROID_BUILD_TOP}" ]; then
   fi
 
   find "${ROOT_DIR}" \( -name Android.mk -o -name Android.bp \) \
-    -a -not -path "${ROOT_DIR}"/msm-kernel/Android.bp -delete
+    -a -not -path "${ROOT_DIR}"/soc-repo/Android.bp -delete
   set +x
 
   ################################################################################
@@ -497,7 +510,6 @@ if [ -n "${ANDROID_PRODUCT_OUT}" ] && [ -n "${ANDROID_BUILD_TOP}" ]; then
   ################################################################################
   echo
   echo "  Compiling vendor devicetree overlays"
-
   for project in $(cd ${ANDROID_BUILD_TOP} && find -L vendor/ -type d -name "*-devicetree")
   do
     if [ ! -e "${project}/Makefile" ]; then
@@ -508,8 +520,8 @@ if [ -n "${ANDROID_PRODUCT_OUT}" ] && [ -n "${ANDROID_BUILD_TOP}" ]; then
     echo "Building ${project}"
 
     (
-      cd ${ROOT_DIR}
       set -x
+      cd ${ROOT_DIR}
       OUT_DIR=${ANDROID_EXT_MODULES_OUT} \
       EXT_MODULES="${KP_TO_ANDROID}/${project}" \
       KERNEL_KIT=${ANDROID_KERNEL_OUT} \

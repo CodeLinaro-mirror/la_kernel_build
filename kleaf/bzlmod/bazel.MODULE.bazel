@@ -78,7 +78,7 @@ new_kleaf_local_repository(
 
 new_kleaf_local_repository(
     name = "dtc",
-    build_file = "msm-kernel/BUILD.dtc",
+    build_file = "soc-repo/BUILD.dtc",
     path = "external/dtc",
 )
 
