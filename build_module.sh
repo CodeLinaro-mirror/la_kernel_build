@@ -260,6 +260,12 @@ echo "========================================================"
 echo " Building external modules and installing them into staging directory"
 echo $EXT_MODULES
 
+if [[ "$DTB_COMPILE" == 1 ]];then
+  STAG_EXT_MOD=${COMMON_OUT_DIR}/../staging_ext_mod_dir
+  STAG_EXT_MOD_REL="../../staging_ext_mod_dir"
+  mkdir -p $STAG_EXT_MOD
+fi
+
 for EXT_MOD in ${EXT_MODULES}; do
   # The path that we pass in via the variable M needs to be a relative path
   # relative to the kernel source directory. The source files will then be
@@ -281,13 +287,9 @@ for EXT_MOD in ${EXT_MODULES}; do
     mkdir -p ${OUT_DIR}/${EXT_MOD_REL}
   fi
 
-  STAG_EXT_MOD=${COMMON_OUT_DIR}/../staging_ext_mod_dir
-  STAG_EXT_MOD_REL="../../staging_ext_mod_dir"
-  mkdir -p $STAG_EXT_MOD
-  rm -rf ${STAG_EXT_MOD}/* || true
-  cp -rf ${EXT_MOD}/* ${STAG_EXT_MOD}/
-
   if [[ "$DTB_COMPILE" == 1 ]];then
+    rm -rf ${STAG_EXT_MOD}/* || true
+    cp -rf ${EXT_MOD}/* ${STAG_EXT_MOD}/
     rm -rf ${ROOT_DIR}/Kbuild
     python ${ROOT_DIR}/build/kernel/android/modify_dt_kbuild.py ${KERNEL_KIT}/.config ${STAG_EXT_MOD}/Kbuild
     mv "${ROOT_DIR}/Kbuild" ${STAG_EXT_MOD}/Kbuild
