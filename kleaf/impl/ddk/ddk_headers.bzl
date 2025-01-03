@@ -141,10 +141,6 @@ def ddk_headers_common_impl(label, hdrs, includes, linux_includes):
     )
 
 def _ddk_headers_impl(ctx):
-    if get_headers_depset(ctx.attr.textual_hdrs):
-        # buildifier: disable=print
-        print("\nWARNING: textual_hdrs deprecated, use `hdrs` instead.")
-
     ddk_headers_info = ddk_headers_common_impl(
         ctx.label,
         ctx.attr.hdrs + ctx.attr.textual_hdrs,
