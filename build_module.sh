@@ -205,8 +205,8 @@ KERNEL_SRC="${COMMON_OUT_DIR}/super_kernel"
 SOC_DIR="soc-repo"
 COMMON_DIR="common"
 mkdir -p ${KERNEL_SRC}
-cp -rf ${ROOT_DIR}/${COMMON_DIR}/* ${KERNEL_SRC}/ > /dev/null
-cp -rf ${ROOT_DIR}/${SOC_DIR}/* ${KERNEL_SRC}/ || true > /dev/null
+cp -ardf ${ROOT_DIR}/${COMMON_DIR}/* ${KERNEL_SRC}/ || true > /dev/null
+cp -ardf ${ROOT_DIR}/${SOC_DIR}/* ${KERNEL_SRC}/ || true > /dev/null
 
 if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
   echo "========================================================"
@@ -214,17 +214,17 @@ if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
 
   set -x
   mkdir -p ${OUT_DIR}/
-  cp ${KERNEL_KIT}/.config ${KERNEL_KIT}/Module.symvers ${OUT_DIR}/
+  cp -f ${KERNEL_KIT}/.config ${KERNEL_KIT}/Module.symvers ${OUT_DIR}/
 
   if [ -z "${EXT_MODULES}" -a ! ${KERNEL_KIT}/host -ef ${COMMON_OUT_DIR}/host ]; then
     rm -rf ${COMMON_OUT_DIR}/host
   fi
   if [ -e ${KERNEL_KIT}/host -a ! -e ${COMMON_OUT_DIR}/host ]; then
-    cp -r ${KERNEL_KIT}/host ${COMMON_OUT_DIR}
+    cp -ardf ${KERNEL_KIT}/host ${COMMON_OUT_DIR}
   fi
 
   # Install .config from kernel platform
-  cp ${KERNEL_KIT}/.config ${KERNEL_SRC}/
+  cp -f ${KERNEL_KIT}/.config ${KERNEL_SRC}/
   (
     if [[ "$DTB_COMPILE" == 1 ]];then
       cd "${KERNEL_SRC}"
@@ -237,7 +237,7 @@ if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
   # the kernel platform .config changing since autoconf.h and related files would need an update
   # in OUT_DIR. To get around this valid change, do "make olddefconfig", copy the .config again,
   # then do the NOSILENTUPDATE check
-  cp ${KERNEL_KIT}/.config ${OUT_DIR}/
+  cp -f ${KERNEL_KIT}/.config ${OUT_DIR}/
   (
     if [[ "$DTB_COMPILE" == 1 ]];then
       cd "${KERNEL_SRC}"
@@ -251,7 +251,7 @@ if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
   set +x
 fi
 
-cp ${KERNEL_KIT}/.config ${OUT_DIR}/
+cp -f ${KERNEL_KIT}/.config ${OUT_DIR}/
 # Set KBUILD_MIXED_TREE in case an out-of-tree Makefile does "make all". This causes
 # kbuild to also want to compile vmlinux
 MAKE_ARGS+=" KBUILD_MIXED_TREE=${KERNEL_KIT} KCONFIG=${KERNEL_KIT}/.config"
@@ -289,7 +289,7 @@ for EXT_MOD in ${EXT_MODULES}; do
 
   if [[ "$DTB_COMPILE" == 1 ]];then
     rm -rf ${STAG_EXT_MOD}/* || true
-    cp -rf ${EXT_MOD}/* ${STAG_EXT_MOD}/
+    cp -ardf ${EXT_MOD}/* ${STAG_EXT_MOD}/
     rm -rf ${ROOT_DIR}/Kbuild
     python ${ROOT_DIR}/build/kernel/android/modify_dt_kbuild.py ${KERNEL_KIT}/.config ${STAG_EXT_MOD}/Kbuild
     mv "${ROOT_DIR}/Kbuild" ${STAG_EXT_MOD}/Kbuild
@@ -378,10 +378,10 @@ for EXT_MOD in ${EXT_MODULES}; do
     if [ -n "$INTERMEDIATE_DIR" ]; then
       mkdir -p "$(dirname "$INTERMEDIATE_DIR")"
       rm -rf "${INTERMEDIATE_DIR}/${EXT_MOD_REL}"
-      cp -ar "${OUT_DIR}/${EXT_MOD_REL}" "$INTERMEDIATE_DIR"
+      cp -ardf "${OUT_DIR}/${EXT_MOD_REL}" "$INTERMEDIATE_DIR"
       for ko in "${OUT_DIR}/${EXT_MOD_REL}"/*.ko; do
         rm -rf "$(dirname "$INTERMEDIATE_DIR")/$(basename "$ko")_intermediates"
-        cp -ar "${OUT_DIR}/${EXT_MOD_REL}" \
+        cp -ardf "${OUT_DIR}/${EXT_MOD_REL}" \
           "$(dirname "$INTERMEDIATE_DIR")/$(basename "$ko")_intermediates"
       done
     fi
@@ -395,7 +395,7 @@ for EXT_MOD in ${EXT_MODULES}; do
         fi
         dir="$(dirname "$ko")"
         mkdir -p "${OUT_DIR}/${EXT_MOD_REL}/${dir}"
-        cp -a "${OUT_DIR}/${EXT_MOD_REL}/${ko_name}" "${OUT_DIR}/${EXT_MOD_REL}/${dir}"
+        cp -ardf "${OUT_DIR}/${EXT_MOD_REL}/${ko_name}" "${OUT_DIR}/${EXT_MOD_REL}/${dir}"
       fi
     done
   else
@@ -405,7 +405,7 @@ for EXT_MOD in ${EXT_MODULES}; do
       make -C ${STAG_EXT_MOD} M=${STAG_EXT_MOD_REL} VPATH=${KERNEL_SRC} \
                           KERNEL_SRC=${KERNEL_SRC} \
                           O=${KERNEL_SRC} "${TOOL_ARGS[@]}" ${MAKE_ARGS}
-      cp -rf ${STAG_EXT_MOD}/* ${OUT_DIR}/${EXT_MOD_REL}
+      cp -ardf ${STAG_EXT_MOD}/* ${OUT_DIR}/${EXT_MOD_REL}
       rm -rf ${STAG_EXT_MOD}/*
     else
       echo "WARNING - Skipping compilation of $EXT_MOD with legacy make. Please migrate to DDK."
