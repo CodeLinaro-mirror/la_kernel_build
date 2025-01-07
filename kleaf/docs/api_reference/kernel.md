@@ -762,7 +762,8 @@ Build an unsparsed image.
 
 Takes in a .img file and unsparses it.
 
-When included in a `copy_to_dist_dir` rule, this rule copies a `super_unsparsed.img` to `DIST_DIR`.
+When included in a `pkg_files`/`pkg_install` rule, this rule copies a `super_unsparsed.img` to
+`destdir`.
 
 **ATTRIBUTES**
 
@@ -1327,13 +1328,6 @@ kernel_abi(
     kernel_build = ":kernel_aarch64",
     ...
 )
-_dist_targets = ["kernel_aarch64", ...]
-copy_to_dist_dir(name = "kernel_aarch64_dist", data = _dist_targets)
-kernel_abi_dist(
-    name = "kernel_aarch64_abi_dist",
-    kernel_abi = "kernel_aarch64_abi",
-    data = _dist_targets,
-)
 ```
 
 The `kernel_abi` invocation above defines the following targets:
@@ -1356,6 +1350,9 @@ In addition, the following targets are defined if `define_abi_targets = True`:
   - Building this target extracts the ABI.
   - Include this target in a [`kernel_abi_dist`](#kernel_abi_dist)
     target to copy ABI dump to `--dist-dir`.
+
+To create a distribution, see
+[`kernel_abi_wrapped_dist`](#kernel_abi_wrapped_dist).
 
 See build/kernel/kleaf/abi.md for a conversion chart from `build_abi.sh`
 commands to Bazel commands.
@@ -1389,28 +1386,23 @@ kernel_abi_dist(<a href="#kernel_abi_dist-name">name</a>, <a href="#kernel_abi_d
                 <a href="#kernel_abi_dist-kwargs">kwargs</a>)
 </pre>
 
-A wrapper over `copy_to_dist_dir` for [`kernel_abi`](#kernel_abi).
-
-After copying all files to dist dir, return the exit code from `diff_abi`.
-
-**Implementation notes**:
-
-`with_vmlinux_transition` is applied on all targets by default. In
-particular, the `kernel_build` targets in `data` automatically builds
-`vmlinux` regardless of whether `vmlinux` is specified in `outs`.
-
+This macro is no longer supported. Invoking this macro triggers an error.
 
 **PARAMETERS**
 
 
 | Name  | Description | Default Value |
 | :------------- | :------------- | :------------- |
-| <a id="kernel_abi_dist-name"></a>name |  name of the dist target   |  none |
-| <a id="kernel_abi_dist-kernel_abi"></a>kernel_abi |  name of the [`kernel_abi`](#kernel_abi) invocation.   |  none |
-| <a id="kernel_abi_dist-kernel_build_add_vmlinux"></a>kernel_build_add_vmlinux |  [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes). If `True`, all `kernel_build` targets depended on by this change automatically applies a [transition](https://bazel.build/extending/config#user-defined-transitions) that always builds `vmlinux`. For up-to-date implementation details, look for `with_vmlinux_transition` in `build/kernel/kleaf/impl/abi`.<br><br>If there are multiple `kernel_build` targets in `data`, only keep the one for device build. Otherwise, the build may break. For example:<br><br><pre><code>kernel_build(&#10;    name = "tuna",&#10;    base_kernel = "//common:kernel_aarch64"&#10;    ...&#10;)&#10;&#10;kernel_abi(...)&#10;kernel_abi_dist(&#10;    name = "tuna_abi_dist",&#10;    data = [&#10;        ":tuna",&#10;        # "//common:kernel_aarch64", # remove GKI&#10;    ],&#10;    kernel_build_add_vmlinux = True,&#10;)</code></pre><br><br>Enabling this option ensures that `tuna_abi_dist` doesn't build `//common:kernel_aarch64` and `:tuna` twice, once with the transition and once without. Enabling this ensures that `//common:kernel_aarch64` and `:tuna` always built with the transition.<br><br>**Note**: Its value will be `True` by default in the future. During the migration period, this is `False` by default. Once all devices have been fixed, this attribute will be set to `True` by default.   |  `None` |
-| <a id="kernel_abi_dist-ignore_diff"></a>ignore_diff |  [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes). If `True` and the return code of `stgdiff` signals the ABI difference, then the result is ignored.   |  `None` |
-| <a id="kernel_abi_dist-no_ignore_diff_target"></a>no_ignore_diff_target |  [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes). If `ignore_diff` is `True`, this need to be set to a name of the target that doesn't have `ignore_diff`. This target will be recommended as an alternative to a user. If `no_ignore_diff_target` is None, there will be no alternative recommended.   |  `None` |
-| <a id="kernel_abi_dist-kwargs"></a>kwargs |  attributes to the `copy_to_dist_dir` macro.   |  none |
+| <a id="kernel_abi_dist-name"></a>name |  ignored   |  none |
+| <a id="kernel_abi_dist-kernel_abi"></a>kernel_abi |  ignored   |  none |
+| <a id="kernel_abi_dist-kernel_build_add_vmlinux"></a>kernel_build_add_vmlinux |  ignored   |  `None` |
+| <a id="kernel_abi_dist-ignore_diff"></a>ignore_diff |  ignored   |  `None` |
+| <a id="kernel_abi_dist-no_ignore_diff_target"></a>no_ignore_diff_target |  ignored   |  `None` |
+| <a id="kernel_abi_dist-kwargs"></a>kwargs |  ignored   |  none |
+
+**DEPRECATED**
+
+Use [`kernel_abi_wrapped_dist`](#kernel_abi_wrapped_dist) instead.
 
 
 <a id="kernel_abi_wrapped_dist"></a>
@@ -1486,11 +1478,10 @@ kernel_build(<a href="#kernel_build-name">name</a>, <a href="#kernel_build-build
              <a href="#kernel_build-base_kernel">base_kernel</a>, <a href="#kernel_build-make_goals">make_goals</a>, <a href="#kernel_build-kconfig_ext">kconfig_ext</a>, <a href="#kernel_build-dtstree">dtstree</a>, <a href="#kernel_build-kmi_symbol_list">kmi_symbol_list</a>, <a href="#kernel_build-protected_exports_list">protected_exports_list</a>,
              <a href="#kernel_build-protected_modules_list">protected_modules_list</a>, <a href="#kernel_build-additional_kmi_symbol_lists">additional_kmi_symbol_lists</a>, <a href="#kernel_build-trim_nonlisted_kmi">trim_nonlisted_kmi</a>,
              <a href="#kernel_build-kmi_symbol_list_strict_mode">kmi_symbol_list_strict_mode</a>, <a href="#kernel_build-collect_unstripped_modules">collect_unstripped_modules</a>, <a href="#kernel_build-enable_interceptor">enable_interceptor</a>,
-             <a href="#kernel_build-kbuild_symtypes">kbuild_symtypes</a>, <a href="#kernel_build-toolchain_version">toolchain_version</a>, <a href="#kernel_build-strip_modules">strip_modules</a>, <a href="#kernel_build-module_signing_key">module_signing_key</a>,
-             <a href="#kernel_build-system_trusted_key">system_trusted_key</a>, <a href="#kernel_build-modules_prepare_force_generate_headers">modules_prepare_force_generate_headers</a>, <a href="#kernel_build-defconfig">defconfig</a>,
-             <a href="#kernel_build-pre_defconfig_fragments">pre_defconfig_fragments</a>, <a href="#kernel_build-post_defconfig_fragments">post_defconfig_fragments</a>, <a href="#kernel_build-defconfig_fragments">defconfig_fragments</a>, <a href="#kernel_build-check_defconfig">check_defconfig</a>,
-             <a href="#kernel_build-page_size">page_size</a>, <a href="#kernel_build-pack_module_env">pack_module_env</a>, <a href="#kernel_build-sanitizers">sanitizers</a>, <a href="#kernel_build-ddk_module_defconfig_fragments">ddk_module_defconfig_fragments</a>,
-             <a href="#kernel_build-ddk_module_headers">ddk_module_headers</a>, <a href="#kernel_build-kwargs">kwargs</a>)
+             <a href="#kernel_build-kbuild_symtypes">kbuild_symtypes</a>, <a href="#kernel_build-strip_modules">strip_modules</a>, <a href="#kernel_build-module_signing_key">module_signing_key</a>, <a href="#kernel_build-system_trusted_key">system_trusted_key</a>,
+             <a href="#kernel_build-modules_prepare_force_generate_headers">modules_prepare_force_generate_headers</a>, <a href="#kernel_build-defconfig">defconfig</a>, <a href="#kernel_build-pre_defconfig_fragments">pre_defconfig_fragments</a>,
+             <a href="#kernel_build-post_defconfig_fragments">post_defconfig_fragments</a>, <a href="#kernel_build-defconfig_fragments">defconfig_fragments</a>, <a href="#kernel_build-check_defconfig">check_defconfig</a>, <a href="#kernel_build-page_size">page_size</a>,
+             <a href="#kernel_build-pack_module_env">pack_module_env</a>, <a href="#kernel_build-sanitizers">sanitizers</a>, <a href="#kernel_build-ddk_module_defconfig_fragments">ddk_module_defconfig_fragments</a>, <a href="#kernel_build-ddk_module_headers">ddk_module_headers</a>, <a href="#kernel_build-kwargs">kwargs</a>)
 </pre>
 
 Defines a kernel build target with all dependent targets.
@@ -1539,7 +1530,6 @@ For example, if name is `"kernel_aarch64"`:
 | <a id="kernel_build-collect_unstripped_modules"></a>collect_unstripped_modules |  If `True`, provide all unstripped in-tree.   |  `None` |
 | <a id="kernel_build-enable_interceptor"></a>enable_interceptor |  If set to `True`, enable interceptor so it can be used in [`kernel_compile_commands`](#kernel_compile_commands).   |  `None` |
 | <a id="kernel_build-kbuild_symtypes"></a>kbuild_symtypes |  The value of `KBUILD_SYMTYPES`.<br><br>This can be set to one of the following:<br><br>- `"true"` - `"false"` - `"auto"` - `None`, which defaults to `"auto"`<br><br>If the value is `"auto"`, it is determined by the `--kbuild_symtypes` flag.<br><br>If the value is `"true"`; or the value is `"auto"` and `--kbuild_symtypes` is specified, then `KBUILD_SYMTYPES=1`. **Note**: kernel build time can be significantly longer.<br><br>If the value is `"false"`; or the value is `"auto"` and `--kbuild_symtypes` is not specified, then `KBUILD_SYMTYPES=`.   |  `None` |
-| <a id="kernel_build-toolchain_version"></a>toolchain_version |  **Deprecated**. [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes). The toolchain version to depend on.<br><br>It is an error to specify `toolchain_version`. Instead, delete the attribute, so it uses the default clang toolchain. The default clang toolchain version is specified in the `@kernel_toolchain_info` repository, usually containing the content of `common/build.config.constants`.   |  `None` |
 | <a id="kernel_build-strip_modules"></a>strip_modules |  If `None` or not specified, default is `False`. If set to `True`, debug information for distributed modules is stripped.<br><br>This corresponds to negated value of `DO_NOT_STRIP_MODULES` in `build.config`.   |  `None` |
 | <a id="kernel_build-module_signing_key"></a>module_signing_key |  A label referring to a module signing key.<br><br>This is to allow for dynamic setting of `CONFIG_MODULE_SIG_KEY` from Bazel.   |  `None` |
 | <a id="kernel_build-system_trusted_key"></a>system_trusted_key |  A label referring to a trusted system key.<br><br>This is to allow for dynamic setting of `CONFIG_SYSTEM_TRUSTED_KEY` from Bazel.   |  `None` |

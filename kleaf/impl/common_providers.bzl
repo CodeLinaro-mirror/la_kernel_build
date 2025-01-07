@@ -16,6 +16,14 @@
 
 visibility("//build/kernel/kleaf/...")
 
+WrittenDepsetInfo = provider(
+    doc = "Describes a depset written to a file",
+    fields = {
+        "depset_file": "The text file, where each line is a path to an item in the depset",
+        "depset": "A depset containing the text file and the original depset",
+    },
+)
+
 StepInfo = provider(
     "Describes a step, part of a run_shell",
     fields = {
@@ -482,8 +490,33 @@ DdkConfigInfo = provider(
     fields = {
         "kconfig": """A [depset](https://bazel.build/extending/depsets) containing the Kconfig file
             of this and its dependencies. Uses `postorder` ordering (dependencies first).""",
+        "kconfig_written": "WrittenDepsetInfo representing kconfig",
         "defconfig": """A [depset](https://bazel.build/extending/depsets) containing the Kconfig
             file of this and its dependencies. Uses `postorder` ordering (dependencies first).""",
+        "defconfig_written": "WrittenDepsetInfo representing defconfig",
+    },
+)
+
+DdkConfigOutputsInfo = provider(
+    doc = "Describes output of a `ddk_config` target.",
+    fields = {
+        "out_dir": "Output directory",
+        "kconfig_ext": "The directory for KCONFIG_EXT",
+    },
+)
+
+DdkHeadersInfo = provider(
+    "Information for a target that provides DDK headers to a dependent target.",
+    fields = {
+        "include_infos": """A [depset](https://bazel.build/rules/lib/depset) of DdkIncludeInfo
+
+            The direct list contains DdkIncludeInfos for the current target.
+
+            The transitive list contains DdkHeadersInfo.includes from dependencies.
+
+            Depset order must be `DDK_INCLUDE_INFO_ORDER`.
+        """,
+        "files": "A [depset](https://bazel.build/rules/lib/depset) of header files of this target and dependencies",
     },
 )
 
