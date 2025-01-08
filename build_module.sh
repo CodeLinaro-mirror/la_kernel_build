@@ -346,8 +346,8 @@ for EXT_MOD in ${EXT_MODULES}; do
 
     # Make sure Bazel extensions are linked properly
     if [ ! -f "build/msm_kernel_extensions.bzl" ] \
-          && [ -f "soc-repo/msm_kernel_extensions.bzl" ]; then
-      ln -fs "../soc-repo/msm_kernel_extensions.bzl" "build/msm_kernel_extensions.bzl"
+          && [ -f "soc-repo/kleaf-scripts/msm_kernel_extensions.bzl" ]; then
+      ln -fs "../soc-repo/kleaf-scripts/msm_kernel_extensions.bzl" "build/msm_kernel_extensions.bzl"
     fi
     if [ ! -f "build/abl_extensions.bzl" ] \
           && [ -f "bootable/bootloader/edk2/abl_extensions.bzl" ]; then
