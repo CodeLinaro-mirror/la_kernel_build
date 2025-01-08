@@ -406,6 +406,7 @@ for EXT_MOD in ${EXT_MODULES}; do
                           KERNEL_SRC=${KERNEL_SRC} \
                           O=${KERNEL_SRC} "${TOOL_ARGS[@]}" ${MAKE_ARGS}
       cp -rf ${STAG_EXT_MOD}/* ${OUT_DIR}/${EXT_MOD_REL}
+      rm -rf ${STAG_EXT_MOD}/*
     else
       echo "WARNING - Skipping compilation of $EXT_MOD with legacy make. Please migrate to DDK."
     fi
