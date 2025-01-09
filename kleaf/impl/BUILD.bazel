@@ -57,7 +57,10 @@ bzl_library(
         "constants.bzl",
         "ddk/ddk_conditional_filegroup.bzl",
         "ddk/ddk_config.bzl",
-        "ddk/ddk_config_subrule.bzl",
+        "ddk/ddk_config/ddk_config_info_subrule.bzl",
+        "ddk/ddk_config/ddk_config_main_action_subrule.bzl",
+        "ddk/ddk_config/ddk_config_restore_out_dir_step.bzl",
+        "ddk/ddk_config/ddk_config_script_subrule.bzl",
         "ddk/ddk_headers.bzl",
         "ddk/ddk_headers_archive.bzl",
         "ddk/ddk_module.bzl",
@@ -341,10 +344,20 @@ py_binary(
     ],
 )
 
+py_library(
+    name = "parse_config",
+    srcs = [
+        "parse_config.py",
+    ],
+    imports = ["."],
+    visibility = ["//build/kernel/kleaf:__subpackages__"],
+)
+
 py_binary(
     name = "check_config",
     srcs = ["check_config.py"],
     visibility = ["//visibility:public"],
+    deps = [":parse_config"],
 )
 
 py_binary(

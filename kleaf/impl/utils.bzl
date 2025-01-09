@@ -23,6 +23,7 @@ load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     ":common_providers.bzl",
     "DdkConfigInfo",
+    "DdkHeadersInfo",
     "DdkSubmoduleInfo",
     "KernelBuildExtModuleInfo",
     "KernelImagesInfo",
@@ -32,8 +33,8 @@ load(
     "KernelModuleSetupInfo",
     "KernelSerializedEnvInfo",
     "ModuleSymversInfo",
+    "WrittenDepsetInfo",
 )
-load(":ddk/ddk_headers.bzl", "DdkHeadersInfo")
 
 visibility("//build/kernel/kleaf/...")
 
@@ -216,7 +217,7 @@ def _write_depset_impl(subrule_ctx, d, out, *, _write_depset):
         mnemonic = "WriteDepset",
         progress_message = "Dumping depset to {} %{{label}}".format(out),
     )
-    return struct(
+    return WrittenDepsetInfo(
         depset_file = out_file,
         depset = depset([out_file], transitive = [d]),
     )
@@ -261,6 +262,12 @@ def _optional_file(files, what = None):
         fail("{}: expected a single file!".format(what or ""))
     return files[0]
 
+def _single_file(files, what = None):
+    """Retrieves the only file in the list. If the list length is not 1, error."""
+    if len(files) != 1:
+        fail("{}: expected a single file!".format(what or ""))
+    return files[0]
+
 # Utilities that applies to all Bazel stuff in general. These functions are
 # not Kleaf specific.
 utils = struct(
@@ -279,6 +286,7 @@ utils = struct(
     optional_path = _optional_path,
     optional_single_path = _optional_single_path,
     optional_file = _optional_file,
+    single_file = _single_file,
 )
 
 def _filter_module_srcs(files):

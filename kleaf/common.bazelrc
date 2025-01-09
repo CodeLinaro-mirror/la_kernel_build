@@ -16,7 +16,7 @@
 common --experimental_enable_scl_dialect
 
 # Lock down the PATH variable in actions to /usr/bin and /usr/local/bin.
-build --experimental_strict_action_env
+build --incompatible_strict_action_env
 
 # By default, output all the logs to stdout/stderr by disabling the console limit
 build --experimental_ui_max_stdouterr_bytes=-1
@@ -33,6 +33,14 @@ common --experimental_rule_extension_api
 # Ensure to always use @local_jdk; the checked-in JDK.
 # build --java_runtime_version=local_jdk
 build --tool_java_runtime_version=local_jdk
+
+# Control auto-load modules
+common --incompatible_autoload_externally=+@rules_cc,+@rules_python,-@rules_android
+common --noincompatible_enable_proto_toolchain_resolution
+# See bazel.py for additional flags.
+
+# TODO: b/385005950 - drop this flag once partners added allow_empty properly
+common --noincompatible_disallow_empty_glob
 
 # Always dump full test results
 test --test_output=errors --test_summary=terse
