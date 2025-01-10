@@ -411,16 +411,5 @@ for EXT_MOD in ${EXT_MODULES}; do
       echo "WARNING - Skipping compilation of $EXT_MOD with legacy make. Please migrate to DDK."
     fi
   fi
-
-  if [ -n "${INSTALL_MODULE_HEADERS}" ]; then
-    echo "========================================================"
-    echo " Installing UAPI module headers:"
-    mkdir -p "${KERNEL_UAPI_HEADERS_DIR}/usr"
-    make -C ${EXT_MOD} M=${EXT_MOD_REL} VPATH=${ROOT_DIR}/${KERNEL_DIR}	\
-                      KERNEL_SRC=${ROOT_DIR}/${KERNEL_DIR}		\
-                      O=${OUT_DIR} "${TOOL_ARGS[@]}"			\
-                      INSTALL_HDR_PATH="${KERNEL_UAPI_HEADERS_DIR}/usr"	\
-                      ${MAKE_ARGS} headers_install
-  fi
   set +x
 done
