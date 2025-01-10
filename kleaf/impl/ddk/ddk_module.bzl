@@ -15,7 +15,7 @@
 """Rules for defining a DDK (Driver Development Kit) module."""
 
 load(":ddk/ddk_conditional_filegroup.bzl", "flatten_conditional_srcs")
-load(":ddk/ddk_config.bzl", "ddk_config")
+load(":ddk/ddk_module_config.bzl", "ddk_module_config")
 load(":ddk/makefiles.bzl", "makefiles")
 load(":kernel_module.bzl", "kernel_module")
 
@@ -463,7 +463,7 @@ def ddk_module(
           `package/Makefile`, and `make` is executed under `package/`. In order
           to find `other/header.h`, its path relative to `package/` is given.
 
-        kconfig: The Kconfig file for this external module.
+        kconfig: The Kconfig files for this external module.
 
           See
           [`Documentation/kbuild/kconfig-language.rst`](https://www.kernel.org/doc/html/latest/kbuild/kconfig.html)
@@ -475,6 +475,10 @@ def ddk_module(
           - Kconfig from `kernel_build`
           - Kconfig from dependent modules, if any
           - Kconfig of this module, if any
+
+          For legacy reasons, this is singular and accepts a single target. If multiple `Kconfig`
+          files should be added, use a
+          [`filegroup`](https://bazel.build/reference/be/general#filegroup) to wrap the files.
         defconfig: The `defconfig` file.
 
           Items must already be declared in `kconfig`. An item not declared
@@ -498,7 +502,7 @@ def ddk_module(
 
     module_hdrs = (hdrs or []) + (textual_hdrs or [])
 
-    ddk_config(
+    ddk_module_config(
         name = name + "_config",
         defconfig = defconfig,
         kconfig = kconfig,
