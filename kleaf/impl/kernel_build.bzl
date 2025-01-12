@@ -96,8 +96,8 @@ _MODULES_PREPARE_ARCHIVE = "modules_prepare_outdir.tar.gz"
 
 def kernel_build(
         name,
-        build_config,
         outs,
+        build_config = None,
         makefile = None,
         keep_module_symvers = None,
         keep_dot_config = None,
@@ -135,6 +135,7 @@ def kernel_build(
         sanitizers = None,
         ddk_module_defconfig_fragments = None,
         ddk_module_headers = None,
+        kcflags = None,
         **kwargs):
     """Defines a kernel build target with all dependent targets.
 
@@ -153,6 +154,13 @@ def kernel_build(
     Args:
         name: The final kernel target name, e.g. `"kernel_aarch64"`.
         build_config: Label of the build.config file, e.g. `"build.config.gki.aarch64"`.
+
+            If it contains no files, the list of constants in `@kernel_toolchain_info` is used. This
+            is `//common:build.config.constants` by default, unless otherwise specified.
+
+            If it contains no files, [`makefile`](#kernel_build-makefile) must be set as the anchor
+            to the directory to run `make`.
+
         makefile: `Makefile` governing the kernel tree sources (see `srcs`).
             Example values:
 
@@ -579,6 +587,10 @@ def kernel_build(
           than `ddk_module_headers` of this kernel_build.
 
           These headers are not applied to this `kernel_build` target.
+        kcflags: Extra `KCFLAGS`. Empty by default.
+
+            To add common KCFLAGS, you must explicitly set
+            it to `COMMON_KCFLAGS` (see `//build/kernel/kleaf:constants.bzl`).
         **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
@@ -698,6 +710,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         }),
         pre_defconfig_fragments = pre_defconfig_fragments,
         post_defconfig_fragments = post_defconfig_fragments,
+        kcflags = kcflags,
         **internal_kwargs
     )
 

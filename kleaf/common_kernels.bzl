@@ -60,7 +60,7 @@ _GKI_ADD_VMLINUX = False
 def common_kernel(
         name,
         outs,
-        build_config,
+        build_config = None,
         makefile = None,
         arch = None,
         visibility = None,
@@ -85,7 +85,8 @@ def common_kernel(
         deprecation = None,
         ddk_headers_archive = None,
         ddk_module_headers = None,
-        extra_dist = None):
+        extra_dist = None,
+        kcflags = None):
     """Macro for an Android Common Kernel.
 
     The following targets are declared as public API:
@@ -151,6 +152,7 @@ def common_kernel(
         deprecation: If set, mark target deprecated with given message.
         ddk_headers_archive: nonconfigurable. Target to the archive packing DDK headers
         extra_dist: extra targets added to `<name>_dist`
+        kcflags: [kernel_build.kcflags](kernel.md#kernel_build-kcflags)
     """
     json_target_config = dict(
         name = name,
@@ -212,14 +214,18 @@ def common_kernel(
         srcs = all_kmi_symbol_lists,
     )
 
-    kernel_build_config(
-        name = name + "_build_config",
-        srcs = [
-            # do not sort
-            build_config,
-            Label("//build/kernel/kleaf:gki_build_config_fragment"),
-        ],
-    )
+    if build_config:
+        kernel_build_config(
+            name = name + "_build_config",
+            srcs = [
+                # do not sort
+                build_config,
+                Label("//build/kernel/kleaf:gki_build_config_fragment"),
+            ],
+        )
+        build_config = name + "_build_config"
+    else:
+        build_config = Label("//build/kernel/kleaf:gki_build_config_fragment")
 
     kernel_build(
         name = name,
@@ -234,7 +240,7 @@ def common_kernel(
             "certs/signing_key.pem",
             "certs/signing_key.x509",
         ],
-        build_config = name + "_build_config",
+        build_config = build_config,
         makefile = makefile,
         check_defconfig = select({
             Label("//build/kernel/kleaf:gki_build_config_fragment_is_unset"): "minimized",
@@ -263,6 +269,7 @@ def common_kernel(
             Label("//build/kernel/kleaf/impl/defconfig:signing_modules_disabled"),
         ],
         ddk_module_headers = ddk_module_headers,
+        kcflags = kcflags,
     )
 
     kernel_abi(
