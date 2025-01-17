@@ -203,8 +203,8 @@ cp "${ROOT_DIR}/build.config" "${ANDROID_KERNEL_OUT}/build.config"
 
 # Make sure Bazel extensions are linked properly
 if [ ! -f "${ROOT_DIR}/build/msm_kernel_extensions.bzl" ] \
-      && [ -f "${ROOT_DIR}/soc-repo/msm_kernel_extensions.bzl" ]; then
-  ln -fs "../soc-repo/msm_kernel_extensions.bzl" "${ROOT_DIR}/build/msm_kernel_extensions.bzl"
+      && [ -f "${ROOT_DIR}/soc-repo/kleaf-scripts/msm_kernel_extensions.bzl" ]; then
+  ln -fs "../soc-repo/kleaf-scripts/msm_kernel_extensions.bzl" "${ROOT_DIR}/build/msm_kernel_extensions.bzl"
 fi
 if [ ! -f "${ROOT_DIR}/build/abl_extensions.bzl" ] \
       && [ -f "${ROOT_DIR}/bootable/bootloader/edk2/abl_extensions.bzl" ]; then
