@@ -304,6 +304,13 @@ def define_common_kernels(
 
     This is equivalent to specifying `--use_prebuilt_gki=8077484` for all Bazel commands.
 
+    To include prebuilts for the `16k` variant make sure to include `gki_prebuilts_aarch64_16k`:
+    ```
+    # device.bazelrc
+    build --use_prebuilt_gki
+    build --action_env=KLEAF_DOWNLOAD_BUILD_NUMBER_MAP="gki_prebuilts=12742164,gki_prebuilts_aarch64_16k=12742164"
+    ```
+
     You may set `--use_signed_prebuilts` to download the signed boot images instead
     of the unsigned one. This requires `--use_prebuilt_gki` to be set to a signed build.
 
