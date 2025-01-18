@@ -557,9 +557,26 @@ class BazelWrapper(KleafHelpPrinter):
             f.write(textwrap.dedent(f"""\
                 build --//build/kernel/kleaf:cache_dir={shlex.quote(str(self.known_args.cache_dir))}
             """))
+        override_module_bazelrc = self.gen_bazelrc_dir / "override_module.bazelrc"
+        with open(override_module_bazelrc, "w") as f:
+            f.write(textwrap.dedent("""\
+                # Override modules to fake path by default.
+                # When building docs, allow to fetch from original URL.
+            """))
+            fake_module_dir = self.kleaf_repo_dir / "build/kernel/kleaf/bzlmod/fake_modules"
+            for override_module_path in fake_module_dir.glob("*/"):
+                override_module = override_module_path.name
+                if override_module_path.is_relative_to(self.workspace_dir):
+                    override_module_path = (pathlib.Path("%workspace%") /
+                        override_module_path.relative_to(self.workspace_dir))
+                f.write(textwrap.dedent(f"""\
+                    common --override_module={override_module}={override_module_path}
+                    common:docs --override_module={override_module}=
+                """))
 
         self.transformed_startup_options += self._transform_bazelrc_files([
             cache_dir_bazelrc,
+            override_module_bazelrc,
         ])
 
         if self.known_args.hermetic_actions:
@@ -580,6 +597,7 @@ class BazelWrapper(KleafHelpPrinter):
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/musl.bazelrc",
             # Control Network access - with no internet by default.
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/network.bazelrc",
+            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/docs.bazelrc",
             # Experimental bzlmod support
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/bzlmod.bazelrc",
 

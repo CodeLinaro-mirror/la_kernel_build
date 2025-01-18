@@ -12,15 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# --config=musl: Experimental: Enable musl.
-#    See build/kernel/kleaf/docs/musl.md
+# Flags used to build docs for Kleaf.
 
-# Individually enable sub-features.
-build:musl --musl_prebuilts
-build:musl --musl_kbuild
-build:musl --musl_tools_from_sources
-common:musl --config=musl_platform
+# --config=docs: Internal config for updating Kleaf docs
 
-# By default, enable some musl libc features.
-# This is added temporarily and intentionally duplicated with the list above.
-common --config=musl_platform
+# Allow accessing the Internet for Stardoc, Java stuff, etc.
+common:docs --config=internet
+
+# Control auto-load modules
+common:docs --incompatible_autoload_externally=+@rules_cc,+@rules_python,+@rules_shell,@rules_android,+java_common,+JavaInfo,+JavaPluginInfo,+java_binary,+java_library,+@protobuf,+@com_google_protobuf
+# See bazel.py for additional flags.
+
+# Restore BCR for Bazel to be able to find dependencies.
+common:docs --registry=https://bcr.bazel.build

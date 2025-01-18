@@ -12,23 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Subrule for handling rule attribute kconfigs and defconfigs"""
+"""Subrules for creating DdkConfigInfo."""
 
 load(
     ":common_providers.bzl",
     "DdkConfigInfo",
 )
+load(":utils.bzl", "utils")
 
 visibility("//build/kernel/kleaf/impl/...")
 
-def _ddk_config_subrule_impl(
+def _ddk_config_info_subrule_impl(
         subrule_ctx,  # buildifier: disable=unused-variable
         kconfig_targets,
         defconfig_targets,
         deps,
         extra_defconfigs = None):
     """
-    Impl for ddk_config_subrule.
+    Create a regular DdkConfigInfo.
 
     Args:
         subrule_ctx: context
@@ -41,20 +42,28 @@ def _ddk_config_subrule_impl(
     if extra_defconfigs == None:
         extra_defconfigs = depset()
 
-    return DdkConfigInfo(
-        kconfig = depset(
-            transitive = [dep[DdkConfigInfo].kconfig for dep in deps if DdkConfigInfo in dep] +
-                         [target.files for target in kconfig_targets],
-            order = "postorder",
-        ),
-        defconfig = depset(
-            transitive = [extra_defconfigs] +
-                         [dep[DdkConfigInfo].defconfig for dep in deps if DdkConfigInfo in dep] +
-                         [target.files for target in defconfig_targets],
-            order = "postorder",
-        ),
+    kconfig = depset(
+        transitive = [dep[DdkConfigInfo].kconfig for dep in deps if DdkConfigInfo in dep] +
+                     [target.files for target in kconfig_targets],
+        order = "postorder",
+    )
+    defconfig = depset(
+        transitive = [extra_defconfigs] +
+                     [dep[DdkConfigInfo].defconfig for dep in deps if DdkConfigInfo in dep] +
+                     [target.files for target in defconfig_targets],
+        order = "postorder",
     )
 
-ddk_config_subrule = subrule(
-    implementation = _ddk_config_subrule_impl,
+    return DdkConfigInfo(
+        kconfig = kconfig,
+        kconfig_written = utils.write_depset(kconfig, "kconfig_depset.txt"),
+        defconfig = defconfig,
+        defconfig_written = utils.write_depset(defconfig, "defconfig_depset.txt"),
+    )
+
+ddk_config_info_subrule = subrule(
+    implementation = _ddk_config_info_subrule_impl,
+    subrules = [
+        utils.write_depset,
+    ],
 )
