@@ -684,3 +684,18 @@ test_suite(
         "//prebuilts/build-tools/tests",
     ],
 )
+
+string_flag(
+    name = "socrepo",
+    build_setting_default = "false",
+)
+
+config_setting(
+    name = "socrepo_false",
+    flag_values = {":socrepo": "false"},
+)
+
+config_setting(
+    name = "socrepo_true",
+    flag_values = {":socrepo": "true"},
+)
