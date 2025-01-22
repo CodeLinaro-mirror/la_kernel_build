@@ -402,7 +402,7 @@ function build_boot_images() {
       # Also execute ${VENDOR_RAMDISK_CMDS} for further modifications
       ( cd "${MKBOOTIMG_RAMDISK_STAGING_DIR}"
         fakeroot cpio -idu --quiet <"${VENDOR_RAMDISK_CPIO}"
-        rm -rf lib/modules
+        rm -rf dev/*
         eval ${VENDOR_RAMDISK_CMDS}
       )
     fi
@@ -438,9 +438,15 @@ function build_boot_images() {
   elif [ "${#MKBOOTIMG_RAMDISK_DIRS[@]}" -gt 0 ]; then
     MKBOOTIMG_RAMDISK_CPIO="${MKBOOTIMG_STAGING_DIR}/ramdisk.cpio"
     if [ "${USE_CPIO_FOR_RAMDISK}" == "1" ]; then
-        rsync -av "${INITRAMFS_STAGING_DIR}"/* "${MKBOOTIMG_RAMDISK_STAGING_DIR}"/
+        CPIO_PATH=/usr/bin/cpio
+        if [ -n "${BUILD_INITRAMFS}" ] && [ -d "${INITRAMFS_STAGING_DIR}" ]; then
+            ker_ver_initramfs=$(ls "${INITRAMFS_STAGING_DIR}"/lib/modules/)
+            ker_ver_ramdisk=$(ls "${MKBOOTIMG_RAMDISK_STAGING_DIR}"/lib/modules/)
+            rsync -av "${INITRAMFS_STAGING_DIR}"/lib/modules/"${ker_ver_initramfs}"/* \
+            "${MKBOOTIMG_RAMDISK_STAGING_DIR}"/lib/modules/"${ker_ver_ramdisk}"/
+        fi
         ( cd "${MKBOOTIMG_RAMDISK_STAGING_DIR}" || return
-           find . | cpio -o -H newc > "${MKBOOTIMG_RAMDISK_CPIO}"
+           find . | "${CPIO_PATH}" -o -H newc --owner='root:root' > "${MKBOOTIMG_RAMDISK_CPIO}"
         )
     else
         mkbootfs "${MKBOOTIMG_RAMDISK_DIRS[@]}" >"${MKBOOTIMG_RAMDISK_CPIO}"
