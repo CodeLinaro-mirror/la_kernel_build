@@ -1156,32 +1156,26 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
         self.uname_pattern_prefix = re.compile(
             r"^Linux version [0-9]+[.][0-9]+[.][0-9]+(\S*)")
 
-        self.build_config_constants_path = f"{self._common()}/build.config.constants"
-        self.restore_file_after_test(self.build_config_constants_path)
-
-        self.gki_defconfig_path = f"{self._common()}/arch/arm64/configs/gki_defconfig"
-        self.restore_file_after_test(self.gki_defconfig_path)
-
         self.makefile_path = f"{self._common()}/Makefile"
         self.restore_file_after_test(self.makefile_path)
 
-    def _setup_mainline(self):
-        lines = [
-            "BRANCH=android-mainline\n",
-            "KMI_GENERATION=\n"
-        ]
-        with open(self.build_config_constants_path, "r") as f:
-            lines += [line for line in f if not line.startswith("BRANCH") and
-                      not line.startswith("KMI_GENERATION")]
-        with open(self.build_config_constants_path, "w") as f:
-            f.write("".join(lines))
+    def _setup_constants(self, branch, kmi_generation):
+        """Writes BRANCH and KMI_GENERATION to build configs."""
+        build_config_constants_path = f"{self._common()}/build.config.constants"
+        build_config_common_path = f"{self._common()}/build.config.common"
 
-        # Writing to defconfig directly requires us to disable check_defconfig,
-        # because the ordering is not correct.
-        self.build_config_gki_aarch64_path = f"{self._common()}/build.config.gki.aarch64"
-        self.restore_file_after_test(self.build_config_gki_aarch64_path)
-        with open(self.build_config_gki_aarch64_path, "a") as f:
-            f.write("POST_DEFCONFIG_CMDS=true\n")
+        for path in (build_config_constants_path, build_config_common_path):
+            self.restore_file_after_test(path)
+            self.filter_lines(path, lambda x: not x.startswith("BRANCH") and
+                              not x.startswith("KMI_GENERATION"))
+            with open(path, "a") as f:
+                f.write(textwrap.dedent(f"""\
+                        BRANCH={branch}
+                        KMI_GENERATION={kmi_generation}
+                    """))
+
+    def _setup_mainline(self):
+        self._setup_constants(branch="android-mainline", kmi_generation="")
 
         extraversion_pattern = re.compile(r"^EXTRAVERSION\s*=")
         self.replace_lines(self.makefile_path,
@@ -1189,19 +1183,8 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
                            ["EXTRAVERSION = -rc999"])
 
     def _setup_release_branch(self):
-        lines = [
-            "BRANCH=android99-100.110\n",
-            "KMI_GENERATION=56\n"
-        ]
-        with open(self.build_config_constants_path, "r") as f:
-            lines += [line for line in f if not line.startswith("BRANCH") and
-                      not line.startswith("KMI_GENERATION")]
-        with open(self.build_config_constants_path, "w") as f:
-            f.write("".join(lines))
+        self._setup_constants(branch="android99-100.110", kmi_generation="56")
 
-        localversion_pattern = re.compile(r"^CONFIG_LOCALVERSION=")
-        self.filter_lines(self.gki_defconfig_path,
-                          lambda x: not re.search(localversion_pattern, x))
         extraversion_pattern = re.compile(r"^EXTRAVERSION\s*=")
         self.replace_lines(self.makefile_path,
                            lambda x: re.search(extraversion_pattern, x),
@@ -1251,8 +1234,9 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
                 f"//{self._common()}:kernel_aarch64",
             ],
             env=ScmversionIntegrationTest._env_without_build_number())
+        scmversion_pat = re.compile(r"^-rc999-mainline-maybe-dirty(-4k)?$")
         for scmversion in self._get_vmlinux_scmversion():
-            self.assertEqual("-rc999-mainline-maybe-dirty-4k", scmversion)
+            self.assertRegex(scmversion, scmversion_pat)
 
     def test_mainline_stamp(self):
         self._setup_mainline()
@@ -1267,7 +1251,7 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
         scmversion_pat = re.compile(
             r"^-rc999-mainline(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?(-4k)?$")
         for scmversion in self._get_vmlinux_scmversion():
-            self.assertRegexpMatches(scmversion, scmversion_pat)
+            self.assertRegex(scmversion, scmversion_pat)
 
     def test_mainline_ab(self):
         self._setup_mainline()
@@ -1279,11 +1263,11 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
                 f"//{self._common()}:kernel_aarch64",
             ],
             env=ScmversionIntegrationTest._env_with_build_number("123456"))
+        # pylint: disable=line-too-long
         scmversion_pat = re.compile(
-            r"^-rc999-mainline(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?-ab123456(-4k)?$"
-        )
+            r"^-rc999-mainline(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?-ab123456(-4k)?$")
         for scmversion in self._get_vmlinux_scmversion():
-            self.assertRegexpMatches(scmversion, scmversion_pat)
+            self.assertRegex(scmversion, scmversion_pat)
 
     def test_release_branch_no_stamp(self):
         self._setup_release_branch()
@@ -1294,8 +1278,9 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
                 f"//{self._common()}:kernel_aarch64",
             ],
             env=ScmversionIntegrationTest._env_without_build_number())
+        scmversion_pat = re.compile(r"^-android99-56-maybe-dirty(-4k)?$")
         for scmversion in self._get_vmlinux_scmversion():
-            self.assertEqual("-android99-56-maybe-dirty", scmversion)
+            self.assertRegex(scmversion, scmversion_pat)
 
     def test_release_branch_stamp(self):
         self._setup_release_branch()
@@ -1308,9 +1293,9 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
             ],
             env=ScmversionIntegrationTest._env_without_build_number())
         scmversion_pat = re.compile(
-            r"^-android99-56(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?$")
+            r"^-android99-56(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?(-4k)?$")
         for scmversion in self._get_vmlinux_scmversion():
-            self.assertRegexpMatches(scmversion, scmversion_pat)
+            self.assertRegex(scmversion, scmversion_pat)
 
     def test_release_branch_ab(self):
         self._setup_release_branch()
@@ -1322,10 +1307,11 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
                 f"//{self._common()}:kernel_aarch64",
             ],
             env=ScmversionIntegrationTest._env_with_build_number("123456"))
+        # pylint: disable=line-too-long
         scmversion_pat = re.compile(
-            r"^-android99-56(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?-ab123456$")
+            r"^-android99-56(-[0-9]{5,})?-g[0-9a-f]{12,40}(-dirty)?-ab123456(-4k)?$")
         for scmversion in self._get_vmlinux_scmversion():
-            self.assertRegexpMatches(scmversion, scmversion_pat)
+            self.assertRegex(scmversion, scmversion_pat)
 
     def test_stamp_repo_root_is_not_workspace_root(self):
         """Tests that --config=stamp works when repo root is not Bazel workspace root."""
@@ -1385,9 +1371,6 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
         self._setup_mainline()
 
         new_kernel_dir = pathlib.Path("test_symlink")
-        with open(self.build_config_gki_aarch64_path, "a") as f:
-            f.write(f"KERNEL_DIR={new_kernel_dir}\n")
-
         if not new_kernel_dir.is_symlink():
             new_kernel_dir.symlink_to(self._common(), True)
         self.addCleanup(new_kernel_dir.unlink)
