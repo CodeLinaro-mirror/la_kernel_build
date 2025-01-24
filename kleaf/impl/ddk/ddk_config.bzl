@@ -50,7 +50,7 @@ def _ddk_config_impl(ctx):
 def _create_merge_dot_config_step(defconfig_depset_written):
     defconfig_depset_file = defconfig_depset_written.depset_file
     cmd = """
-        if [[ -s {defconfig_depset_file} ]]; then
+        if grep -q '\\S' {defconfig_depset_file} ; then
             {merge_dot_config_cmd}
         fi
     """.format(
@@ -76,7 +76,7 @@ def _create_kconfig_ext_step(ctx, kconfig_depset_written):
         KCONFIG_EXT_PREFIX=$(realpath {intermediates_dir} --relative-to ${{ROOT_DIR}}/${{KERNEL_DIR}})/
 
         # Source Kconfig from depending modules
-        if [[ -s {kconfig_depset_file} ]]; then
+        if grep -q '\\S' < {kconfig_depset_file} ; then
             (
                 for kconfig in $(cat {kconfig_depset_file}); do
                     mod_kconfig_rel=$(realpath ${{kconfig}} --relative-to ${{ROOT_DIR}}/${{KERNEL_DIR}})
@@ -97,7 +97,7 @@ def _create_kconfig_ext_step(ctx, kconfig_depset_written):
 def _create_oldconfig_step(ctx, defconfig_depset_written, kconfig_depset_written):
     module_label = Label(str(ctx.label).removesuffix("_config"))
     cmd = """
-        if [[ -s {defconfig_depset_file} ]] || [[ -s {kconfig_depset_file} ]]; then
+        if grep -q '\\S' < {defconfig_depset_file} || grep -q '\\S' < {kconfig_depset_file} ; then
             # Regenerate include/.
             # We could also run `make syncconfig` but syncconfig is an implementation detail
             # of Kbuild. Hence, just wipe out include/ to force it to be re-regenerated.
@@ -187,8 +187,8 @@ def _create_main_action(
         {oldconfig_cmd}
 
         # Copy outputs
-        rsync --no-perms -L ${{OUT_DIR}}/.config {out_dir}/.config
-        rsync --no-perms -L -r ${{OUT_DIR}}/include/ {out_dir}/include/
+        rsync -aL ${{OUT_DIR}}/.config {out_dir}/.config
+        rsync -aL ${{OUT_DIR}}/include/ {out_dir}/include/
     """.format(
         merge_config_cmd = merge_dot_config_step.cmd,
         kconfig_ext_cmd = kconfig_ext_step.cmd,
@@ -217,8 +217,8 @@ def _create_env_and_outputs_info(ctx, out_dir):
 
     # Overlay module-specific configs
     restore_outputs_cmd = """
-        rsync --no-perms -L {out_dir}/.config ${{OUT_DIR}}/.config
-        rsync --no-perms -L -r --chmod=D+w {out_dir}/include/ ${{OUT_DIR}}/include/
+        rsync -aL {out_dir}/.config ${{OUT_DIR}}/.config
+        rsync -aL --chmod=D+w {out_dir}/include/ ${{OUT_DIR}}/include/
     """.format(
         out_dir = out_dir.path,
     )
