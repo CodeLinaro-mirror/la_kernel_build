@@ -413,6 +413,8 @@ kernel_platform_toolchain(
     name = "kernel_toolchain_exec",
     visibility = ["//build/kernel/kleaf/tests:__subpackages__"],
     deps = [
+        # do not sort
+        "@openssl//:openssl-library",
         "//prebuilts/kernel-build-tools:linux_x86_imported_libs",
     ],
 )
