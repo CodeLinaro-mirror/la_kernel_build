@@ -34,6 +34,9 @@ def ddk_module(
         out = None,
         local_defines = None,
         copts = None,
+        removed_copts = None,
+        asopts = None,
+        linkopts = None,
         config = None,
         kconfig = None,
         defconfig = None,
@@ -376,12 +379,12 @@ def ddk_module(
         out: The output module file. This should usually be `"{name}.ko"`.
 
           This is required if this target does not contain submodules.
-        local_defines: List of defines to add to the compile line.
+        local_defines: List of defines to add to the compile and assemble command line.
 
           **Order matters**. To prevent buildifier from sorting the list, use the
           `# do not sort` magic line.
 
-          Each string is prepended with `-D` and added to the compile command
+          Each string is prepended with `-D` and added to the compile/assemble command
           line for this target, but not to its dependents.
 
           Unlike
@@ -468,16 +471,69 @@ def ddk_module(
             srcs = ["//other:header.h", "my_module.c"],
           )
           ```
-          Then the generated Makefile contains:
+          Then the content of generated Makefile is semantically equivalent to:
 
           ```
-          ccflags-y += -include ../other/header.h
+          CFLAGS_my_module.o += -include ../other/header.h
           ```
 
           The behavior is such because the generated `Makefile` is located in
           `package/Makefile`, and `make` is executed under `package/`. In order
           to find `other/header.h`, its path relative to `package/` is given.
 
+        removed_copts: Similar to `copts` but for flags **removed** from the
+            compilation command.
+
+            For example:
+            ```
+            ddk_module(
+                name = "my_module",
+                removed_copts = ["-Werror"],
+                srcs = ["my_module.c"],
+            )
+            ```
+            Then the content of generated Makefile is semantically equivalent to:
+
+            ```
+            CFLAGS_REMOVE_my_module.o += -Werror
+            ```
+
+            Note: Due to implementation details of Kleaf flags in `copts` are written to a file and
+            provided to the compiler with the `@<arg_file>` syntax, so they are not affected
+            by `removed_copts` implemented by `CFLAGS_REMOVE_`. To remove flags from the Bazel
+            `copts` list, do so directly.
+
+        asopts: Similar to `copts` but for assembly.
+
+            For example:
+            ```
+            ddk_module(
+                name = "my_module",
+                asopts = ["-ansi"],
+                srcs = ["my_module.S"],
+            )
+            ```
+            Then the content of generated Makefile is semantically equivalent to:
+
+            ```
+            AFLAGS_my_module.o += -ansi
+            ```
+        linkopts: Similar to `copts` but for linking the module.
+
+            For example:
+            ```
+            ddk_module(
+                name = "my_module",
+                linkopts = ["-lc"],
+                out = "my_module.ko",
+                # ...
+            )
+            ```
+            Then the content of generated Makefile is semantically equivalent to:
+
+            ```
+            LDFLAGS_my_module.ko += -lc
+            ```
         config: **EXPERIMENTAL**. The parent [ddk_config](#ddk_config) that encapsulates
             Kconfig/defconfig.
 
@@ -569,6 +625,9 @@ def ddk_module(
         module_deps = deps,
         module_local_defines = local_defines,
         module_copts = copts,
+        module_removed_copts = removed_copts,
+        module_asopts = asopts,
+        module_linkopts = linkopts,
         module_autofdo_profile = autofdo_profile,
         module_debug_info_for_profiling = debug_info_for_profiling,
         top_level_makefile = True,
