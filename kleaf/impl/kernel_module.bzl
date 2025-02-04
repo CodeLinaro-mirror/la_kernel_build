@@ -424,6 +424,7 @@ def _kernel_module_impl(ctx):
     if ctx.file.internal_ddk_makefiles_dir:
         command += """
              # Restore Makefile and Kbuild
+               mkdir -p {ext_mod}
                cp -r {ddk_makefiles}/* {ext_mod}/
              # Replace env var in cflags files
                find {ext_mod} -name '*.cflags' -exec sed -i'' -e 's:$(ROOT_DIR):'"${{ROOT_DIR}}"':g' {{}} \\+
