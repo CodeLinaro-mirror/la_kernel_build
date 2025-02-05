@@ -331,6 +331,7 @@ def _gen_ddk_makefile_for_module(
                     out_file=out_file,
                     kernel_module_out=kernel_module_out,
                     obj_suffix=obj_suffix,
+                    is_crate_root = src_item.get("is_crate_root", False)
                 )
 
             if config is not None and value != True: # pylint: disable=singleton-comparison
@@ -411,7 +412,7 @@ def _get_rel_srcs_flat(rel_srcs: list[dict[str, Any]]) -> list[pathlib.Path] :
         files = rel_item["files"]
         rel_srcs_flat.extend(
             file for file in files if file.suffix in _SOURCE_SUFFIXES)
-    return rel_srcs_flat
+    return list(set(rel_srcs_flat))
 
 def _check_srcs_valid(rel_srcs: list[dict[str, Any]],
                       kernel_module_out: pathlib.Path):
@@ -468,6 +469,7 @@ def _handle_src(
         out_file: TextIO,
         kernel_module_out: pathlib.Path,
         obj_suffix: str,
+        is_crate_root: bool,
 ):
     # Ignore non-exported headers specified in srcs
     if src.suffix in (".h",):
@@ -477,6 +479,10 @@ def _handle_src(
     if not src.is_relative_to(kernel_module_out.parent):
         die("%s is not a valid source because it is not under %s",
             src, kernel_module_out.parent)
+
+    # Ignore non-crate-root .rs. Only crate-root .rs is added.
+    if src.suffix == ".rs" and not is_crate_root:
+        return
 
     if src.suffix == ".cmd_shipped":
         abs_out = src.with_suffix(".cmd")
