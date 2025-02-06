@@ -380,6 +380,7 @@ def common_kernel(
         kernel_build = name,
         extra_deps = filegroup_extra_deps,
         images = name + "_system_dlkm_image",
+        ddk_module_headers = ddk_module_headers,
         visibility = ["//visibility:private"],
     )
     target_mapping = CI_TARGET_MAPPING.get(name, {})
@@ -696,7 +697,6 @@ def _define_common_kernels_additional_tests(
         defconfig = defconfig,
         pre_defconfig_fragments = [Label("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragment")],
         base_kernel = native.package_relative_label(kernel_build_name),
-        build_config = Label("//build/kernel/kleaf/tests/defconfig_test:build.config.{}".format(arch)),
         make_goals = ["modules"],
         # We don't actually build the kernel_build target, so we don't care about outputs
         outs = [],
@@ -722,6 +722,12 @@ def _define_common_kernels_additional_tests(
         extra_tests.append(
             Label("//build/kernel/kleaf/tests/ddk_examples"),
         )
+
+        # Building pKVM module with DDK is only supported if the following file exists.
+        if native.glob(["arch/arm64/kvm/hyp/nvhe/Makefile.module"]):
+            extra_tests.append(
+                Label("//build/kernel/kleaf/tests/ddk_examples:pkvm_module_test"),
+            )
 
     native.test_suite(
         name = name,

@@ -383,7 +383,11 @@ def _kernel_module_impl(ctx):
     )
     grab_cmd_step = get_grab_cmd_step(ctx, "${OUT_DIR}/${ext_mod_rel}")
     grab_gcno_step = get_grab_gcno_step(ctx, "${COMMON_OUT_DIR}", is_kernel_build = False)
-    compile_commands_step = compile_commands_utils.get_step(ctx, "${OUT_DIR}/${ext_mod_rel}")
+    compile_commands_step = compile_commands_utils.get_step(
+        ctx,
+        "${OUT_DIR}/${ext_mod_rel}",
+        skip = ctx.attr.internal_is_ddk_library,
+    )
 
     for step in (
         cache_dir_step,
@@ -509,22 +513,30 @@ def _kernel_module_impl(ctx):
     )
 
     # TODO(b/291955924): make the `make` invocations parallel
-    for goal in compile_commands_utils.additional_make_goals(ctx):
-        command += """
+    if not ctx.attr.internal_is_ddk_library:
+        for goal in compile_commands_utils.additional_make_goals(ctx):
+            command += """
                 make -C {ext_mod} ${{TOOL_ARGS}} M=${{ext_mod_rel}} VPATH=${{ROOT_DIR}}/${{KERNEL_DIR}} O=${{OUT_DIR}} KERNEL_SRC=${{ROOT_DIR}}/${{KERNEL_DIR}} {goal} {make_filter} {make_redirect}
-        """.format(
-            ext_mod = ext_mod,
-            goal = goal,
-            make_filter = make_filter,
-            make_redirect = modpost_warn.make_redirect,
-        )
+            """.format(
+                ext_mod = ext_mod,
+                goal = goal,
+                make_filter = make_filter,
+                make_redirect = modpost_warn.make_redirect,
+            )
 
     if ctx.attr.internal_is_ddk_library:
         # For ddk_library, directly copy output files in the main action.
         for short_name, out in zip(original_outs, output_files):
-            command += """
-                cp -aL ${{OUT_DIR}}/${{ext_mod_rel}}/{short_name_trimmed} {out}
-            """.format(
+            if out.extension == "cmd_shipped":
+                # Remove absolute paths in *.cmd files.
+                fmt = """
+                    sed -e "s:${{ROOT_DIR}}/${{KERNEL_DIR}}/:"'$(srctree)/:g' \\
+                        -e "s:${{ROOT_DIR}}/:"'$(srctree)/'"$(realpath ${{ROOT_DIR}} --relative-to ${{KERNEL_DIR}})/:g" \\
+                        < ${{OUT_DIR}}/${{ext_mod_rel}}/{short_name_trimmed} > {out}
+                """
+            else:
+                fmt = "\ncp -aL ${{OUT_DIR}}/${{ext_mod_rel}}/{short_name_trimmed} {out}\n"
+            command += fmt.format(
                 short_name_trimmed = short_name.removesuffix("_shipped"),
                 out = out.path,
             )
