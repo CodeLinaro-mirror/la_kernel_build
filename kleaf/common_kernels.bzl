@@ -60,7 +60,7 @@ _GKI_ADD_VMLINUX = False
 def common_kernel(
         name,
         outs,
-        build_config,
+        build_config = None,
         makefile = None,
         arch = None,
         visibility = None,
@@ -85,7 +85,10 @@ def common_kernel(
         deprecation = None,
         ddk_headers_archive = None,
         ddk_module_headers = None,
-        extra_dist = None):
+        extra_dist = None,
+        kcflags = None,
+        system_dlkm_extra_archive_files = None,
+        clang_autofdo_profile = None):
     """Macro for an Android Common Kernel.
 
     The following targets are declared as public API:
@@ -151,6 +154,9 @@ def common_kernel(
         deprecation: If set, mark target deprecated with given message.
         ddk_headers_archive: nonconfigurable. Target to the archive packing DDK headers
         extra_dist: extra targets added to `<name>_dist`
+        kcflags: [kernel_build.kcflags](kernel.md#kernel_build-kcflags)
+        system_dlkm_extra_archive_files: [system_dlkm_image.internal_extra_archive_files](#system_dlkm_image-internal_extra_archive_files)
+        clang_autofdo_profile: See [kernel_build.clang_autofdo_profile](kernel.md#kernel_build-clang_autofdo_profile)
     """
     json_target_config = dict(
         name = name,
@@ -212,14 +218,18 @@ def common_kernel(
         srcs = all_kmi_symbol_lists,
     )
 
-    kernel_build_config(
-        name = name + "_build_config",
-        srcs = [
-            # do not sort
-            build_config,
-            Label("//build/kernel/kleaf:gki_build_config_fragment"),
-        ],
-    )
+    if build_config:
+        kernel_build_config(
+            name = name + "_build_config",
+            srcs = [
+                # do not sort
+                build_config,
+                Label("//build/kernel/kleaf:gki_build_config_fragment"),
+            ],
+        )
+        build_config = name + "_build_config"
+    else:
+        build_config = Label("//build/kernel/kleaf:gki_build_config_fragment")
 
     kernel_build(
         name = name,
@@ -234,7 +244,7 @@ def common_kernel(
             "certs/signing_key.pem",
             "certs/signing_key.x509",
         ],
-        build_config = name + "_build_config",
+        build_config = build_config,
         makefile = makefile,
         check_defconfig = select({
             Label("//build/kernel/kleaf:gki_build_config_fragment_is_unset"): "minimized",
@@ -263,6 +273,8 @@ def common_kernel(
             Label("//build/kernel/kleaf/impl/defconfig:signing_modules_disabled"),
         ],
         ddk_module_headers = ddk_module_headers,
+        kcflags = kcflags,
+        clang_autofdo_profile = clang_autofdo_profile,
     )
 
     kernel_abi(
@@ -321,6 +333,7 @@ def common_kernel(
         build_flatten = True,
         modules_list = gki_system_dlkm_modules,
         fs_types = ["erofs", "ext4"],
+        internal_extra_archive_files = system_dlkm_extra_archive_files,
     )
 
     kernel_images_filegroup(
@@ -718,6 +731,15 @@ def _define_common_kernels_additional_tests(
         visibility = ["//visibility:private"],
     )
 
+    # Build ddk_examples to make sure our DDK examples are up-to-date. Note that these examples
+    # deliberately refers to //common explicitly to provide a clear example, so this build test
+    # is only included when we are building //common:kernel_aarch64.
+    extra_tests = []
+    if native.package_relative_label(kernel_build_name) == native.package_relative_label("//common:kernel_aarch64"):
+        extra_tests.append(
+            Label("//build/kernel/kleaf/tests/ddk_examples"),
+        )
+
     native.test_suite(
         name = name,
         tests = [
@@ -725,7 +747,7 @@ def _define_common_kernels_additional_tests(
             name + "_fake",
             name + "_device_modules_test",
             name + "_pre_defconfig_fragments_menuconfig_test",
-        ],
+        ] + extra_tests,
     )
 
 def _common_kernel_abi_dist(

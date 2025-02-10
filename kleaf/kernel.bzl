@@ -34,9 +34,12 @@ load("//build/kernel/kleaf/impl:abi/kernel_abi.bzl", _kernel_abi = "kernel_abi")
 load("//build/kernel/kleaf/impl:abi/kernel_abi_dist.bzl", _kernel_abi_dist = "kernel_abi_dist", _kernel_abi_wrapped_dist = "kernel_abi_wrapped_dist")
 load("//build/kernel/kleaf/impl:android_filegroup.bzl", _android_filegroup = "android_filegroup")
 load("//build/kernel/kleaf/impl:checkpatch.bzl", _checkpatch = "checkpatch")
+load("//build/kernel/kleaf/impl:ddk/ddk_config.bzl", _ddk_config = "ddk_config")
 load("//build/kernel/kleaf/impl:ddk/ddk_headers.bzl", _ddk_headers = "ddk_headers")
 load("//build/kernel/kleaf/impl:ddk/ddk_headers_archive.bzl", _ddk_headers_archive = "ddk_headers_archive")
+load("//build/kernel/kleaf/impl:ddk/ddk_library.bzl", _ddk_library = "ddk_library")
 load("//build/kernel/kleaf/impl:ddk/ddk_module.bzl", _ddk_module = "ddk_module")
+load("//build/kernel/kleaf/impl:ddk/ddk_prebuilt_object.bzl", _ddk_prebuilt_object = "ddk_prebuilt_object")
 load("//build/kernel/kleaf/impl:ddk/ddk_submodule.bzl", _ddk_submodule = "ddk_submodule")
 load("//build/kernel/kleaf/impl:ddk/ddk_uapi_headers.bzl", _ddk_uapi_headers = "ddk_uapi_headers")
 load("//build/kernel/kleaf/impl:gki_artifacts.bzl", _gki_artifacts = "gki_artifacts", _gki_artifacts_prebuilts = "gki_artifacts_prebuilts")
@@ -62,13 +65,18 @@ load("//build/kernel/kleaf/impl:kernel_unstripped_modules_archive.bzl", _kernel_
 load("//build/kernel/kleaf/impl:merge_kzip.bzl", _merge_kzip = "merge_kzip")
 load("//build/kernel/kleaf/impl:merge_module_symvers.bzl", _merge_module_symvers = "merge_module_symvers")
 load("//build/kernel/kleaf/impl:merged_kernel_uapi_headers.bzl", _merged_kernel_uapi_headers = "merged_kernel_uapi_headers")
+load("//build/kernel/kleaf/impl:modinfo_summary.bzl", _modinfo_summary_report = "modinfo_summary_report")
+load("//build/kernel/kleaf/impl/testing:kernel_unit_test.bzl", _kunit_test = "kunit_test")
 
 # Re-exports. This is the list of public rules and macros.
 android_filegroup = _android_filegroup
 checkpatch = _checkpatch
+ddk_config = _ddk_config
 ddk_headers = _ddk_headers
 ddk_headers_archive = _ddk_headers_archive
+ddk_library = _ddk_library
 ddk_module = _ddk_module
+ddk_prebuilt_object = _ddk_prebuilt_object
 ddk_submodule = _ddk_submodule
 ddk_uapi_headers = _ddk_uapi_headers
 dependency_graph = _dependency_graph
@@ -99,6 +107,7 @@ kernel_unstripped_modules_archive = _kernel_unstripped_modules_archive
 merge_kzip = _merge_kzip
 merge_module_symvers = _merge_module_symvers
 merged_kernel_uapi_headers = _merged_kernel_uapi_headers
+modinfo_summary_report = _modinfo_summary_report
 super_image = _super_image
 system_dlkm_image = _system_dlkm_image
 unsparsed_image = _unsparsed_image
@@ -107,3 +116,4 @@ vendor_dlkm_image = _vendor_dlkm_image
 
 # Tests
 kernel_module_test = _kernel_module_test
+kunit_test = _kunit_test

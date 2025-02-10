@@ -34,13 +34,15 @@ _SOURCE_SUFFIXES = (
     ".c",
     ".rs",
     ".S",
+    ".o_shipped",
+    ".cmd_shipped",
 )
 
 # Example:
 # -key=$(execpath thing)
-_KEY_VALUE_COPT_RE = re.compile(r"^(?P<key>[^$]+)(?P<sep>=)(?P<value>\$\([^)]+\))$")
+_KEY_VALUE_OPT_RE = re.compile(r"^(?P<key>[^$]+)(?P<sep>=)(?P<value>\$\([^)]+\))$")
 # $(execpath thing)
-_VALUE_COPT_RE = re.compile(r"^\$\([^)]+\)$")
+_VALUE_OPT_RE = re.compile(r"^\$\([^)]+\)$")
 
 class DieException(SystemExit):
     def __init__(self, *args, **kwargs):
@@ -84,6 +86,8 @@ def _get_license_str():
 def _gen_makefile(
         module_symvers_list: list[pathlib.Path],
         output_makefile: pathlib.Path,
+        is_library: bool,
+        rel_srcs: list[dict[str, Any]],
 ):
     content = _get_license_str()
 
@@ -93,10 +97,25 @@ def _gen_makefile(
             EXTRA_SYMBOLS += $(COMMON_OUT_DIR)/{module_symvers}
             """)
 
-    content += textwrap.dedent("""\
-        modules modules_install clean compile_commands.json:
-        \t$(MAKE) -C $(KERNEL_SRC) M=$(M) $(KBUILD_OPTIONS) KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)" $(@)
-        """)
+    if is_library:
+        # ddk_library does not support conditional_srcs for now, because we can't get
+        # the list of configs in Makefile.
+        objects = " ".join(str(path.with_suffix(".o")) for src_item in rel_srcs for path in src_item["files"])
+        content += textwrap.dedent(f"""\
+            .PHONY: kleaf-objects
+
+            kleaf-objects:
+            \t$(MAKE) -C $(KERNEL_SRC) M=$(M) $(KBUILD_OPTIONS) \\
+            \t    KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)"       \\
+            \t    {objects}
+            """)
+    else:
+        content += textwrap.dedent("""\
+            modules modules_install clean compile_commands.json:
+            \t$(MAKE) -C $(KERNEL_SRC) M=$(M) $(KBUILD_OPTIONS) \\
+            \t    KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)"       \\
+            \t    $(@)
+            """)
 
     os.makedirs(output_makefile.parent, exist_ok=True)
     with open(output_makefile, "w") as out_file:
@@ -133,7 +152,8 @@ def _merge_directories(
                     dst.write(f"// {submodule_file}\n")
                 elif dst_path.suffix == ".S":
                     dst.write(f"/* {submodule_file} */\n")
-                elif dst_path.name in ("Kbuild", "Makefile"):
+                elif (dst_path.name in ("Kbuild", "Makefile") or
+                      dst_path.suffix in (".cmd_shipped")):
                     dst.write(f"# {submodule_file}\n")
                 dst.write(src.read())
                 dst.write("\n")
@@ -166,21 +186,25 @@ def gen_ddk_makefile(
         kernel_module_out: Optional[pathlib.Path],
         linux_include_dirs: list[pathlib.Path],
         submodule_linux_include_dirs: dict[pathlib.Path, list[pathlib.Path]],
+        is_library: bool,
         **kwargs
 ):
-    if produce_top_level_makefile:
-        _gen_makefile(
-            module_symvers_list=module_symvers_list,
-            output_makefile=output_makefiles / "Makefile",
-        )
-
+    rel_srcs = []
     if kernel_module_out:
-        _gen_ddk_makefile_for_module(
+        rel_srcs = _gen_ddk_makefile_for_module(
             output_makefiles=output_makefiles,
             package=package,
             kernel_module_out=kernel_module_out,
             linux_include_dirs=linux_include_dirs,
             **kwargs
+        )
+
+    if produce_top_level_makefile:
+        _gen_makefile(
+            module_symvers_list=module_symvers_list,
+            output_makefile=output_makefiles / "Makefile",
+            is_library=is_library,
+            rel_srcs = rel_srcs,
         )
 
     ddk_markers: set[pathlib.Path] = set()
@@ -212,7 +236,10 @@ def _gen_ddk_makefile_for_module(
         include_dirs: list[pathlib.Path],
         linux_include_dirs: list[pathlib.Path],
         local_defines: list[str],
-        copt_file: Optional[TextIO],
+        copts_file: TextIO | None,
+        removed_copts_file: TextIO | None,
+        asopts_file: TextIO | None,
+        linkopts_file: TextIO | None,
         kbuild_has_linux_include: bool,
         **unused_kwargs
 ):
@@ -253,17 +280,27 @@ def _gen_ddk_makefile_for_module(
 
     # rel to this package
     out_cflags_subpath = kernel_module_out.with_suffix(".cflags")
+    out_asflags_subpath = kernel_module_out.with_suffix(".asflags")
+    out_ldflags_subpath = kernel_module_out.with_suffix(".ldflags")
 
-    # Output cflags file path
+    # Output flags file path
     out_cflags_path = output_makefiles / out_cflags_subpath
+    out_asflags_path = output_makefiles / out_asflags_subpath
+    out_ldflags_path = output_makefiles / out_ldflags_subpath
 
     # For modinfo tagging
     _handle_ddk_marker(rel_srcs, kernel_module_out,
         out_cflags_path, package / out_cflags_subpath.parent)
 
-    copts = json.load(copt_file) if copt_file else None
+    copts = json.load(copts_file) if copts_file else None
+    removed_copts = json.load(removed_copts_file) if removed_copts_file else None
+    asopts = json.load(asopts_file) if asopts_file else None
+    linkopts = json.load(linkopts_file) if linkopts_file else None
 
-    with open(kbuild, "w") as out_file, open(out_cflags_path, "a") as out_cflags:
+    with open(kbuild, "w") as out_file, \
+         open(out_cflags_path, "a") as out_cflags, \
+         open(out_asflags_path, "a") as out_asflags, \
+         open(out_ldflags_path, "a") as out_ldflags:
         out_file.write(_get_license_str())
         out_file.write(textwrap.dedent(f"""\
             # Build {package / kernel_module_out}
@@ -304,9 +341,14 @@ def _gen_ddk_makefile_for_module(
         # constructs arguments to the compiler.
         _handle_defines(out_cflags, local_defines)
         _handle_includes(out_cflags, include_dirs)
-        _handle_copts(out_cflags, copts)
+        _handle_opts(out_cflags, copts, "copts")
+        _handle_defines(out_asflags, local_defines)
+        _handle_includes(out_asflags, include_dirs)
+        _handle_opts(out_asflags, asopts, "asopts")
+        _handle_opts(out_ldflags, linkopts, "linkopts")
 
         out_files_with_cflags = set()
+        out_files_with_asflags = set()
         for src_item in rel_srcs:
             config = src_item.get("config")
             value = src_item.get("value")
@@ -319,18 +361,32 @@ def _gen_ddk_makefile_for_module(
 
                 out = src.with_suffix(".o").relative_to(
                     kernel_module_out.parent)
-                if out in out_files_with_cflags:
-                    continue
-                out_files_with_cflags.add(out)
-                # kernel_module() copies makefiles and .cflags files to
-                # $(ROOT_DIR)/<package> (aka $ROOT_DIR/<ext_mod>) and fix up
-                # .cflags files there before building.
-                out_file.write(textwrap.dedent(f"""\
-                    CFLAGS_{out} += @$(ROOT_DIR)/{package / out_cflags_subpath}
-                    """))
+
+                # TODO: b/389976463 - CFLAGS should only be applied to .c files.
+                if out not in out_files_with_cflags:
+                    out_files_with_cflags.add(out)
+                    # kernel_module() copies makefiles and .cflags files to
+                    # $(ROOT_DIR)/<package> (aka $ROOT_DIR/<ext_mod>) and fix up
+                    # .cflags files there before building.
+                    out_file.write(textwrap.dedent(f"""\
+                        CFLAGS_{out} += @$(ROOT_DIR)/{package / out_cflags_subpath}
+                        """))
+                    _handle_opts_kbuild(out_file, "CFLAGS_REMOVE", out,
+                                        removed_copts, "removed_copts")
+
+                if asopts and src.suffix == ".S" and out not in out_files_with_asflags:
+                    out_files_with_asflags.add(out)
+                    out_file.write(textwrap.dedent(f"""\
+                        AFLAGS_{out} += @$(ROOT_DIR)/{package / out_asflags_subpath}
+                        """))
 
             if config is not None and value != True: # pylint: disable=singleton-comparison
                 out_file.write(f"endif # {conditional}\n\n")
+
+        if linkopts:
+            out_file.write(textwrap.dedent(f"""\
+                LDFLAGS_{kernel_module_out.with_suffix('.o').name} += @$(ROOT_DIR)/{package / out_ldflags_subpath}
+            """))
 
     top_kbuild = output_makefiles / "Kbuild"
     if top_kbuild != kbuild:
@@ -341,6 +397,8 @@ def _gen_ddk_makefile_for_module(
                 # Build {package / kernel_module_out}
                 obj-y += {kernel_module_out.parent}/
                 """))
+
+    return rel_srcs
 
 def _get_rel_srcs_flat(rel_srcs: list[dict[str, Any]]) -> list[pathlib.Path] :
     """List of source file paths(minus headers)."""
@@ -416,15 +474,25 @@ def _handle_src(
         die("%s is not a valid source because it is not under %s",
             src, kernel_module_out.parent)
 
-    out = src.with_suffix(".o").relative_to(kernel_module_out.parent)
+    if src.suffix == ".cmd_shipped":
+        abs_out = src.with_suffix(".cmd")
+    else:
+        abs_out = src.with_suffix(".o")
+
+    out = abs_out.relative_to(kernel_module_out.parent)
     # Ignore self (don't omit obj-foo += foo.o)
     if src.with_suffix(".ko") == kernel_module_out:
         out_file.write(textwrap.dedent(f"""\
                         # The module {kernel_module_out} has a source file {src}
                     """))
     else:
+        if src.suffix == ".cmd_shipped":
+            object_to_build = "always"
+        else:
+            object_to_build = kernel_module_out.with_suffix('').name
+
         out_file.write(textwrap.dedent(f"""\
-                        {kernel_module_out.with_suffix('').name}-{obj_suffix} += {out}
+                        {object_to_build}-{obj_suffix} += {out}
                     """))
 
 
@@ -465,38 +533,76 @@ def _handle_includes(out_cflags: TextIO,
             """))
 
 
-def _handle_copts(out_cflags: TextIO,
-                  copts: Optional[list[dict[str, str | bool]]]):
-    if not copts:
+def _handle_opts(out_flags: TextIO,
+                 opts: Optional[list[dict[str, str | bool]]],
+                 attr_name: str):
+    """Writes opts into out_flags."""
+    if not opts:
         return
 
-    for d in copts:
+    for d in opts:
         expanded: str = d["expanded"]
         orig: str = d["orig"]
 
-        out_cflags.write(textwrap.dedent(f"""\
-            {_quote_transform_copt(orig, expanded)}
+        out_flags.write(textwrap.dedent(f"""\
+            {_quote_transform_opt(orig, expanded, attr_name)}
             """))
 
 
-def _quote_transform_copt(orig: str, expanded: str):
+def _handle_opts_kbuild(out_file: TextIO, flag_type: str, out: str,
+                        removed_opts: None | list[dict[str, str | bool]],
+                        attr_name: str):
+    """Writes removed opts into Kbuild out_file.
+
+    Args:
+        out_file: The Kbuild file
+        flag_type: CFLAGS_REMOVE
+        out: output .o file stem
+        removed_opts: the JSON dictionary provided by gen_makefiles.bzl
+    """
+
+    # CFLAGS_REMOVE_ etc. needs to be written to Kbuild directly because
+    # it is implemented with $(filter-out).
+    if not removed_opts:
+        return
+
+    for d in removed_opts:
+        expanded: str = d["expanded"]
+        orig: str = d["orig"]
+
+        out_file.write(textwrap.dedent(f"""\
+            {flag_type}_{out} += {_quote_transform_opt(orig, expanded, attr_name)}
+        """))
+
+
+def _quote_transform_opt(orig: str, expanded: str, attr_name: str):
+    """Quote and transform a given flag.
+
+    Paths are properly fixed.
+
+    Args:
+        orig: original text in the Bazel target attribute
+        expanded: expanded paths after ctx.expand_location()
+        attr_name: The relevant Bazel target attribute name.
+    """
     if expanded == orig:
         return shlex.quote(expanded)
 
-    mo = _VALUE_COPT_RE.match(orig)
+    mo = _VALUE_OPT_RE.match(orig)
     if mo:
         return f"$(ROOT_DIR)/{shlex.quote(expanded)}"
 
-    mo = _KEY_VALUE_COPT_RE.match(orig)
+    mo = _KEY_VALUE_OPT_RE.match(orig)
     if mo:
         prefix = f"{mo.group('key')}{mo.group('sep')}"
         if not expanded.startswith(prefix):
-            die("Invalid copt: %s. Expected %s to start with %s", orig, expanded, prefix)
+            die("Invalid %s: %s. Expected %s to start with %s",
+                attr_name, orig, expanded, prefix)
         expanded_value = expanded.removeprefix(prefix)
         return f"{prefix}$(ROOT_DIR)/{shlex.quote(expanded_value)}"
 
-    die("Invalid copt: %s. $(location) expressions must be its own token, or "
-        "part of -key=$(location target)", orig)
+    die("Invalid %s: %s. $(location) expressions must be its own token, or "
+        "part of -key=$(location target)", attr_name, orig)
 
 
 class SubmoduleLinuxIncludeDirAction(argparse.Action):
@@ -527,7 +633,10 @@ if __name__ == "__main__":
     parser.add_argument("--module-symvers-list",
                         type=pathlib.Path, nargs="*", default=[])
     parser.add_argument("--local-defines", nargs="*", default=[])
-    parser.add_argument("--copt-file", type=argparse.FileType("r"))
+    parser.add_argument("--copts-file", type=argparse.FileType("r"))
+    parser.add_argument("--removed-copts-file", type=argparse.FileType("r"))
+    parser.add_argument("--asopts-file", type=argparse.FileType("r"))
+    parser.add_argument("--linkopts-file", type=argparse.FileType("r"))
     parser.add_argument("--produce-top-level-makefile", action="store_true")
     parser.add_argument("--kbuild-has-linux-include", action="store_true")
     parser.add_argument("--kbuild-add-submodule-linux-include",
@@ -538,7 +647,7 @@ if __name__ == "__main__":
     parser.add_argument("--submodule-linux-include-dirs",
                         type=pathlib.Path, nargs="+", default={},
                         action=SubmoduleLinuxIncludeDirAction)
-
+    parser.add_argument("--is-library", action="store_true")
     args = parser.parse_args()
 
     die_exception = None

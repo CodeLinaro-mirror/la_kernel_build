@@ -15,7 +15,7 @@
 """Rules for defining a DDK (Driver Development Kit) module."""
 
 load(":ddk/ddk_conditional_filegroup.bzl", "flatten_conditional_srcs")
-load(":ddk/ddk_config.bzl", "ddk_config")
+load(":ddk/ddk_module_config.bzl", "ddk_module_config")
 load(":ddk/makefiles.bzl", "makefiles")
 load(":kernel_module.bzl", "kernel_module")
 
@@ -34,6 +34,10 @@ def ddk_module(
         out = None,
         local_defines = None,
         copts = None,
+        removed_copts = None,
+        asopts = None,
+        linkopts = None,
+        config = None,
         kconfig = None,
         defconfig = None,
         generate_btf = None,
@@ -71,6 +75,8 @@ def ddk_module(
       [`glob`](https://bazel.build/reference/be/functions#glob) of headers or a large list
       of headers.
     - Using `hdrs`, `textual_hdrs` and `includes` of this target.
+
+    For details, see `build/kernel/kleaf/tests/ddk_examples/README.md`.
 
     `hdrs`, `textual_hdrs` and `includes` have the same semantics as [`ddk_headers`](#ddk_headers).
     That is, this target effectively acts as a `ddk_headers` target when specified in the `deps`
@@ -313,7 +319,7 @@ def ddk_module(
     Args:
         name: Name of target. This should usually be name of the output `.ko` file without the
           suffix.
-        srcs: sources and local headers.
+        srcs: sources or local headers.
 
             Source files (`.c`, `.S`, `.rs`) must be in the package of
             this `ddk_module` target, or in subpackages.
@@ -332,7 +338,21 @@ def ddk_module(
             - [`kernel_module`](#kernel_module)
             - [`ddk_module`](#ddk_module)
             - [`ddk_headers`](#ddk_headers).
+            - [`ddk_prebuilt_object`](#ddk_prebuilt_object)
+            - [`ddk_library`](#ddk_library)
+
+            If [`config`](#ddk_module-config) is set, if some `deps` of this target have `kconfig`
+            / `defconfig` set (including transitive dependencies), you may need to duplicate these
+            targets in `ddk_config.deps`. Inconsistent configs are disallowed; if the resulting
+            `.config` is not the same as the one from [`config`](#ddk_module-config), you get a
+            build error.
         hdrs: See [`ddk_headers.hdrs`](#ddk_headers-hdrs)
+
+            If [`config`](#ddk_module-config) is set, if some `hdrs` of this target have `kconfig`
+            / `defconfig` set (including transitive dependencies), you may need to duplicate these
+            targets in `ddk_config.deps`. Inconsistent configs are disallowed; if the resulting
+            `.config` is not the same as the one from [`config`](#ddk_module-config), you get a
+            build error.
         textual_hdrs: See [`ddk_headers.textual_hdrs`](#ddk_headers-textual_hdrs). DEPRECATED. Use `hdrs`.
         includes: See [`ddk_headers.includes`](#ddk_headers-includes)
         linux_includes: See [`ddk_headers.linux_includes`](#ddk_headers-linux_includes)
@@ -359,12 +379,12 @@ def ddk_module(
         out: The output module file. This should usually be `"{name}.ko"`.
 
           This is required if this target does not contain submodules.
-        local_defines: List of defines to add to the compile line.
+        local_defines: List of defines to add to the compile and assemble command line.
 
           **Order matters**. To prevent buildifier from sorting the list, use the
           `# do not sort` magic line.
 
-          Each string is prepended with `-D` and added to the compile command
+          Each string is prepended with `-D` and added to the compile/assemble command
           line for this target, but not to its dependents.
 
           Unlike
@@ -451,17 +471,73 @@ def ddk_module(
             srcs = ["//other:header.h", "my_module.c"],
           )
           ```
-          Then the generated Makefile contains:
+          Then the content of generated Makefile is semantically equivalent to:
 
           ```
-          ccflags-y += -include ../other/header.h
+          CFLAGS_my_module.o += -include ../other/header.h
           ```
 
           The behavior is such because the generated `Makefile` is located in
           `package/Makefile`, and `make` is executed under `package/`. In order
           to find `other/header.h`, its path relative to `package/` is given.
 
-        kconfig: The Kconfig file for this external module.
+        removed_copts: Similar to `copts` but for flags **removed** from the
+            compilation command.
+
+            For example:
+            ```
+            ddk_module(
+                name = "my_module",
+                removed_copts = ["-Werror"],
+                srcs = ["my_module.c"],
+            )
+            ```
+            Then the content of generated Makefile is semantically equivalent to:
+
+            ```
+            CFLAGS_REMOVE_my_module.o += -Werror
+            ```
+
+            Note: Due to implementation details of Kleaf flags in `copts` are written to a file and
+            provided to the compiler with the `@<arg_file>` syntax, so they are not affected
+            by `removed_copts` implemented by `CFLAGS_REMOVE_`. To remove flags from the Bazel
+            `copts` list, do so directly.
+
+        asopts: Similar to `copts` but for assembly.
+
+            For example:
+            ```
+            ddk_module(
+                name = "my_module",
+                asopts = ["-ansi"],
+                srcs = ["my_module.S"],
+            )
+            ```
+            Then the content of generated Makefile is semantically equivalent to:
+
+            ```
+            AFLAGS_my_module.o += -ansi
+            ```
+        linkopts: Similar to `copts` but for linking the module.
+
+            For example:
+            ```
+            ddk_module(
+                name = "my_module",
+                linkopts = ["-lc"],
+                out = "my_module.ko",
+                # ...
+            )
+            ```
+            Then the content of generated Makefile is semantically equivalent to:
+
+            ```
+            LDFLAGS_my_module.ko += -lc
+            ```
+        config: **EXPERIMENTAL**. The parent [ddk_config](#ddk_config) that encapsulates
+            Kconfig/defconfig.
+
+        kconfig: The Kconfig files for this external module.
 
           See
           [`Documentation/kbuild/kconfig-language.rst`](https://www.kernel.org/doc/html/latest/kbuild/kconfig.html)
@@ -473,6 +549,10 @@ def ddk_module(
           - Kconfig from `kernel_build`
           - Kconfig from dependent modules, if any
           - Kconfig of this module, if any
+
+          For legacy reasons, this is singular and accepts a single target. If multiple `Kconfig`
+          files should be added, use a
+          [`filegroup`](https://bazel.build/reference/be/general#filegroup) to wrap the files.
         defconfig: The `defconfig` file.
 
           Items must already be declared in `kconfig`. An item not declared
@@ -496,8 +576,9 @@ def ddk_module(
 
     module_hdrs = (hdrs or []) + (textual_hdrs or [])
 
-    ddk_config(
+    ddk_module_config(
         name = name + "_config",
+        parent = config,
         defconfig = defconfig,
         kconfig = kconfig,
         kernel_build = kernel_build,
@@ -544,6 +625,9 @@ def ddk_module(
         module_deps = deps,
         module_local_defines = local_defines,
         module_copts = copts,
+        module_removed_copts = removed_copts,
+        module_asopts = asopts,
+        module_linkopts = linkopts,
         module_autofdo_profile = autofdo_profile,
         module_debug_info_for_profiling = debug_info_for_profiling,
         top_level_makefile = True,
