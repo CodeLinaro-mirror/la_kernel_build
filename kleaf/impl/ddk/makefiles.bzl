@@ -18,13 +18,15 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:sets.bzl", "sets")
 load(
     ":common_providers.bzl",
+    "DdkConditionalFilegroupInfo",
     "DdkHeadersInfo",
     "DdkIncludeInfo",
+    "DdkLibraryInfo",
     "DdkSubmoduleInfo",
     "ModuleSymversFileInfo",
     "ModuleSymversInfo",
 )
-load(":ddk/ddk_conditional_filegroup.bzl", "DdkConditionalFilegroupInfo")
+load(":constants.bzl", "DDK_MODULE_SRCS_ALLOWED_EXTENSIONS")
 load(
     ":ddk/ddk_headers.bzl",
     "DDK_INCLUDE_INFO_ORDER",
@@ -70,8 +72,15 @@ def _gather_prefixed_linux_includes(ddk_include_info):
     """Returns a list of ddk_include_info.linux_includes prefixed with ddk_include_info.prefix"""
     return _gather_prefixed_includes_common(ddk_include_info, "linux_includes")
 
-def _handle_copt(ctx):
-    # copt values contains prefixing "-", so we must use --copt=-x --copt=-y to avoid confusion.
+def _handle_opts(ctx, file_name, opts, pre_opts_json = None):
+    """Common function for handling copts, removed_copts, and asopts.
+
+    Args:
+        ctx: ctx
+        file_name: The declared JSON file name
+        opts: list of flags
+        pre_opts_json: Additional list prepended to the JSON list.
+    """
     # We treat $(location) differently because paths must be relative to the Makefile
     # under {package}, e.g. for -include option.
 
@@ -80,18 +89,17 @@ def _handle_copt(ctx):
     expand_targets += ctx.attr.module_hdrs
     expand_targets += ctx.attr.module_deps
 
-    copt_content = []
-    copt_content += _get_autofdo_copts(ctx)
-    for copt in ctx.attr.module_copts:
+    json_content = list(pre_opts_json) if pre_opts_json else []
+    for copt in opts:
         expanded = ctx.expand_location(copt, targets = expand_targets)
-        copt_content.append({
+        json_content.append({
             "expanded": expanded,
             "orig": copt,
         })
-    out = ctx.actions.declare_file("{}/copts.json".format(ctx.attr.name))
+    out = ctx.actions.declare_file("{}/{}".format(ctx.attr.name, file_name))
     ctx.actions.write(
         output = out,
-        content = json.encode_indent(copt_content, indent = "  "),
+        content = json.encode_indent(json_content, indent = "  "),
     )
     return out
 
@@ -195,7 +203,7 @@ def _check_submodule_same_package(module_label, submodule_deps):
     if bad:
         fail("{}: submodules must be in the same package: {}".format(module_label, bad))
 
-def _handle_module_srcs(ctx):
+def _handle_module_srcs(ctx, ddk_library_deps):
     """Parses module_srcs.
 
     For each item in ddk_module.srcs:
@@ -214,37 +222,19 @@ def _handle_module_srcs(ctx):
         struct of
         -    srcs_json: a file containing the JSON content about sources
         -    gen_srcs_depset: depset of generated, non .h files
+        -    src_matrix: list of list of files. The sum of values is equivalent of ctx.files.module_srcs
     """
+    src_matrix = []
     srcs_json_list = []
     gen_srcs_depsets = []
-    for target in ctx.attr.module_srcs:
-        # TODO(b/353811700): avoid depset expansion
-        target_files = target.files.to_list()
-        srcs_json_dict = {}
-
-        source_files = []
-        generated_sources = []
-
-        for file in target_files:
-            if file.is_source:
-                source_files.append(file)
-            elif file.extension != "h":
-                generated_sources.append(file)
-
-            # Generated headers in srcs are handled by _gather_prefixed_includes_common
-
-        if source_files:
-            srcs_json_dict["files"] = [file.path for file in source_files]
-
-        if generated_sources:
-            srcs_json_dict["gen"] = {file.short_path: file.path for file in generated_sources}
-
-        if DdkConditionalFilegroupInfo in target:
-            srcs_json_dict["config"] = target[DdkConditionalFilegroupInfo].config
-            srcs_json_dict["value"] = target[DdkConditionalFilegroupInfo].value
-
-        srcs_json_list.append(srcs_json_dict)
-        gen_srcs_depsets.append(depset(generated_sources))
+    for targets, info in ((ctx.attr.module_srcs, DefaultInfo), (ddk_library_deps, DdkLibraryInfo)):
+        for target in targets:
+            # TODO(b/353811700): avoid depset expansion
+            target_files = target[info].files.to_list()
+            src_matrix.append(target_files)
+            ret = _handle_target_files_as_srcs(target, target_files)
+            srcs_json_list.append(ret.srcs_json_dict)
+            gen_srcs_depsets.append(ret.gen_srcs_depset)
 
     srcs_json = ctx.actions.declare_file("{}/srcs.json".format(ctx.attr.name))
     ctx.actions.write(
@@ -255,6 +245,36 @@ def _handle_module_srcs(ctx):
     return struct(
         srcs_json = srcs_json,
         gen_srcs_depset = depset(transitive = gen_srcs_depsets),
+        src_matrix = src_matrix,
+    )
+
+def _handle_target_files_as_srcs(target, target_files):
+    srcs_json_dict = {}
+
+    source_files = []
+    generated_sources = []
+
+    for file in target_files:
+        if file.is_source:
+            source_files.append(file)
+        elif file.extension != "h":
+            generated_sources.append(file)
+
+        # Generated headers in srcs are handled by _gather_prefixed_includes_common
+
+    if source_files:
+        srcs_json_dict["files"] = [file.path for file in source_files]
+
+    if generated_sources:
+        srcs_json_dict["gen"] = {file.short_path: file.path for file in generated_sources}
+
+    if DdkConditionalFilegroupInfo in target:
+        srcs_json_dict["config"] = target[DdkConditionalFilegroupInfo].config
+        srcs_json_dict["value"] = target[DdkConditionalFilegroupInfo].value
+
+    return struct(
+        srcs_json_dict = srcs_json_dict,
+        gen_srcs_depset = depset(generated_sources),
     )
 
 def _makefiles_impl(ctx):
@@ -269,6 +289,7 @@ def _makefiles_impl(ctx):
     submodule_deps = split_deps.submodules
     hdr_deps = split_deps.hdrs
     module_symvers_deps = split_deps.module_symvers_deps
+    ddk_library_deps = split_deps.ddk_library_deps
 
     if submodule_deps:
         _check_empty_with_submodules(ctx, module_label, kernel_module_deps)
@@ -311,7 +332,7 @@ def _makefiles_impl(ctx):
         for target in module_symvers_deps
     ])
 
-    module_srcs_ret = _handle_module_srcs(ctx)
+    module_srcs_ret = _handle_module_srcs(ctx, ddk_library_deps)
 
     args = ctx.actions.args()
 
@@ -364,8 +385,22 @@ def _makefiles_impl(ctx):
 
     args.add_all("--local-defines", ctx.attr.module_local_defines)
 
-    copt_file = _handle_copt(ctx)
-    args.add("--copt-file", copt_file)
+    copts_file = _handle_opts(
+        ctx = ctx,
+        file_name = "copts.json",
+        opts = ctx.attr.module_copts,
+        pre_opts_json = _get_autofdo_copts(ctx),
+    )
+    args.add("--copts-file", copts_file)
+
+    removed_copts_file = _handle_opts(ctx, "removed_copts.json", ctx.attr.module_removed_copts)
+    args.add("--removed-copts-file", removed_copts_file)
+
+    asopts_file = _handle_opts(ctx, "asopts.json", ctx.attr.module_asopts)
+    args.add("--asopts-file", asopts_file)
+
+    linkopts_file = _handle_opts(ctx, "linkopts.json", ctx.attr.module_linkopts)
+    args.add("--linkopts-file", linkopts_file)
 
     submodule_makefiles = depset(transitive = [dep.files for dep in submodule_deps])
     args.add_all("--submodule-makefiles", submodule_makefiles, expand_directories = False)
@@ -373,10 +408,16 @@ def _makefiles_impl(ctx):
     if ctx.attr.internal_target_fail_message:
         args.add("--internal-target-fail-message", ctx.attr.internal_target_fail_message)
 
+    if ctx.attr.is_library:
+        args.add("--is-library")
+
     ctx.actions.run(
         mnemonic = "DdkMakefiles",
         inputs = depset([
-            copt_file,
+            copts_file,
+            removed_copts_file,
+            asopts_file,
+            linkopts_file,
             module_srcs_ret.srcs_json,
         ], transitive = [submodule_makefiles, module_srcs_ret.gen_srcs_depset]),
         outputs = [output_makefiles],
@@ -385,10 +426,29 @@ def _makefiles_impl(ctx):
         progress_message = "Generating Makefile %{label}",
     )
 
-    outs_depset_direct = []
-    if ctx.attr.module_out:
-        outs_depset_direct.append(struct(out = ctx.attr.module_out, src = ctx.label))
-    outs_depset_transitive = [dep[DdkSubmoduleInfo].outs for dep in submodule_deps]
+    if ctx.attr.is_library:
+        my_pkg_path = paths.join(ctx.label.workspace_root, ctx.label.package)
+        outs_depset_direct = []
+        for srcs_list in module_srcs_ret.src_matrix:
+            for src in srcs_list:
+                # All sources must be below this package.
+                # Use short_path here because we don't care about bin_dir for generated sources.
+                # path/to/foo.c -> [path/to/foo.o_shipped, path/to/.foo.o.cmd_shipped]
+                src_rel_pkg = paths.relativize(src.short_path, my_pkg_path)
+                object = paths.replace_extension(src_rel_pkg, ".o_shipped")
+                cmd_file_basename = "." + paths.replace_extension(paths.basename(src_rel_pkg), ".o.cmd_shipped")
+                cmd_file = paths.join(paths.dirname(src_rel_pkg), cmd_file_basename)
+                outs_depset_direct += [
+                    struct(out = object, src = ctx.label),
+                    struct(out = cmd_file, src = ctx.label),
+                ]
+        outs_depset = depset(outs_depset_direct)
+    else:
+        outs_depset_direct = []
+        if ctx.attr.module_out:
+            outs_depset_direct.append(struct(out = ctx.attr.module_out, src = ctx.label))
+        outs_depset_transitive = [dep[DdkSubmoduleInfo].outs for dep in submodule_deps]
+        outs_depset = depset(outs_depset_direct, transitive = outs_depset_transitive)
 
     srcs_depset_transitive = [target.files for target in ctx.attr.module_srcs]
     srcs_depset_transitive += [dep[DdkSubmoduleInfo].srcs for dep in submodule_deps]
@@ -423,8 +483,8 @@ def _makefiles_impl(ctx):
     return [
         DefaultInfo(files = depset([output_makefiles])),
         DdkSubmoduleInfo(
-            outs = depset(outs_depset_direct, transitive = outs_depset_transitive),
-            out = ctx.attr.module_out,
+            outs = outs_depset,
+            out = None if ctx.attr.is_library else ctx.attr.module_out,
             srcs = depset(transitive = srcs_depset_transitive),
             kernel_module_deps = depset(
                 [kernel_utils.create_kernel_module_dep_info(target) for target in kernel_module_deps],
@@ -455,7 +515,7 @@ makefiles = rule(
         ),
         # module_X is the X attribute of the ddk_module. Prefixed with `module_`
         # because they aren't real srcs / hdrs / deps to the makefiles rule.
-        "module_srcs": attr.label_list(allow_files = [".c", ".h", ".S", ".rs"]),
+        "module_srcs": attr.label_list(allow_files = DDK_MODULE_SRCS_ALLOWED_EXTENSIONS),
         # allow_files = True because https://github.com/bazelbuild/bazel/issues/7516
         "module_hdrs": attr.label_list(allow_files = True),
         "module_includes": attr.string_list(),
@@ -464,6 +524,9 @@ makefiles = rule(
         "module_out": attr.string(),
         "module_local_defines": attr.string_list(),
         "module_copts": attr.string_list(),
+        "module_removed_copts": attr.string_list(),
+        "module_asopts": attr.string_list(),
+        "module_linkopts": attr.string_list(),
         "module_autofdo_profile": attr.label(allow_single_file = True),
         "module_debug_info_for_profiling": attr.bool(),
         "top_level_makefile": attr.bool(),
@@ -474,6 +537,7 @@ makefiles = rule(
         "internal_target_fail_message": attr.string(
             doc = "For testing only. Assert that this target to fail to build with the given message.",
         ),
+        "is_library": attr.bool(doc = "True for `ddk_library`, False otherwise."),
         "_gen_makefile": attr.label(
             default = "//build/kernel/kleaf/impl:ddk/gen_makefiles",
             executable = True,

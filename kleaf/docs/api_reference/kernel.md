@@ -7,6 +7,8 @@ All public rules and macros to build the kernel.
 ## android_filegroup
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "android_filegroup")
+
 android_filegroup(<a href="#android_filegroup-name">name</a>, <a href="#android_filegroup-srcs">srcs</a>, <a href="#android_filegroup-cpu">cpu</a>)
 </pre>
 
@@ -27,6 +29,8 @@ Like filegroup, but applies transitions to Android.
 ## checkpatch
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "checkpatch")
+
 checkpatch(<a href="#checkpatch-name">name</a>, <a href="#checkpatch-checkpatch_pl">checkpatch_pl</a>, <a href="#checkpatch-ignorelist">ignorelist</a>)
 </pre>
 
@@ -42,11 +46,37 @@ Run `checkpatch.sh` at the root of this package.
 | <a id="checkpatch-ignorelist"></a>ignorelist |  checkpatch ignorelist   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@kleaf//build/kernel/static_analysis:checkpatch_ignorelist"`  |
 
 
+<a id="ddk_config"></a>
+
+## ddk_config
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_config")
+
+ddk_config(<a href="#ddk_config-name">name</a>, <a href="#ddk_config-deps">deps</a>, <a href="#ddk_config-defconfig">defconfig</a>, <a href="#ddk_config-kconfigs">kconfigs</a>, <a href="#ddk_config-kernel_build">kernel_build</a>)
+</pre>
+
+**EXPERIMENTAL.** A target that can later be used to configure a [`ddk_module`](#ddk_module).
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="ddk_config-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="ddk_config-deps"></a>deps |  See [ddk_module.deps](#ddk_module-deps).   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="ddk_config-defconfig"></a>defconfig |  The `defconfig` file.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="ddk_config-kconfigs"></a>kconfigs |  The extra `Kconfig` files for external modules that use this config.<br><br>See [`Documentation/kbuild/kconfig-language.rst`](https://www.kernel.org/doc/html/latest/kbuild/kconfig.html) for its format.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="ddk_config-kernel_build"></a>kernel_build |  [`kernel_build`](#kernel_build).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+
+
 <a id="ddk_headers"></a>
 
 ## ddk_headers
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+
 ddk_headers(<a href="#ddk_headers-name">name</a>, <a href="#ddk_headers-hdrs">hdrs</a>, <a href="#ddk_headers-defconfigs">defconfigs</a>, <a href="#ddk_headers-includes">includes</a>, <a href="#ddk_headers-kconfigs">kconfigs</a>, <a href="#ddk_headers-linux_includes">linux_includes</a>, <a href="#ddk_headers-textual_hdrs">textual_hdrs</a>)
 </pre>
 
@@ -97,6 +127,8 @@ ddk_headers(
 ## ddk_headers_archive
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_headers_archive")
+
 ddk_headers_archive(<a href="#ddk_headers_archive-name">name</a>, <a href="#ddk_headers_archive-srcs">srcs</a>)
 </pre>
 
@@ -114,11 +146,55 @@ semantically identical to the original `ddk_headers` definition.
 | <a id="ddk_headers_archive-srcs"></a>srcs |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 
 
+<a id="ddk_prebuilt_object"></a>
+
+## ddk_prebuilt_object
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_prebuilt_object")
+
+ddk_prebuilt_object(<a href="#ddk_prebuilt_object-name">name</a>, <a href="#ddk_prebuilt_object-src">src</a>, <a href="#ddk_prebuilt_object-cmd">cmd</a>, <a href="#ddk_prebuilt_object-config">config</a>, <a href="#ddk_prebuilt_object-config_bool_value">config_bool_value</a>)
+</pre>
+
+Wraps a `<stem>.o` file so it can be used in [ddk_module.srcs](#ddk_module-srcs).
+
+An optional `.<stem>.o.cmd` file may be provided. If not provided, a fake
+`.<stem>.o.cmd` is generated.
+
+Example:
+
+```
+ddk_prebuilt_object(
+    name = "foo",
+    src = "foo.o",
+)
+
+ddk_module(
+    name = "mymod",
+    deps = [":foo"],
+    # ...
+)
+```
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="ddk_prebuilt_object-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="ddk_prebuilt_object-src"></a>src |  The .o file, e.g. `foo.o`   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="ddk_prebuilt_object-cmd"></a>cmd |  The .cmd file, e.g. `.foo.o.cmd`. If missing, an empty file is provided.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="ddk_prebuilt_object-config"></a>config |  If set, name of the config with the `CONFIG_` prefix. The prebuilt object is only linked when the given config matches `config_bool_value`.   | String | optional |  `""`  |
+| <a id="ddk_prebuilt_object-config_bool_value"></a>config_bool_value |  If `config` is set, and `config_bool_value == True`, the object is only included if the config is `y` or `m`. If `config` is set and `config_bool_value == False`, the object is only included if the config is not set.   | Boolean | optional |  `False`  |
+
+
 <a id="ddk_uapi_headers"></a>
 
 ## ddk_uapi_headers
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_uapi_headers")
+
 ddk_uapi_headers(<a href="#ddk_uapi_headers-name">name</a>, <a href="#ddk_uapi_headers-srcs">srcs</a>, <a href="#ddk_uapi_headers-out">out</a>, <a href="#ddk_uapi_headers-kernel_build">kernel_build</a>)
 </pre>
 
@@ -151,6 +227,8 @@ ddk_uapi_headers(
 ## dependency_graph_drawer
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "dependency_graph_drawer")
+
 dependency_graph_drawer(<a href="#dependency_graph_drawer-name">name</a>, <a href="#dependency_graph_drawer-adjacency_list">adjacency_list</a>, <a href="#dependency_graph_drawer-colorful">colorful</a>)
 </pre>
 
@@ -192,6 +270,8 @@ A rule that creates a [Graphviz](https://graphviz.org/) diagram file.
 ## dependency_graph_extractor
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "dependency_graph_extractor")
+
 dependency_graph_extractor(<a href="#dependency_graph_extractor-name">name</a>, <a href="#dependency_graph_extractor-enable_add_vmlinux">enable_add_vmlinux</a>, <a href="#dependency_graph_extractor-exclude_base_kernel_modules">exclude_base_kernel_modules</a>, <a href="#dependency_graph_extractor-kernel_build">kernel_build</a>,
                            <a href="#dependency_graph_extractor-kernel_modules">kernel_modules</a>)
 </pre>
@@ -233,7 +313,9 @@ It works by matching undefined symbols from one module with exported symbols fro
 ## dtb_image
 
 <pre>
-dtb_image(<a href="#dtb_image-name">name</a>, <a href="#dtb_image-srcs">srcs</a>)
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "dtb_image")
+
+dtb_image(<a href="#dtb_image-name">name</a>, <a href="#dtb_image-srcs">srcs</a>, <a href="#dtb_image-out">out</a>)
 </pre>
 
 Build `dtb` image.
@@ -245,6 +327,7 @@ Build `dtb` image.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="dtb_image-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="dtb_image-srcs"></a>srcs |  DTB sources to add to the dtb image   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="dtb_image-out"></a>out |  Name of `dtb` image.<br><br>Default to `name` if not set   | String | optional |  `""`  |
 
 
 <a id="dtbo"></a>
@@ -252,6 +335,8 @@ Build `dtb` image.
 ## dtbo
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "dtbo")
+
 dtbo(<a href="#dtbo-name">name</a>, <a href="#dtbo-srcs">srcs</a>, <a href="#dtbo-config_file">config_file</a>, <a href="#dtbo-kernel_build">kernel_build</a>)
 </pre>
 
@@ -273,6 +358,8 @@ Build dtbo.
 ## extract_symbols
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "extract_symbols")
+
 extract_symbols(<a href="#extract_symbols-name">name</a>, <a href="#extract_symbols-src">src</a>, <a href="#extract_symbols-enable_add_vmlinux">enable_add_vmlinux</a>, <a href="#extract_symbols-kernel_build">kernel_build</a>, <a href="#extract_symbols-kernel_modules">kernel_modules</a>,
                 <a href="#extract_symbols-kernel_modules_exclude_list">kernel_modules_exclude_list</a>, <a href="#extract_symbols-kmi_symbol_list_add_only">kmi_symbol_list_add_only</a>, <a href="#extract_symbols-module_grouping">module_grouping</a>)
 </pre>
@@ -299,6 +386,8 @@ extract_symbols(<a href="#extract_symbols-name">name</a>, <a href="#extract_symb
 ## gki_artifacts
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "gki_artifacts")
+
 gki_artifacts(<a href="#gki_artifacts-name">name</a>, <a href="#gki_artifacts-arch">arch</a>, <a href="#gki_artifacts-boot_img_sizes">boot_img_sizes</a>, <a href="#gki_artifacts-gki_kernel_cmdline">gki_kernel_cmdline</a>, <a href="#gki_artifacts-kernel_build">kernel_build</a>, <a href="#gki_artifacts-mkbootimg">mkbootimg</a>)
 </pre>
 
@@ -322,6 +411,8 @@ gki_artifacts(<a href="#gki_artifacts-name">name</a>, <a href="#gki_artifacts-ar
 ## gki_artifacts_prebuilts
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "gki_artifacts_prebuilts")
+
 gki_artifacts_prebuilts(<a href="#gki_artifacts_prebuilts-name">name</a>, <a href="#gki_artifacts_prebuilts-srcs">srcs</a>, <a href="#gki_artifacts_prebuilts-outs">outs</a>)
 </pre>
 
@@ -342,6 +433,8 @@ gki_artifacts_prebuilts(<a href="#gki_artifacts_prebuilts-name">name</a>, <a hre
 ## initramfs
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "initramfs")
+
 initramfs(<a href="#initramfs-name">name</a>, <a href="#initramfs-deps">deps</a>, <a href="#initramfs-create_modules_order">create_modules_order</a>, <a href="#initramfs-kernel_modules_install">kernel_modules_install</a>, <a href="#initramfs-modules_blocklist">modules_blocklist</a>,
           <a href="#initramfs-modules_charger_list">modules_charger_list</a>, <a href="#initramfs-modules_list">modules_list</a>, <a href="#initramfs-modules_options">modules_options</a>, <a href="#initramfs-modules_recovery_list">modules_recovery_list</a>,
           <a href="#initramfs-ramdisk_compression">ramdisk_compression</a>, <a href="#initramfs-ramdisk_compression_args">ramdisk_compression_args</a>, <a href="#initramfs-vendor_boot_name">vendor_boot_name</a>)
@@ -384,6 +477,8 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 ## kernel_build_config
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_build_config")
+
 kernel_build_config(<a href="#kernel_build_config-name">name</a>, <a href="#kernel_build_config-deps">deps</a>, <a href="#kernel_build_config-srcs">srcs</a>)
 </pre>
 
@@ -404,6 +499,8 @@ Create a build.config file by concatenating build config fragments.
 ## kernel_compile_commands
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_compile_commands")
+
 kernel_compile_commands(<a href="#kernel_compile_commands-name">name</a>, <a href="#kernel_compile_commands-deps">deps</a>, <a href="#kernel_compile_commands-kernel_build">kernel_build</a>)
 </pre>
 
@@ -424,6 +521,8 @@ Define an executable that creates `compile_commands.json` from kernel targets.
 ## kernel_filegroup
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_filegroup")
+
 kernel_filegroup(<a href="#kernel_filegroup-name">name</a>, <a href="#kernel_filegroup-deps">deps</a>, <a href="#kernel_filegroup-srcs">srcs</a>, <a href="#kernel_filegroup-outs">outs</a>, <a href="#kernel_filegroup-all_module_names">all_module_names</a>, <a href="#kernel_filegroup-collect_unstripped_modules">collect_unstripped_modules</a>,
                  <a href="#kernel_filegroup-config_out_dir">config_out_dir</a>, <a href="#kernel_filegroup-config_out_dir_files">config_out_dir_files</a>, <a href="#kernel_filegroup-ddk_module_defconfig_fragments">ddk_module_defconfig_fragments</a>,
                  <a href="#kernel_filegroup-ddk_module_headers">ddk_module_headers</a>, <a href="#kernel_filegroup-env_setup_script">env_setup_script</a>, <a href="#kernel_filegroup-exec_platform">exec_platform</a>, <a href="#kernel_filegroup-gki_artifacts">gki_artifacts</a>, <a href="#kernel_filegroup-images">images</a>,
@@ -478,6 +577,8 @@ It can be used in the `base_kernel` attribute of a [`kernel_build`](#kernel_buil
 ## kernel_kythe
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_kythe")
+
 kernel_kythe(<a href="#kernel_kythe-name">name</a>, <a href="#kernel_kythe-corpus">corpus</a>, <a href="#kernel_kythe-kernel_build">kernel_build</a>)
 </pre>
 
@@ -498,6 +599,8 @@ Extract Kythe source code index (kzip file) from a `kernel_build`.
 ## kernel_module_group
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_module_group")
+
 kernel_module_group(<a href="#kernel_module_group-name">name</a>, <a href="#kernel_module_group-srcs">srcs</a>)
 </pre>
 
@@ -553,6 +656,8 @@ kernel_modules_install(
 ## kernel_modules_install
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_modules_install")
+
 kernel_modules_install(<a href="#kernel_modules_install-name">name</a>, <a href="#kernel_modules_install-outs">outs</a>, <a href="#kernel_modules_install-kernel_build">kernel_build</a>, <a href="#kernel_modules_install-kernel_modules">kernel_modules</a>)
 </pre>
 
@@ -607,6 +712,8 @@ In `foo_dist`, specifying `foo_modules_install` in `data` won't include
 ## kernel_unstripped_modules_archive
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_unstripped_modules_archive")
+
 kernel_unstripped_modules_archive(<a href="#kernel_unstripped_modules_archive-name">name</a>, <a href="#kernel_unstripped_modules_archive-kernel_build">kernel_build</a>, <a href="#kernel_unstripped_modules_archive-kernel_modules">kernel_modules</a>)
 </pre>
 
@@ -627,6 +734,8 @@ Compress the unstripped modules into a tarball.
 ## merge_kzip
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "merge_kzip")
+
 merge_kzip(<a href="#merge_kzip-name">name</a>, <a href="#merge_kzip-srcs">srcs</a>)
 </pre>
 
@@ -646,6 +755,8 @@ Merge .kzip files
 ## merge_module_symvers
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "merge_module_symvers")
+
 merge_module_symvers(<a href="#merge_module_symvers-name">name</a>, <a href="#merge_module_symvers-srcs">srcs</a>)
 </pre>
 
@@ -665,6 +776,8 @@ Merge Module.symvers files
 ## merged_kernel_uapi_headers
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "merged_kernel_uapi_headers")
+
 merged_kernel_uapi_headers(<a href="#merged_kernel_uapi_headers-name">name</a>, <a href="#merged_kernel_uapi_headers-kernel_build">kernel_build</a>, <a href="#merged_kernel_uapi_headers-kernel_modules">kernel_modules</a>)
 </pre>
 
@@ -689,11 +802,34 @@ the list have higher priority:
 | <a id="merged_kernel_uapi_headers-kernel_modules"></a>kernel_modules |  A list of external `kernel_module`s to merge `kernel-uapi-headers.tar.gz`   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 
 
+<a id="modinfo_summary_report"></a>
+
+## modinfo_summary_report
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "modinfo_summary_report")
+
+modinfo_summary_report(<a href="#modinfo_summary_report-name">name</a>, <a href="#modinfo_summary_report-deps">deps</a>)
+</pre>
+
+Generate a report from kernel modules of the given kernel build.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="modinfo_summary_report-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="modinfo_summary_report-deps"></a>deps |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+
+
 <a id="super_image"></a>
 
 ## super_image
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "super_image")
+
 super_image(<a href="#super_image-name">name</a>, <a href="#super_image-out">out</a>, <a href="#super_image-super_img_size">super_img_size</a>, <a href="#super_image-system_dlkm_image">system_dlkm_image</a>, <a href="#super_image-vendor_dlkm_image">vendor_dlkm_image</a>)
 </pre>
 
@@ -721,8 +857,10 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 ## system_dlkm_image
 
 <pre>
-system_dlkm_image(<a href="#system_dlkm_image-name">name</a>, <a href="#system_dlkm_image-deps">deps</a>, <a href="#system_dlkm_image-base">base</a>, <a href="#system_dlkm_image-build_flatten">build_flatten</a>, <a href="#system_dlkm_image-fs_types">fs_types</a>, <a href="#system_dlkm_image-kernel_modules_install">kernel_modules_install</a>,
-                  <a href="#system_dlkm_image-modules_blocklist">modules_blocklist</a>, <a href="#system_dlkm_image-modules_list">modules_list</a>, <a href="#system_dlkm_image-props">props</a>)
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "system_dlkm_image")
+
+system_dlkm_image(<a href="#system_dlkm_image-name">name</a>, <a href="#system_dlkm_image-deps">deps</a>, <a href="#system_dlkm_image-base">base</a>, <a href="#system_dlkm_image-build_flatten">build_flatten</a>, <a href="#system_dlkm_image-fs_types">fs_types</a>, <a href="#system_dlkm_image-internal_extra_archive_files">internal_extra_archive_files</a>,
+                  <a href="#system_dlkm_image-kernel_modules_install">kernel_modules_install</a>, <a href="#system_dlkm_image-modules_blocklist">modules_blocklist</a>, <a href="#system_dlkm_image-modules_list">modules_list</a>, <a href="#system_dlkm_image-props">props</a>)
 </pre>
 
 Build system_dlkm partition image with signed GKI modules.
@@ -744,6 +882,7 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 | <a id="system_dlkm_image-base"></a>base |  The `system_dlkm_image()` corresponding to the `base_kernel` of the `kernel_build`. This is required for building a device-specific `system_dlkm` image. For example, if `base_kernel` of `kernel_build()` is `//common:kernel_aarch64`, then `base` is `//common:kernel_aarch64_system_dlkm_image`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="system_dlkm_image-build_flatten"></a>build_flatten |  When True it builds system_dlkm image with no `uname -r` in the path.   | Boolean | optional |  `False`  |
 | <a id="system_dlkm_image-fs_types"></a>fs_types |  List of file systems type for `system_dlkm` images.<br><br>Supported filesystems for `system_dlkm` image are `ext4` and `erofs`. If not specified, build `system_dlkm.img` with ext4. Otherwise, build `system_dlkm.<fs>.img` for each file system type in the list.   | List of strings | optional |  `["ext4"]`  |
+| <a id="system_dlkm_image-internal_extra_archive_files"></a>internal_extra_archive_files |  **Internal only; subject to change without notice.** Extra files to be placed at the root of the archive.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="system_dlkm_image-kernel_modules_install"></a>kernel_modules_install |  The [`kernel_modules_install`](#kernel_modules_install).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="system_dlkm_image-modules_blocklist"></a>modules_blocklist |  An optional file containing a list of modules which are blocked from being loaded.<br><br>This file is copied directly to the staging directory and should be in the format: <pre><code>blocklist module_name</code></pre>   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="system_dlkm_image-modules_list"></a>modules_list |  An optional file containing the list of kernel modules which shall be copied into a system_dlkm partition image.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
@@ -755,6 +894,8 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 ## unsparsed_image
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "unsparsed_image")
+
 unsparsed_image(<a href="#unsparsed_image-name">name</a>, <a href="#unsparsed_image-src">src</a>, <a href="#unsparsed_image-out">out</a>)
 </pre>
 
@@ -780,6 +921,8 @@ When included in a `pkg_files`/`pkg_install` rule, this rule copies a `super_uns
 ## vendor_boot_image
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "vendor_boot_image")
+
 vendor_boot_image(<a href="#vendor_boot_image-name">name</a>, <a href="#vendor_boot_image-deps">deps</a>, <a href="#vendor_boot_image-outs">outs</a>, <a href="#vendor_boot_image-dtb_image">dtb_image</a>, <a href="#vendor_boot_image-initramfs">initramfs</a>, <a href="#vendor_boot_image-kernel_build">kernel_build</a>, <a href="#vendor_boot_image-mkbootimg">mkbootimg</a>,
                   <a href="#vendor_boot_image-ramdisk_compression">ramdisk_compression</a>, <a href="#vendor_boot_image-ramdisk_compression_args">ramdisk_compression_args</a>, <a href="#vendor_boot_image-unpack_ramdisk">unpack_ramdisk</a>, <a href="#vendor_boot_image-vendor_boot_name">vendor_boot_name</a>,
                   <a href="#vendor_boot_image-vendor_ramdisk_binaries">vendor_ramdisk_binaries</a>, <a href="#vendor_boot_image-vendor_ramdisk_dev_nodes">vendor_ramdisk_dev_nodes</a>)
@@ -812,6 +955,8 @@ Build `vendor_boot` or `vendor_kernel_boot` image.
 ## vendor_dlkm_image
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "vendor_dlkm_image")
+
 vendor_dlkm_image(<a href="#vendor_dlkm_image-name">name</a>, <a href="#vendor_dlkm_image-deps">deps</a>, <a href="#vendor_dlkm_image-archive">archive</a>, <a href="#vendor_dlkm_image-base_system_dlkm_image">base_system_dlkm_image</a>, <a href="#vendor_dlkm_image-build_flatten">build_flatten</a>, <a href="#vendor_dlkm_image-create_modules_order">create_modules_order</a>,
                   <a href="#vendor_dlkm_image-dedup_dlkm_modules">dedup_dlkm_modules</a>, <a href="#vendor_dlkm_image-etc_files">etc_files</a>, <a href="#vendor_dlkm_image-fs_type">fs_type</a>, <a href="#vendor_dlkm_image-kernel_modules_install">kernel_modules_install</a>, <a href="#vendor_dlkm_image-modules_blocklist">modules_blocklist</a>,
                   <a href="#vendor_dlkm_image-modules_list">modules_list</a>, <a href="#vendor_dlkm_image-props">props</a>, <a href="#vendor_dlkm_image-system_dlkm_image">system_dlkm_image</a>, <a href="#vendor_dlkm_image-vendor_boot_modules_load">vendor_boot_modules_load</a>)
@@ -849,14 +994,62 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 | <a id="vendor_dlkm_image-vendor_boot_modules_load"></a>vendor_boot_modules_load |  File to `vendor_boot.modules.load`.<br><br>Modules listed in this file is stripped away from the `vendor_dlkm` image.<br><br>As a special case, you may also provide a [`initramfs`](#initramfs) target here, in which case the `vendor_boot.modules.load` of the initramfs is used.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 
 
+<a id="ddk_library"></a>
+
+## ddk_library
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_library")
+
+ddk_library(<a href="#ddk_library-name">name</a>, <a href="#ddk_library-kernel_build">kernel_build</a>, <a href="#ddk_library-srcs">srcs</a>, <a href="#ddk_library-deps">deps</a>, <a href="#ddk_library-hdrs">hdrs</a>, <a href="#ddk_library-includes">includes</a>, <a href="#ddk_library-linux_includes">linux_includes</a>, <a href="#ddk_library-local_defines">local_defines</a>, <a href="#ddk_library-copts">copts</a>,
+            <a href="#ddk_library-removed_copts">removed_copts</a>, <a href="#ddk_library-asopts">asopts</a>, <a href="#ddk_library-config">config</a>, <a href="#ddk_library-kconfig">kconfig</a>, <a href="#ddk_library-defconfig">defconfig</a>, <a href="#ddk_library-autofdo_profile">autofdo_profile</a>,
+            <a href="#ddk_library-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_library-kwargs">**kwargs</a>)
+</pre>
+
+**EXPERIMENTAL**. A library that may be used by a DDK module.
+
+The library has its own list of dependencies, flags that are usually local, and
+not exported to the `ddk_module` using it. However, `hdrs`, `includes`,
+kconfig and defconfig are exported.
+
+Known issues:
+    - (b/392186874) The generated .o.cmd files contain absolute paths and are not reproducible.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="ddk_library-name"></a>name |  name of module   |  none |
+| <a id="ddk_library-kernel_build"></a>kernel_build |  [`kernel_build`](#kernel_build)   |  none |
+| <a id="ddk_library-srcs"></a>srcs |  see [`ddk_module.srcs`](#ddk_module-srcs)   |  `None` |
+| <a id="ddk_library-deps"></a>deps |  see [`ddk_module.deps`](#ddk_module-deps). [`ddk_submodule`](#ddk_submodule)s are not allowed.   |  `None` |
+| <a id="ddk_library-hdrs"></a>hdrs |  see [`ddk_module.hdrs`](#ddk_module-hdrs)   |  `None` |
+| <a id="ddk_library-includes"></a>includes |  see [`ddk_module.includes`](#ddk_module-includes)   |  `None` |
+| <a id="ddk_library-linux_includes"></a>linux_includes |  see [`ddk_module.linux_includes`](#ddk_module-linux_includes)   |  `None` |
+| <a id="ddk_library-local_defines"></a>local_defines |  see [`ddk_module.local_defines`](#ddk_module-local_defines)   |  `None` |
+| <a id="ddk_library-copts"></a>copts |  see [`ddk_module.copts`](#ddk_module-copts)   |  `None` |
+| <a id="ddk_library-removed_copts"></a>removed_copts |  see [`ddk_module.removed_copts`](#ddk_module-removed_copts)   |  `None` |
+| <a id="ddk_library-asopts"></a>asopts |  see [`ddk_module.asopts`](#ddk_module-asopts)   |  `None` |
+| <a id="ddk_library-config"></a>config |  see [`ddk_module.config`](#ddk_module-config)   |  `None` |
+| <a id="ddk_library-kconfig"></a>kconfig |  see [`ddk_module.kconfig`](#ddk_module-kconfig)   |  `None` |
+| <a id="ddk_library-defconfig"></a>defconfig |  see [`ddk_module.defconfig`](#ddk_module-defconfig)   |  `None` |
+| <a id="ddk_library-autofdo_profile"></a>autofdo_profile |  see [`ddk_module.autofdo_profile`](#ddk_module-autofdo_profile)   |  `None` |
+| <a id="ddk_library-debug_info_for_profiling"></a>debug_info_for_profiling |  see [`ddk_module.debug_info_for_profiling`](#ddk_module-debug_info_for_profiling)   |  `None` |
+| <a id="ddk_library-kwargs"></a>kwargs |  Additional attributes to the internal rule. See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
+
+
 <a id="ddk_module"></a>
 
 ## ddk_module
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_module")
+
 ddk_module(<a href="#ddk_module-name">name</a>, <a href="#ddk_module-kernel_build">kernel_build</a>, <a href="#ddk_module-srcs">srcs</a>, <a href="#ddk_module-deps">deps</a>, <a href="#ddk_module-hdrs">hdrs</a>, <a href="#ddk_module-textual_hdrs">textual_hdrs</a>, <a href="#ddk_module-includes">includes</a>, <a href="#ddk_module-conditional_srcs">conditional_srcs</a>,
-           <a href="#ddk_module-linux_includes">linux_includes</a>, <a href="#ddk_module-out">out</a>, <a href="#ddk_module-local_defines">local_defines</a>, <a href="#ddk_module-copts">copts</a>, <a href="#ddk_module-kconfig">kconfig</a>, <a href="#ddk_module-defconfig">defconfig</a>, <a href="#ddk_module-generate_btf">generate_btf</a>,
-           <a href="#ddk_module-autofdo_profile">autofdo_profile</a>, <a href="#ddk_module-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_module-kwargs">kwargs</a>)
+           <a href="#ddk_module-linux_includes">linux_includes</a>, <a href="#ddk_module-out">out</a>, <a href="#ddk_module-local_defines">local_defines</a>, <a href="#ddk_module-copts">copts</a>, <a href="#ddk_module-removed_copts">removed_copts</a>, <a href="#ddk_module-asopts">asopts</a>, <a href="#ddk_module-linkopts">linkopts</a>, <a href="#ddk_module-config">config</a>,
+           <a href="#ddk_module-kconfig">kconfig</a>, <a href="#ddk_module-defconfig">defconfig</a>, <a href="#ddk_module-generate_btf">generate_btf</a>, <a href="#ddk_module-autofdo_profile">autofdo_profile</a>, <a href="#ddk_module-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_module-kwargs">**kwargs</a>)
 </pre>
 
 Defines a DDK (Driver Development Kit) module.
@@ -889,6 +1082,8 @@ Exported headers should be specified in one of the following ways:
   [`glob`](https://bazel.build/reference/be/functions#glob) of headers or a large list
   of headers.
 - Using `hdrs`, `textual_hdrs` and `includes` of this target.
+
+For details, see `build/kernel/kleaf/tests/ddk_examples/README.md`.
 
 `hdrs`, `textual_hdrs` and `includes` have the same semantics as [`ddk_headers`](#ddk_headers).
 That is, this target effectively acts as a `ddk_headers` target when specified in the `deps`
@@ -1136,17 +1331,21 @@ $(LINUXINCLUDE)
 | :------------- | :------------- | :------------- |
 | <a id="ddk_module-name"></a>name |  Name of target. This should usually be name of the output `.ko` file without the suffix.   |  none |
 | <a id="ddk_module-kernel_build"></a>kernel_build |  [`kernel_build`](#kernel_build)   |  none |
-| <a id="ddk_module-srcs"></a>srcs |  sources and local headers.<br><br>Source files (`.c`, `.S`, `.rs`) must be in the package of this `ddk_module` target, or in subpackages.<br><br>Generated source files (`.c`, `.S`, `.rs`) are accepted as long as they are in the package of this `ddk_module` target, or in subpackages.<br><br>Header files specified here are only visible to this `ddk_module` target, but not dependencies. To export a header so dependencies can use it, put it in `hdrs` and set `includes` accordingly.<br><br>Generated header files are accepted.   |  `None` |
-| <a id="ddk_module-deps"></a>deps |  A list of dependent targets. Each of them must be one of the following:<br><br>- [`kernel_module`](#kernel_module) - [`ddk_module`](#ddk_module) - [`ddk_headers`](#ddk_headers).   |  `None` |
-| <a id="ddk_module-hdrs"></a>hdrs |  See [`ddk_headers.hdrs`](#ddk_headers-hdrs)   |  `None` |
+| <a id="ddk_module-srcs"></a>srcs |  sources or local headers.<br><br>Source files (`.c`, `.S`, `.rs`) must be in the package of this `ddk_module` target, or in subpackages.<br><br>Generated source files (`.c`, `.S`, `.rs`) are accepted as long as they are in the package of this `ddk_module` target, or in subpackages.<br><br>Header files specified here are only visible to this `ddk_module` target, but not dependencies. To export a header so dependencies can use it, put it in `hdrs` and set `includes` accordingly.<br><br>Generated header files are accepted.   |  `None` |
+| <a id="ddk_module-deps"></a>deps |  A list of dependent targets. Each of them must be one of the following:<br><br>- [`kernel_module`](#kernel_module) - [`ddk_module`](#ddk_module) - [`ddk_headers`](#ddk_headers). - [`ddk_prebuilt_object`](#ddk_prebuilt_object) - [`ddk_library`](#ddk_library)<br><br>If [`config`](#ddk_module-config) is set, if some `deps` of this target have `kconfig` / `defconfig` set (including transitive dependencies), you may need to duplicate these targets in `ddk_config.deps`. Inconsistent configs are disallowed; if the resulting `.config` is not the same as the one from [`config`](#ddk_module-config), you get a build error.   |  `None` |
+| <a id="ddk_module-hdrs"></a>hdrs |  See [`ddk_headers.hdrs`](#ddk_headers-hdrs)<br><br>If [`config`](#ddk_module-config) is set, if some `hdrs` of this target have `kconfig` / `defconfig` set (including transitive dependencies), you may need to duplicate these targets in `ddk_config.deps`. Inconsistent configs are disallowed; if the resulting `.config` is not the same as the one from [`config`](#ddk_module-config), you get a build error.   |  `None` |
 | <a id="ddk_module-textual_hdrs"></a>textual_hdrs |  See [`ddk_headers.textual_hdrs`](#ddk_headers-textual_hdrs). DEPRECATED. Use `hdrs`.   |  `None` |
 | <a id="ddk_module-includes"></a>includes |  See [`ddk_headers.includes`](#ddk_headers-includes)   |  `None` |
 | <a id="ddk_module-conditional_srcs"></a>conditional_srcs |  A dictionary that specifies sources conditionally compiled based on configs.<br><br>Example:<br><br><pre><code>conditional_srcs = {&#10;    "CONFIG_FOO": {&#10;        True: ["foo.c"],&#10;        False: ["notfoo.c"]&#10;    }&#10;}</code></pre><br><br>In the above example, if `CONFIG_FOO` is `y` or `m`, `foo.c` is compiled. Otherwise, `notfoo.c` is compiled instead.   |  `None` |
 | <a id="ddk_module-linux_includes"></a>linux_includes |  See [`ddk_headers.linux_includes`](#ddk_headers-linux_includes)<br><br>Unlike `ddk_headers.linux_includes`, `ddk_module.linux_includes` is **NOT** applied to dependent `ddk_module`s.   |  `None` |
 | <a id="ddk_module-out"></a>out |  The output module file. This should usually be `"{name}.ko"`.<br><br>This is required if this target does not contain submodules.   |  `None` |
-| <a id="ddk_module-local_defines"></a>local_defines |  List of defines to add to the compile line.<br><br>**Order matters**. To prevent buildifier from sorting the list, use the `# do not sort` magic line.<br><br>Each string is prepended with `-D` and added to the compile command line for this target, but not to its dependents.<br><br>Unlike [`cc_library.local_defines`](https://bazel.build/reference/be/c-cpp#cc_library.local_defines), this is not subject to ["Make" variable substitution](https://bazel.build/reference/be/make-variables) or [`$(location)` substitution](https://bazel.build/reference/be/make-variables#predefined_label_variables).<br><br>Each string is treated as a single Bourne shell token. Unlike [`cc_library.local_defines`](https://bazel.build/reference/be/c-cpp#cc_library.local_defines), this is not subject to [Bourne shell tokenization](https://bazel.build/reference/be/common-definitions#sh-tokenization). The behavior is similar to `cc_library` with the `no_copts_tokenization` [feature](https://bazel.build/reference/be/functions#package.features). For details about `no_copts_tokenization`, see [`cc_library.copts`](https://bazel.build/reference/be/c-cpp#cc_library.copts).   |  `None` |
-| <a id="ddk_module-copts"></a>copts |  Add these options to the compilation command.<br><br>**Order matters**. To prevent buildifier from sorting the list, use the `# do not sort` magic line.<br><br>Subject to [`$(location)` substitution](https://bazel.build/reference/be/make-variables#predefined_label_variables).<br><br>The flags take effect only for compiling this target, not its dependencies, so be careful about header files included elsewhere.<br><br>All host paths should be provided via [`$(location)` substitution](https://bazel.build/reference/be/make-variables#predefined_label_variables). See "Implementation detail" section below.<br><br>Each `$(location)` expression should occupy its own token; optional argument key is allowed as a prefix. For example:<br><br><pre><code># Good&#10;copts = ["-include", "$(location //other:header.h)"]&#10;copts = ["-include=$(location //other:header.h)"]&#10;&#10;# BAD - Don't do this! Split into two tokens.&#10;copts = ["-include $(location //other:header.h)"]&#10;&#10;# BAD - Don't do this! Split into two tokens.&#10;copts = ["$(location //other:header.h) -Werror"]&#10;&#10;# BAD - Don't do this! Split into two tokens.&#10;copts = ["$(location //other:header.h) $(location //other:header2.h)"]</code></pre><br><br>Unlike [`cc_library.local_defines`](https://bazel.build/reference/be/c-cpp#cc_library.local_defines), this is not subject to ["Make" variable substitution](https://bazel.build/reference/be/make-variables).<br><br>Each string is treated as a single Bourne shell token. Unlike [`cc_library.copts`](https://bazel.build/reference/be/c-cpp#cc_library.copts) this is not subject to [Bourne shell tokenization](https://bazel.build/reference/be/common-definitions#sh-tokenization). The behavior is similar to `cc_library` with the `no_copts_tokenization` [feature](https://bazel.build/reference/be/functions#package.features). For details about `no_copts_tokenization`, see [`cc_library.copts`](https://bazel.build/reference/be/c-cpp#cc_library.copts).<br><br>Because each string is treated as a single Bourne shell token, if a plural `$(locations)` expression expands to multiple paths, they are treated as a single Bourne shell token, which is likely an undesirable behavior. To avoid surprising behaviors, use singular `$(location)` expressions to ensure that the label only expands to one path. For differences between the `$(locations)` and `$(location)`, see [`$(location)` substitution](https://bazel.build/reference/be/make-variables#predefined_label_variables).<br><br>**Implementation detail**: Unlike usual `$(location)` expansion, `$(location)` in `copts` is expanded to a path relative to the current package before sending to the compiler.<br><br>For example:<br><br><pre><code># package: //package&#10;ddk_module(&#10;  name = "my_module",&#10;  copts = ["-include", "$(location //other:header.h)"],&#10;  srcs = ["//other:header.h", "my_module.c"],&#10;)</code></pre> Then the generated Makefile contains:<br><br><pre><code>ccflags-y += -include ../other/header.h</code></pre><br><br>The behavior is such because the generated `Makefile` is located in `package/Makefile`, and `make` is executed under `package/`. In order to find `other/header.h`, its path relative to `package/` is given.   |  `None` |
-| <a id="ddk_module-kconfig"></a>kconfig |  The Kconfig file for this external module.<br><br>See [`Documentation/kbuild/kconfig-language.rst`](https://www.kernel.org/doc/html/latest/kbuild/kconfig.html) for its format.<br><br>Kconfig is optional for a `ddk_module`. The final Kconfig known by this module consists of the following:<br><br>- Kconfig from `kernel_build` - Kconfig from dependent modules, if any - Kconfig of this module, if any   |  `None` |
+| <a id="ddk_module-local_defines"></a>local_defines |  List of defines to add to the compile and assemble command line.<br><br>**Order matters**. To prevent buildifier from sorting the list, use the `# do not sort` magic line.<br><br>Each string is prepended with `-D` and added to the compile/assemble command line for this target, but not to its dependents.<br><br>Unlike [`cc_library.local_defines`](https://bazel.build/reference/be/c-cpp#cc_library.local_defines), this is not subject to ["Make" variable substitution](https://bazel.build/reference/be/make-variables) or [`$(location)` substitution](https://bazel.build/reference/be/make-variables#predefined_label_variables).<br><br>Each string is treated as a single Bourne shell token. Unlike [`cc_library.local_defines`](https://bazel.build/reference/be/c-cpp#cc_library.local_defines), this is not subject to [Bourne shell tokenization](https://bazel.build/reference/be/common-definitions#sh-tokenization). The behavior is similar to `cc_library` with the `no_copts_tokenization` [feature](https://bazel.build/reference/be/functions#package.features). For details about `no_copts_tokenization`, see [`cc_library.copts`](https://bazel.build/reference/be/c-cpp#cc_library.copts).   |  `None` |
+| <a id="ddk_module-copts"></a>copts |  Add these options to the compilation command.<br><br>**Order matters**. To prevent buildifier from sorting the list, use the `# do not sort` magic line.<br><br>Subject to [`$(location)` substitution](https://bazel.build/reference/be/make-variables#predefined_label_variables).<br><br>The flags take effect only for compiling this target, not its dependencies, so be careful about header files included elsewhere.<br><br>All host paths should be provided via [`$(location)` substitution](https://bazel.build/reference/be/make-variables#predefined_label_variables). See "Implementation detail" section below.<br><br>Each `$(location)` expression should occupy its own token; optional argument key is allowed as a prefix. For example:<br><br><pre><code># Good&#10;copts = ["-include", "$(location //other:header.h)"]&#10;copts = ["-include=$(location //other:header.h)"]&#10;&#10;# BAD - Don't do this! Split into two tokens.&#10;copts = ["-include $(location //other:header.h)"]&#10;&#10;# BAD - Don't do this! Split into two tokens.&#10;copts = ["$(location //other:header.h) -Werror"]&#10;&#10;# BAD - Don't do this! Split into two tokens.&#10;copts = ["$(location //other:header.h) $(location //other:header2.h)"]</code></pre><br><br>Unlike [`cc_library.local_defines`](https://bazel.build/reference/be/c-cpp#cc_library.local_defines), this is not subject to ["Make" variable substitution](https://bazel.build/reference/be/make-variables).<br><br>Each string is treated as a single Bourne shell token. Unlike [`cc_library.copts`](https://bazel.build/reference/be/c-cpp#cc_library.copts) this is not subject to [Bourne shell tokenization](https://bazel.build/reference/be/common-definitions#sh-tokenization). The behavior is similar to `cc_library` with the `no_copts_tokenization` [feature](https://bazel.build/reference/be/functions#package.features). For details about `no_copts_tokenization`, see [`cc_library.copts`](https://bazel.build/reference/be/c-cpp#cc_library.copts).<br><br>Because each string is treated as a single Bourne shell token, if a plural `$(locations)` expression expands to multiple paths, they are treated as a single Bourne shell token, which is likely an undesirable behavior. To avoid surprising behaviors, use singular `$(location)` expressions to ensure that the label only expands to one path. For differences between the `$(locations)` and `$(location)`, see [`$(location)` substitution](https://bazel.build/reference/be/make-variables#predefined_label_variables).<br><br>**Implementation detail**: Unlike usual `$(location)` expansion, `$(location)` in `copts` is expanded to a path relative to the current package before sending to the compiler.<br><br>For example:<br><br><pre><code># package: //package&#10;ddk_module(&#10;  name = "my_module",&#10;  copts = ["-include", "$(location //other:header.h)"],&#10;  srcs = ["//other:header.h", "my_module.c"],&#10;)</code></pre> Then the content of generated Makefile is semantically equivalent to:<br><br><pre><code>CFLAGS_my_module.o += -include ../other/header.h</code></pre><br><br>The behavior is such because the generated `Makefile` is located in `package/Makefile`, and `make` is executed under `package/`. In order to find `other/header.h`, its path relative to `package/` is given.   |  `None` |
+| <a id="ddk_module-removed_copts"></a>removed_copts |  Similar to `copts` but for flags **removed** from the compilation command.<br><br>For example: <pre><code>ddk_module(&#10;    name = "my_module",&#10;    removed_copts = ["-Werror"],&#10;    srcs = ["my_module.c"],&#10;)</code></pre> Then the content of generated Makefile is semantically equivalent to:<br><br><pre><code>CFLAGS_REMOVE_my_module.o += -Werror</code></pre><br><br>Note: Due to implementation details of Kleaf flags in `copts` are written to a file and provided to the compiler with the `@<arg_file>` syntax, so they are not affected by `removed_copts` implemented by `CFLAGS_REMOVE_`. To remove flags from the Bazel `copts` list, do so directly.   |  `None` |
+| <a id="ddk_module-asopts"></a>asopts |  Similar to `copts` but for assembly.<br><br>For example: <pre><code>ddk_module(&#10;    name = "my_module",&#10;    asopts = ["-ansi"],&#10;    srcs = ["my_module.S"],&#10;)</code></pre> Then the content of generated Makefile is semantically equivalent to:<br><br><pre><code>AFLAGS_my_module.o += -ansi</code></pre>   |  `None` |
+| <a id="ddk_module-linkopts"></a>linkopts |  Similar to `copts` but for linking the module.<br><br>For example: <pre><code>ddk_module(&#10;    name = "my_module",&#10;    linkopts = ["-lc"],&#10;    out = "my_module.ko",&#10;    # ...&#10;)</code></pre> Then the content of generated Makefile is semantically equivalent to:<br><br><pre><code>LDFLAGS_my_module.ko += -lc</code></pre>   |  `None` |
+| <a id="ddk_module-config"></a>config |  **EXPERIMENTAL**. The parent [ddk_config](#ddk_config) that encapsulates Kconfig/defconfig.   |  `None` |
+| <a id="ddk_module-kconfig"></a>kconfig |  The Kconfig files for this external module.<br><br>See [`Documentation/kbuild/kconfig-language.rst`](https://www.kernel.org/doc/html/latest/kbuild/kconfig.html) for its format.<br><br>Kconfig is optional for a `ddk_module`. The final Kconfig known by this module consists of the following:<br><br>- Kconfig from `kernel_build` - Kconfig from dependent modules, if any - Kconfig of this module, if any<br><br>For legacy reasons, this is singular and accepts a single target. If multiple `Kconfig` files should be added, use a [`filegroup`](https://bazel.build/reference/be/general#filegroup) to wrap the files.   |  `None` |
 | <a id="ddk_module-defconfig"></a>defconfig |  The `defconfig` file.<br><br>Items must already be declared in `kconfig`. An item not declared in Kconfig and inherited Kconfig files is silently dropped.<br><br>An item declared in `kconfig` without a specific value in `defconfig` uses default value specified in `kconfig`.   |  `None` |
 | <a id="ddk_module-generate_btf"></a>generate_btf |  Allows generation of BTF type information for the module. See [kernel_module.generate_btf](#kernel_module-generate_btf)   |  `None` |
 | <a id="ddk_module-autofdo_profile"></a>autofdo_profile |  Label to an AutoFDO profile.   |  `None` |
@@ -1159,8 +1358,10 @@ $(LINUXINCLUDE)
 ## ddk_submodule
 
 <pre>
-ddk_submodule(<a href="#ddk_submodule-name">name</a>, <a href="#ddk_submodule-out">out</a>, <a href="#ddk_submodule-srcs">srcs</a>, <a href="#ddk_submodule-deps">deps</a>, <a href="#ddk_submodule-hdrs">hdrs</a>, <a href="#ddk_submodule-includes">includes</a>, <a href="#ddk_submodule-local_defines">local_defines</a>, <a href="#ddk_submodule-copts">copts</a>, <a href="#ddk_submodule-conditional_srcs">conditional_srcs</a>,
-              <a href="#ddk_submodule-autofdo_profile">autofdo_profile</a>, <a href="#ddk_submodule-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_submodule-kwargs">kwargs</a>)
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_submodule")
+
+ddk_submodule(<a href="#ddk_submodule-name">name</a>, <a href="#ddk_submodule-out">out</a>, <a href="#ddk_submodule-srcs">srcs</a>, <a href="#ddk_submodule-deps">deps</a>, <a href="#ddk_submodule-hdrs">hdrs</a>, <a href="#ddk_submodule-includes">includes</a>, <a href="#ddk_submodule-local_defines">local_defines</a>, <a href="#ddk_submodule-copts">copts</a>, <a href="#ddk_submodule-removed_copts">removed_copts</a>, <a href="#ddk_submodule-asopts">asopts</a>,
+              <a href="#ddk_submodule-linkopts">linkopts</a>, <a href="#ddk_submodule-conditional_srcs">conditional_srcs</a>, <a href="#ddk_submodule-autofdo_profile">autofdo_profile</a>, <a href="#ddk_submodule-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_submodule-kwargs">**kwargs</a>)
 </pre>
 
 Declares a DDK (Driver Development Kit) submodule.
@@ -1242,6 +1443,9 @@ dependencies are stable, it is recommended to:
 | <a id="ddk_submodule-includes"></a>includes |  See [`ddk_module.includes`](#ddk_module-includes).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).<br><br>These are exported to downstream targets that depends on the `ddk_module` that includes the current target. Example:<br><br><pre><code>ddk_submodule(name = "module_parent_a", includes = [...])&#10;ddk_module(name = "module_parent", deps = [":module_parent_a"])&#10;ddk_module(name = "module_child", deps = [":module_parent"])</code></pre><br><br>`module_child` automatically gets `includes` of `module_parent_a`.   |  `None` |
 | <a id="ddk_submodule-local_defines"></a>local_defines |  See [`ddk_module.local_defines`](#ddk_module-local_defines).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).<br><br>These are not exported to downstream targets that depends on the `ddk_module` that includes the current target.   |  `None` |
 | <a id="ddk_submodule-copts"></a>copts |  See [`ddk_module.copts`](#ddk_module-copts).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).<br><br>These are not exported to downstream targets that depends on the `ddk_module` that includes the current target.   |  `None` |
+| <a id="ddk_submodule-removed_copts"></a>removed_copts |  See [`ddk_module.removed_copts`](#ddk_module-removed_copts).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).<br><br>These are not exported to downstream targets that depends on the `ddk_module` that includes the current target.   |  `None` |
+| <a id="ddk_submodule-asopts"></a>asopts |  See [`ddk_module.asopts`](#ddk_module-asopts).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).<br><br>These are not exported to downstream targets that depends on the `ddk_module` that includes the current target.   |  `None` |
+| <a id="ddk_submodule-linkopts"></a>linkopts |  See [`ddk_module.linkopts`](#ddk_module-linkopts).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).<br><br>These are not exported to downstream targets that depends on the `ddk_module` that includes the current target.   |  `None` |
 | <a id="ddk_submodule-conditional_srcs"></a>conditional_srcs |  See [`ddk_module.conditional_srcs`](#ddk_module-conditional_srcs).   |  `None` |
 | <a id="ddk_submodule-autofdo_profile"></a>autofdo_profile |  See [`ddk_module.autofdo_profile`](#ddk_module-autofdo_profile).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).   |  `None` |
 | <a id="ddk_submodule-debug_info_for_profiling"></a>debug_info_for_profiling |  See [`ddk_module.debug_info_for_profiling`](#ddk_module-debug_info_for_profiling).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).   |  `None` |
@@ -1253,7 +1457,10 @@ dependencies are stable, it is recommended to:
 ## dependency_graph
 
 <pre>
-dependency_graph(<a href="#dependency_graph-name">name</a>, <a href="#dependency_graph-kernel_build">kernel_build</a>, <a href="#dependency_graph-kernel_modules">kernel_modules</a>, <a href="#dependency_graph-colorful">colorful</a>, <a href="#dependency_graph-exclude_base_kernel_modules">exclude_base_kernel_modules</a>, <a href="#dependency_graph-kwargs">kwargs</a>)
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "dependency_graph")
+
+dependency_graph(<a href="#dependency_graph-name">name</a>, <a href="#dependency_graph-kernel_build">kernel_build</a>, <a href="#dependency_graph-kernel_modules">kernel_modules</a>, <a href="#dependency_graph-colorful">colorful</a>, <a href="#dependency_graph-exclude_base_kernel_modules">exclude_base_kernel_modules</a>,
+                 <a href="#dependency_graph-kwargs">**kwargs</a>)
 </pre>
 
 Declare targets for dependency graph visualization.
@@ -1280,9 +1487,11 @@ Output:
 ## initramfs_modules_lists_test
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "initramfs_modules_lists_test")
+
 initramfs_modules_lists_test(<a href="#initramfs_modules_lists_test-name">name</a>, <a href="#initramfs_modules_lists_test-kernel_images">kernel_images</a>, <a href="#initramfs_modules_lists_test-expected_modules_list">expected_modules_list</a>,
                              <a href="#initramfs_modules_lists_test-expected_modules_recovery_list">expected_modules_recovery_list</a>, <a href="#initramfs_modules_lists_test-expected_modules_charger_list">expected_modules_charger_list</a>,
-                             <a href="#initramfs_modules_lists_test-build_vendor_boot">build_vendor_boot</a>, <a href="#initramfs_modules_lists_test-build_vendor_kernel_boot">build_vendor_kernel_boot</a>, <a href="#initramfs_modules_lists_test-kwargs">kwargs</a>)
+                             <a href="#initramfs_modules_lists_test-build_vendor_boot">build_vendor_boot</a>, <a href="#initramfs_modules_lists_test-build_vendor_kernel_boot">build_vendor_kernel_boot</a>, <a href="#initramfs_modules_lists_test-kwargs">**kwargs</a>)
 </pre>
 
 Tests that the initramfs has modules.load* files with the given content.
@@ -1307,9 +1516,11 @@ Tests that the initramfs has modules.load* files with the given content.
 ## kernel_abi
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_abi")
+
 kernel_abi(<a href="#kernel_abi-name">name</a>, <a href="#kernel_abi-kernel_build">kernel_build</a>, <a href="#kernel_abi-define_abi_targets">define_abi_targets</a>, <a href="#kernel_abi-kernel_modules">kernel_modules</a>, <a href="#kernel_abi-module_grouping">module_grouping</a>,
            <a href="#kernel_abi-abi_definition_stg">abi_definition_stg</a>, <a href="#kernel_abi-kmi_enforced">kmi_enforced</a>, <a href="#kernel_abi-unstripped_modules_archive">unstripped_modules_archive</a>, <a href="#kernel_abi-kmi_symbol_list_add_only">kmi_symbol_list_add_only</a>,
-           <a href="#kernel_abi-kernel_modules_exclude_list">kernel_modules_exclude_list</a>, <a href="#kernel_abi-enable_add_vmlinux">enable_add_vmlinux</a>, <a href="#kernel_abi-kwargs">kwargs</a>)
+           <a href="#kernel_abi-kernel_modules_exclude_list">kernel_modules_exclude_list</a>, <a href="#kernel_abi-enable_add_vmlinux">enable_add_vmlinux</a>, <a href="#kernel_abi-kwargs">**kwargs</a>)
 </pre>
 
 Declare multiple targets to support ABI monitoring.
@@ -1382,8 +1593,10 @@ commands to Bazel commands.
 ## kernel_abi_dist
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_abi_dist")
+
 kernel_abi_dist(<a href="#kernel_abi_dist-name">name</a>, <a href="#kernel_abi_dist-kernel_abi">kernel_abi</a>, <a href="#kernel_abi_dist-kernel_build_add_vmlinux">kernel_build_add_vmlinux</a>, <a href="#kernel_abi_dist-ignore_diff">ignore_diff</a>, <a href="#kernel_abi_dist-no_ignore_diff_target">no_ignore_diff_target</a>,
-                <a href="#kernel_abi_dist-kwargs">kwargs</a>)
+                <a href="#kernel_abi_dist-kwargs">**kwargs</a>)
 </pre>
 
 This macro is no longer supported. Invoking this macro triggers an error.
@@ -1410,7 +1623,9 @@ Use [`kernel_abi_wrapped_dist`](#kernel_abi_wrapped_dist) instead.
 ## kernel_abi_wrapped_dist
 
 <pre>
-kernel_abi_wrapped_dist(<a href="#kernel_abi_wrapped_dist-name">name</a>, <a href="#kernel_abi_wrapped_dist-dist">dist</a>, <a href="#kernel_abi_wrapped_dist-kernel_abi">kernel_abi</a>, <a href="#kernel_abi_wrapped_dist-ignore_diff">ignore_diff</a>, <a href="#kernel_abi_wrapped_dist-no_ignore_diff_target">no_ignore_diff_target</a>, <a href="#kernel_abi_wrapped_dist-kwargs">kwargs</a>)
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_abi_wrapped_dist")
+
+kernel_abi_wrapped_dist(<a href="#kernel_abi_wrapped_dist-name">name</a>, <a href="#kernel_abi_wrapped_dist-dist">dist</a>, <a href="#kernel_abi_wrapped_dist-kernel_abi">kernel_abi</a>, <a href="#kernel_abi_wrapped_dist-ignore_diff">ignore_diff</a>, <a href="#kernel_abi_wrapped_dist-no_ignore_diff_target">no_ignore_diff_target</a>, <a href="#kernel_abi_wrapped_dist-kwargs">**kwargs</a>)
 </pre>
 
 A wrapper over `dist` for [`kernel_abi`](#kernel_abi).
@@ -1473,7 +1688,9 @@ particular, the `kernel_build` targets in `data` automatically builds
 ## kernel_build
 
 <pre>
-kernel_build(<a href="#kernel_build-name">name</a>, <a href="#kernel_build-build_config">build_config</a>, <a href="#kernel_build-outs">outs</a>, <a href="#kernel_build-makefile">makefile</a>, <a href="#kernel_build-keep_module_symvers">keep_module_symvers</a>, <a href="#kernel_build-keep_dot_config">keep_dot_config</a>, <a href="#kernel_build-srcs">srcs</a>,
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_build")
+
+kernel_build(<a href="#kernel_build-name">name</a>, <a href="#kernel_build-outs">outs</a>, <a href="#kernel_build-build_config">build_config</a>, <a href="#kernel_build-makefile">makefile</a>, <a href="#kernel_build-keep_module_symvers">keep_module_symvers</a>, <a href="#kernel_build-keep_dot_config">keep_dot_config</a>, <a href="#kernel_build-srcs">srcs</a>,
              <a href="#kernel_build-module_outs">module_outs</a>, <a href="#kernel_build-implicit_outs">implicit_outs</a>, <a href="#kernel_build-module_implicit_outs">module_implicit_outs</a>, <a href="#kernel_build-generate_vmlinux_btf">generate_vmlinux_btf</a>, <a href="#kernel_build-deps">deps</a>, <a href="#kernel_build-arch">arch</a>,
              <a href="#kernel_build-base_kernel">base_kernel</a>, <a href="#kernel_build-make_goals">make_goals</a>, <a href="#kernel_build-kconfig_ext">kconfig_ext</a>, <a href="#kernel_build-dtstree">dtstree</a>, <a href="#kernel_build-kmi_symbol_list">kmi_symbol_list</a>, <a href="#kernel_build-protected_exports_list">protected_exports_list</a>,
              <a href="#kernel_build-protected_modules_list">protected_modules_list</a>, <a href="#kernel_build-additional_kmi_symbol_lists">additional_kmi_symbol_lists</a>, <a href="#kernel_build-trim_nonlisted_kmi">trim_nonlisted_kmi</a>,
@@ -1481,7 +1698,8 @@ kernel_build(<a href="#kernel_build-name">name</a>, <a href="#kernel_build-build
              <a href="#kernel_build-kbuild_symtypes">kbuild_symtypes</a>, <a href="#kernel_build-strip_modules">strip_modules</a>, <a href="#kernel_build-module_signing_key">module_signing_key</a>, <a href="#kernel_build-system_trusted_key">system_trusted_key</a>,
              <a href="#kernel_build-modules_prepare_force_generate_headers">modules_prepare_force_generate_headers</a>, <a href="#kernel_build-defconfig">defconfig</a>, <a href="#kernel_build-pre_defconfig_fragments">pre_defconfig_fragments</a>,
              <a href="#kernel_build-post_defconfig_fragments">post_defconfig_fragments</a>, <a href="#kernel_build-defconfig_fragments">defconfig_fragments</a>, <a href="#kernel_build-check_defconfig">check_defconfig</a>, <a href="#kernel_build-page_size">page_size</a>,
-             <a href="#kernel_build-pack_module_env">pack_module_env</a>, <a href="#kernel_build-sanitizers">sanitizers</a>, <a href="#kernel_build-ddk_module_defconfig_fragments">ddk_module_defconfig_fragments</a>, <a href="#kernel_build-ddk_module_headers">ddk_module_headers</a>, <a href="#kernel_build-kwargs">kwargs</a>)
+             <a href="#kernel_build-pack_module_env">pack_module_env</a>, <a href="#kernel_build-sanitizers">sanitizers</a>, <a href="#kernel_build-ddk_module_defconfig_fragments">ddk_module_defconfig_fragments</a>, <a href="#kernel_build-ddk_module_headers">ddk_module_headers</a>, <a href="#kernel_build-kcflags">kcflags</a>,
+             <a href="#kernel_build-clang_autofdo_profile">clang_autofdo_profile</a>, <a href="#kernel_build-kwargs">**kwargs</a>)
 </pre>
 
 Defines a kernel build target with all dependent targets.
@@ -1505,8 +1723,8 @@ For example, if name is `"kernel_aarch64"`:
 | Name  | Description | Default Value |
 | :------------- | :------------- | :------------- |
 | <a id="kernel_build-name"></a>name |  The final kernel target name, e.g. `"kernel_aarch64"`.   |  none |
-| <a id="kernel_build-build_config"></a>build_config |  Label of the build.config file, e.g. `"build.config.gki.aarch64"`.   |  none |
 | <a id="kernel_build-outs"></a>outs |  The expected output files.<br><br>Note: in-tree modules should be specified in `module_outs` instead.<br><br>This attribute must be either a `dict` or a `list`. If it is a `list`, for each item in `out`:<br><br>- If `out` does not contain a slash, the build rule   automatically finds a file with name `out` in the kernel   build output directory `${OUT_DIR}`. <pre><code>  find ${OUT_DIR} -name {out}</code></pre>   There must be exactly one match.   The file is copied to the following in the output directory   `{name}/{out}`<br><br>  Example: <pre><code>  kernel_build(name = "kernel_aarch64", outs = ["vmlinux"])</code></pre>   The bulid system copies `${OUT_DIR}/[<optional subdirectory>/]vmlinux`   to `kernel_aarch64/vmlinux`.   `kernel_aarch64/vmlinux` is the label to the file.<br><br>- If `out` contains a slash, the build rule locates the file in the   kernel build output directory `${OUT_DIR}` with path `out`   The file is copied to the following in the output directory     1. `{name}/{out}`     2. `{name}/$(basename {out})`<br><br>  Example: <pre><code>  kernel_build(&#10;    name = "kernel_aarch64",&#10;    outs = ["arch/arm64/boot/vmlinux"])</code></pre>   The bulid system copies     `${OUT_DIR}/arch/arm64/boot/vmlinux`   to:     - `kernel_aarch64/arch/arm64/boot/vmlinux`     - `kernel_aarch64/vmlinux`   They are also the labels to the output files, respectively.<br><br>  See `search_and_cp_output.py` for details.<br><br>Files in `outs` are part of the [`DefaultInfo`](https://docs.bazel.build/versions/main/skylark/lib/DefaultInfo.html) that this `kernel_build` returns. For example: <pre><code>kernel_build(name = "kernel", outs = ["vmlinux"], ...)&#10;pkg_files(name = "kernel_files", srcs = ["kernel"], ...)&#10;pkg_install(name = "kernel_dist", srcs = [":kernel_files"])</code></pre> `vmlinux` will be included in the distribution.<br><br>If it is a `dict`, it is wrapped in [`select()`](https://docs.bazel.build/versions/main/configurable-attributes.html).<br><br>Example: <pre><code>kernel_build(&#10;  name = "kernel_aarch64",&#10;  outs = {"config_foo": ["vmlinux"]})</code></pre> If conditions in `config_foo` is met, the rule is equivalent to <pre><code>kernel_build(&#10;  name = "kernel_aarch64",&#10;  outs = ["vmlinux"])</code></pre> As explained above, the bulid system copies `${OUT_DIR}/[<optional subdirectory>/]vmlinux` to `kernel_aarch64/vmlinux`. `kernel_aarch64/vmlinux` is the label to the file.<br><br>Note that a `select()` may not be passed into `kernel_build()` because [`select()` cannot be evaluated in macros](https://docs.bazel.build/versions/main/configurable-attributes.html#why-doesnt-select-work-in-macros). Hence: - [combining `select()`s](https://docs.bazel.build/versions/main/configurable-attributes.html#combining-selects)   is not allowed. Instead, expand the cartesian product. - To use   [`AND` chaining](https://docs.bazel.build/versions/main/configurable-attributes.html#or-chaining)   or   [`OR` chaining](https://docs.bazel.build/versions/main/configurable-attributes.html#selectsconfig_setting_group),   use `selects.config_setting_group()`.   |  none |
+| <a id="kernel_build-build_config"></a>build_config |  Label of the build.config file, e.g. `"build.config.gki.aarch64"`.<br><br>If it contains no files, the list of constants in `@kernel_toolchain_info` is used. This is `//common:build.config.constants` by default, unless otherwise specified.<br><br>If it contains no files, [`makefile`](#kernel_build-makefile) must be set as the anchor to the directory to run `make`.   |  `None` |
 | <a id="kernel_build-makefile"></a>makefile |  `Makefile` governing the kernel tree sources (see `srcs`). Example values:<br><br>*   `None` (default): Falls back to the value of `KERNEL_DIR` from `build_config`.     `kernel_build()` executes `make` in `KERNEL_DIR`.<br><br>    Note: The usage of specifying `KERNEL_DIR` in `build_config` is deprecated and will     trigger a warning/error in the future.<br><br>*   `"//common:Makefile"` (most common): the kernel sources are located in     `//common`. This means `kernel_build()` executes `make` to build the kernel image     and in-tree drivers in `common`.<br><br>    This usually replaces `//common:set_kernel_dir_build_config` in your `build_config`;     that is, if you set `kernel_build.makefile`, it is likely that you may drop     `//common:set_kernel_dir_build_config` from components of     `kernel_build.build_config`.<br><br>    This replaces `KERNEL_DIR=common` in your `build_config`.<br><br>*   `"@kleaf//common:Makefile"`: If you set up a DDK workspace such that Kleaf     tooling and your kernel source tree are located in the `@kleaf` submodule, you     should specify the full label in the package. *   the `Makefile` next to the build config:<br><br>    For example:<br><br>    ```     kernel_build(         name = "tuna",         build_config = "//package:build.config.tuna", # the build.config.tuna is in //package         makefile = "//package:Makefile", # so set KERNEL_DIR to "package"     )     ```<br><br>    In this example, `build.config.tuna` is in `//package`. Hence,     setting `makefile = "Makefile"` is equivalent to the     legacy behavior of not setting `KERNEL_DIR` in `build.config`, and allowing     `_setup_env.sh` to decide the value by inferring from the directory containing the     build config, which is the `//package`.<br><br>*   `Makefile` in the current package: the kernel sources are in the current package     where `kernel_build()` is called.<br><br>    For example:<br><br>    ```     kernel_build(         name = "tuna",         build_config = "build.config.tuna", # the build.config.tuna is in this package         makefile = "Makefile", # so set KERNEL_DIR to this package     )     ```   |  `None` |
 | <a id="kernel_build-keep_module_symvers"></a>keep_module_symvers |  If set to True, a copy of the default output `Module.symvers` is kept. * To avoid collisions in mixed build distribution packages, the file is renamed   as `$(name)_Module.symvers`. * Default is False.   |  `None` |
 | <a id="kernel_build-keep_dot_config"></a>keep_dot_config |  If set to True, a copy of the default output `.config` is kept. * To avoid collisions in mixed build distribution packages, the file is renamed   as `$(name)_dot_config`. * Default is False.   |  `None` |
@@ -1544,6 +1762,8 @@ For example, if name is `"kernel_aarch64"`:
 | <a id="kernel_build-sanitizers"></a>sanitizers |  **non-configurable**. A list of sanitizer configurations. By default, no sanitizers are explicity configured; values in defconfig are respected. Possible values are:   - `["kasan_any_mode"]`   - `["kasan_sw_tags"]`   - `["kasan_generic"]`   - `["kcsan"]`   |  `None` |
 | <a id="kernel_build-ddk_module_defconfig_fragments"></a>ddk_module_defconfig_fragments |  A list of additional defconfigs, to be used in `ddk_module`s building against this kernel. Unlike `post_defconfig_fragments`, `ddk_module_defconfig_fragments` is not applied to this `kernel_build` target, nor dependent legacy `kernel_module`s.   |  `None` |
 | <a id="kernel_build-ddk_module_headers"></a>ddk_module_headers |  A list of `ddk_headers`, to be used in `ddk_module`s building against this kernel.<br><br>Inherits `ddk_module_headers` from `base_kernel`, with a lower priority than `ddk_module_headers` of this kernel_build.<br><br>These headers are not applied to this `kernel_build` target.   |  `None` |
+| <a id="kernel_build-kcflags"></a>kcflags |  Extra `KCFLAGS`. Empty by default.<br><br>To add common KCFLAGS, you must explicitly set it to `COMMON_KCFLAGS` (see `//build/kernel/kleaf:constants.bzl`).   |  `None` |
+| <a id="kernel_build-clang_autofdo_profile"></a>clang_autofdo_profile |  Path to an AutoFDO profile, For example: <pre><code>  clang_autofdo_profile = "//toolchain/pgo-profiles/kernel:aarch64/android16-6.12/kernel.afdo"</code></pre>   |  `None` |
 | <a id="kernel_build-kwargs"></a>kwargs |  Additional attributes to the internal rule, e.g. [`visibility`](https://docs.bazel.build/versions/main/visibility.html). See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 
@@ -1552,7 +1772,9 @@ For example, if name is `"kernel_aarch64"`:
 ## kernel_dtstree
 
 <pre>
-kernel_dtstree(<a href="#kernel_dtstree-name">name</a>, <a href="#kernel_dtstree-srcs">srcs</a>, <a href="#kernel_dtstree-makefile">makefile</a>, <a href="#kernel_dtstree-kwargs">kwargs</a>)
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_dtstree")
+
+kernel_dtstree(<a href="#kernel_dtstree-name">name</a>, <a href="#kernel_dtstree-srcs">srcs</a>, <a href="#kernel_dtstree-makefile">makefile</a>, <a href="#kernel_dtstree-kwargs">**kwargs</a>)
 </pre>
 
 Specify a kernel DTS tree.
@@ -1573,6 +1795,8 @@ Specify a kernel DTS tree.
 ## kernel_images
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_images")
+
 kernel_images(<a href="#kernel_images-name">name</a>, <a href="#kernel_images-kernel_modules_install">kernel_modules_install</a>, <a href="#kernel_images-kernel_build">kernel_build</a>, <a href="#kernel_images-base_kernel_images">base_kernel_images</a>, <a href="#kernel_images-build_initramfs">build_initramfs</a>,
               <a href="#kernel_images-build_vendor_dlkm">build_vendor_dlkm</a>, <a href="#kernel_images-build_vendor_dlkm_flatten">build_vendor_dlkm_flatten</a>, <a href="#kernel_images-build_boot">build_boot</a>, <a href="#kernel_images-build_vendor_boot">build_vendor_boot</a>,
               <a href="#kernel_images-build_vendor_kernel_boot">build_vendor_kernel_boot</a>, <a href="#kernel_images-build_system_dlkm">build_system_dlkm</a>, <a href="#kernel_images-build_system_dlkm_flatten">build_system_dlkm_flatten</a>, <a href="#kernel_images-build_dtbo">build_dtbo</a>,
@@ -1584,7 +1808,7 @@ kernel_images(<a href="#kernel_images-name">name</a>, <a href="#kernel_images-ke
               <a href="#kernel_images-vendor_dlkm_modules_list">vendor_dlkm_modules_list</a>, <a href="#kernel_images-vendor_dlkm_modules_blocklist">vendor_dlkm_modules_blocklist</a>, <a href="#kernel_images-vendor_dlkm_props">vendor_dlkm_props</a>,
               <a href="#kernel_images-ramdisk_compression">ramdisk_compression</a>, <a href="#kernel_images-ramdisk_compression_args">ramdisk_compression_args</a>, <a href="#kernel_images-unpack_ramdisk">unpack_ramdisk</a>, <a href="#kernel_images-avb_sign_boot_img">avb_sign_boot_img</a>,
               <a href="#kernel_images-avb_boot_partition_size">avb_boot_partition_size</a>, <a href="#kernel_images-avb_boot_key">avb_boot_key</a>, <a href="#kernel_images-avb_boot_algorithm">avb_boot_algorithm</a>, <a href="#kernel_images-avb_boot_partition_name">avb_boot_partition_name</a>,
-              <a href="#kernel_images-dedup_dlkm_modules">dedup_dlkm_modules</a>, <a href="#kernel_images-create_modules_order">create_modules_order</a>, <a href="#kernel_images-kwargs">kwargs</a>)
+              <a href="#kernel_images-dedup_dlkm_modules">dedup_dlkm_modules</a>, <a href="#kernel_images-create_modules_order">create_modules_order</a>, <a href="#kernel_images-kwargs">**kwargs</a>)
 </pre>
 
 Build multiple kernel images.
@@ -1679,7 +1903,9 @@ For details, see
 ## kernel_module
 
 <pre>
-kernel_module(<a href="#kernel_module-name">name</a>, <a href="#kernel_module-kernel_build">kernel_build</a>, <a href="#kernel_module-outs">outs</a>, <a href="#kernel_module-srcs">srcs</a>, <a href="#kernel_module-deps">deps</a>, <a href="#kernel_module-makefile">makefile</a>, <a href="#kernel_module-generate_btf">generate_btf</a>, <a href="#kernel_module-kwargs">kwargs</a>)
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_module")
+
+kernel_module(<a href="#kernel_module-name">name</a>, <a href="#kernel_module-kernel_build">kernel_build</a>, <a href="#kernel_module-outs">outs</a>, <a href="#kernel_module-srcs">srcs</a>, <a href="#kernel_module-deps">deps</a>, <a href="#kernel_module-makefile">makefile</a>, <a href="#kernel_module-generate_btf">generate_btf</a>, <a href="#kernel_module-kwargs">**kwargs</a>)
 </pre>
 
 Generates a rule that builds an external kernel module.
@@ -1723,7 +1949,9 @@ kernel_module(
 ## kernel_module_test
 
 <pre>
-kernel_module_test(<a href="#kernel_module_test-name">name</a>, <a href="#kernel_module_test-modules">modules</a>, <a href="#kernel_module_test-kwargs">kwargs</a>)
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_module_test")
+
+kernel_module_test(<a href="#kernel_module_test-name">name</a>, <a href="#kernel_module_test-modules">modules</a>, <a href="#kernel_module_test-kwargs">**kwargs</a>)
 </pre>
 
 A test on artifacts produced by [kernel_module](kernel.md#kernel_module).
@@ -1743,6 +1971,8 @@ A test on artifacts produced by [kernel_module](kernel.md#kernel_module).
 ## kernel_uapi_headers_cc_library
 
 <pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_uapi_headers_cc_library")
+
 kernel_uapi_headers_cc_library(<a href="#kernel_uapi_headers_cc_library-name">name</a>, <a href="#kernel_uapi_headers_cc_library-kernel_build">kernel_build</a>)
 </pre>
 

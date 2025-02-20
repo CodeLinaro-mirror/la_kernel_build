@@ -7,7 +7,9 @@ Provide tools for a hermetic build.
 ## hermetic_exec
 
 <pre>
-hermetic_exec(<a href="#hermetic_exec-name">name</a>, <a href="#hermetic_exec-script">script</a>, <a href="#hermetic_exec-data">data</a>, <a href="#hermetic_exec-kwargs">kwargs</a>)
+load("@kleaf//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_exec")
+
+hermetic_exec(<a href="#hermetic_exec-name">name</a>, <a href="#hermetic_exec-script">script</a>, <a href="#hermetic_exec-data">data</a>, <a href="#hermetic_exec-kwargs">**kwargs</a>)
 </pre>
 
 A exec that uses hermetic tools.
@@ -32,7 +34,9 @@ register a different hermetic toolchain.
 ## hermetic_exec_test
 
 <pre>
-hermetic_exec_test(<a href="#hermetic_exec_test-name">name</a>, <a href="#hermetic_exec_test-script">script</a>, <a href="#hermetic_exec_test-data">data</a>, <a href="#hermetic_exec_test-kwargs">kwargs</a>)
+load("@kleaf//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_exec_test")
+
+hermetic_exec_test(<a href="#hermetic_exec_test-name">name</a>, <a href="#hermetic_exec_test-script">script</a>, <a href="#hermetic_exec_test-data">data</a>, <a href="#hermetic_exec_test-kwargs">**kwargs</a>)
 </pre>
 
 A exec_test that uses hermetic tools.
@@ -57,7 +61,9 @@ register a different hermetic toolchain.
 ## hermetic_genrule
 
 <pre>
-hermetic_genrule(<a href="#hermetic_genrule-name">name</a>, <a href="#hermetic_genrule-cmd">cmd</a>, <a href="#hermetic_genrule-tools">tools</a>, <a href="#hermetic_genrule-use_cc_toolchain">use_cc_toolchain</a>, <a href="#hermetic_genrule-kwargs">kwargs</a>)
+load("@kleaf//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_genrule")
+
+hermetic_genrule(<a href="#hermetic_genrule-name">name</a>, <a href="#hermetic_genrule-cmd">cmd</a>, <a href="#hermetic_genrule-tools">tools</a>, <a href="#hermetic_genrule-use_cc_toolchain">use_cc_toolchain</a>, <a href="#hermetic_genrule-kwargs">**kwargs</a>)
 </pre>
 
 A genrule that uses hermetic tools.
@@ -86,6 +92,8 @@ ignored.
 ## hermetic_toolchain.get
 
 <pre>
+load("@kleaf//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_toolchain")
+
 hermetic_toolchain.get(<a href="#hermetic_toolchain.get-ctx">ctx</a>)
 </pre>
 
@@ -108,7 +116,9 @@ _HermeticToolchainInfo (see hermetic_tools.bzl).
 ## hermetic_tools
 
 <pre>
-hermetic_tools(<a href="#hermetic_tools-name">name</a>, <a href="#hermetic_tools-deps">deps</a>, <a href="#hermetic_tools-symlinks">symlinks</a>, <a href="#hermetic_tools-kwargs">kwargs</a>)
+load("@kleaf//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_tools")
+
+hermetic_tools(<a href="#hermetic_tools-name">name</a>, <a href="#hermetic_tools-deps">deps</a>, <a href="#hermetic_tools-symlinks">symlinks</a>, <a href="#hermetic_tools-kwargs">**kwargs</a>)
 </pre>
 
 Provide tools for a hermetic build.

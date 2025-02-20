@@ -23,6 +23,8 @@ load("//build/kernel/kleaf/artifact_tests:device_modules_test.bzl", "device_modu
 load("//build/kernel/kleaf/artifact_tests:kernel_test.bzl", "initramfs_modules_options_test")
 load("//build/kernel/kleaf/impl:abi/kernel_abi_dist.bzl", "kernel_abi_wrapped_dist_internal")
 load("//build/kernel/kleaf/impl:gki_artifacts.bzl", "gki_artifacts", "gki_artifacts_prebuilts")
+load("//build/kernel/kleaf/impl:image/initramfs.bzl", "initramfs")
+load("//build/kernel/kleaf/impl:image/kernel_images.bzl", "kernel_images_filegroup")
 load("//build/kernel/kleaf/impl:kernel_filegroup_declaration.bzl", "kernel_filegroup_declaration")
 load(
     "//build/kernel/kleaf/impl:kernel_prebuilt_utils.bzl",
@@ -36,9 +38,9 @@ load(
     "kernel_abi",
     "kernel_build",
     "kernel_build_config",
-    "kernel_images",
     "kernel_modules_install",
     "kernel_unstripped_modules_archive",
+    "system_dlkm_image",
 )
 load(":print_debug.bzl", "print_debug")
 
@@ -58,7 +60,7 @@ _GKI_ADD_VMLINUX = False
 def common_kernel(
         name,
         outs,
-        build_config,
+        build_config = None,
         makefile = None,
         arch = None,
         visibility = None,
@@ -83,7 +85,10 @@ def common_kernel(
         deprecation = None,
         ddk_headers_archive = None,
         ddk_module_headers = None,
-        extra_dist = None):
+        extra_dist = None,
+        kcflags = None,
+        system_dlkm_extra_archive_files = None,
+        clang_autofdo_profile = None):
     """Macro for an Android Common Kernel.
 
     The following targets are declared as public API:
@@ -149,6 +154,9 @@ def common_kernel(
         deprecation: If set, mark target deprecated with given message.
         ddk_headers_archive: nonconfigurable. Target to the archive packing DDK headers
         extra_dist: extra targets added to `<name>_dist`
+        kcflags: [kernel_build.kcflags](kernel.md#kernel_build-kcflags)
+        system_dlkm_extra_archive_files: [system_dlkm_image.internal_extra_archive_files](#system_dlkm_image-internal_extra_archive_files)
+        clang_autofdo_profile: See [kernel_build.clang_autofdo_profile](kernel.md#kernel_build-clang_autofdo_profile)
     """
     json_target_config = dict(
         name = name,
@@ -210,14 +218,18 @@ def common_kernel(
         srcs = all_kmi_symbol_lists,
     )
 
-    kernel_build_config(
-        name = name + "_build_config",
-        srcs = [
-            # do not sort
-            build_config,
-            Label("//build/kernel/kleaf:gki_build_config_fragment"),
-        ],
-    )
+    if build_config:
+        kernel_build_config(
+            name = name + "_build_config",
+            srcs = [
+                # do not sort
+                build_config,
+                Label("//build/kernel/kleaf:gki_build_config_fragment"),
+            ],
+        )
+        build_config = name + "_build_config"
+    else:
+        build_config = Label("//build/kernel/kleaf:gki_build_config_fragment")
 
     kernel_build(
         name = name,
@@ -232,7 +244,7 @@ def common_kernel(
             "certs/signing_key.pem",
             "certs/signing_key.x509",
         ],
-        build_config = name + "_build_config",
+        build_config = build_config,
         makefile = makefile,
         check_defconfig = select({
             Label("//build/kernel/kleaf:gki_build_config_fragment_is_unset"): "minimized",
@@ -261,6 +273,8 @@ def common_kernel(
             Label("//build/kernel/kleaf/impl/defconfig:signing_modules_disabled"),
         ],
         ddk_module_headers = ddk_module_headers,
+        kcflags = kcflags,
+        clang_autofdo_profile = clang_autofdo_profile,
     )
 
     kernel_abi(
@@ -313,16 +327,19 @@ def common_kernel(
         kernel_build = name,
     )
 
-    kernel_images(
-        name = name + "_images",
-        kernel_build = name,
+    system_dlkm_image(
+        name = name + "_system_dlkm_image",
         kernel_modules_install = name + "_modules_install",
-        # Sync with CI_TARGET_MAPPING.*.download_configs.images
-        build_system_dlkm = True,
-        build_system_dlkm_flatten = True,
-        system_dlkm_fs_types = ["erofs", "ext4"],
-        # Keep in sync with build.config.gki* MODULES_LIST
+        build_flatten = True,
         modules_list = gki_system_dlkm_modules,
+        fs_types = ["erofs", "ext4"],
+        internal_extra_archive_files = system_dlkm_extra_archive_files,
+    )
+
+    kernel_images_filegroup(
+        name = name + "_images",
+        srcs = [name + "_system_dlkm_image"],
+        deprecation = "Use {} instead".format(native.package_relative_label(name + "_system_dlkm_image")),
     )
 
     if build_gki_artifacts:
@@ -365,7 +382,7 @@ def common_kernel(
         srcs = [
             # Sync with additional_artifacts_items
             name + "_headers",
-            name + "_images",
+            name + "_system_dlkm_image",
             name + "_kmi_symbol_list",
             name + "_raw_kmi_symbol_list",
             name + "_gki_artifacts",
@@ -379,7 +396,7 @@ def common_kernel(
         name = name + "_filegroup_declaration",
         kernel_build = name,
         extra_deps = filegroup_extra_deps,
-        images = name + "_images",
+        images = name + "_system_dlkm_image",
         visibility = ["//visibility:private"],
     )
     target_mapping = CI_TARGET_MAPPING.get(name, {})
@@ -624,7 +641,7 @@ def define_prebuilts(**kwargs):
 
         additional_artifacts_items = [
             name + "_headers",
-            name + "_images",
+            name + "_system_dlkm_image",
             name + "_kmi_symbol_list",
             name + "_gki_artifacts",
         ]
@@ -651,16 +668,15 @@ def _define_common_kernels_additional_tests(
         arch):
     fake_modules_options = Label("//build/kernel/kleaf/artifact_tests:fake_modules_options.txt")
 
-    kernel_images(
-        name = name + "_fake_images",
+    initramfs(
+        name = name + "_fake_initramfs",
         kernel_modules_install = kernel_modules_install,
-        build_initramfs = True,
         modules_options = fake_modules_options,
     )
 
     initramfs_modules_options_test(
         name = name + "_fake",
-        kernel_images = name + "_fake_images",
+        kernel_images = name + "_fake_initramfs",
         expected_modules_options = fake_modules_options,
     )
 
@@ -670,16 +686,15 @@ def _define_common_kernels_additional_tests(
         content = [],
     )
 
-    kernel_images(
-        name = name + "_empty_images",
+    initramfs(
+        name = name + "_empty_initramfs",
         kernel_modules_install = kernel_modules_install,
-        build_initramfs = True,
         # Not specify module_options
     )
 
     initramfs_modules_options_test(
         name = name + "_empty",
-        kernel_images = name + "_empty_images",
+        kernel_images = name + "_empty_initramfs",
         expected_modules_options = name + "_empty_modules_options",
     )
 
@@ -716,6 +731,15 @@ def _define_common_kernels_additional_tests(
         visibility = ["//visibility:private"],
     )
 
+    # Build ddk_examples to make sure our DDK examples are up-to-date. Note that these examples
+    # deliberately refers to //common explicitly to provide a clear example, so this build test
+    # is only included when we are building //common:kernel_aarch64.
+    extra_tests = []
+    if native.package_relative_label(kernel_build_name) == native.package_relative_label("//common:kernel_aarch64"):
+        extra_tests.append(
+            Label("//build/kernel/kleaf/tests/ddk_examples"),
+        )
+
     native.test_suite(
         name = name,
         tests = [
@@ -723,7 +747,7 @@ def _define_common_kernels_additional_tests(
             name + "_fake",
             name + "_device_modules_test",
             name + "_pre_defconfig_fragments_menuconfig_test",
-        ],
+        ] + extra_tests,
     )
 
 def _common_kernel_abi_dist(
