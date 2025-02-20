@@ -123,7 +123,7 @@ Example:
 ```
 ddk_headers(
    name = "headers",
-   hdrs = ["include/module.h"]
+   hdrs = ["include/module.h", "template.c"],
    includes = ["include"],
 )
 ```
@@ -145,7 +145,8 @@ ddk_headers(
 ```
 """,
     attrs = {
-        "hdrs": attr.label_list(allow_files = [".h"], doc = """One of the following:
+        # allow_files = True because https://github.com/bazelbuild/bazel/issues/7516
+        "hdrs": attr.label_list(allow_files = True, doc = """One of the following:
 
 - Local header files to be exported. You may also need to set the `includes` attribute.
 - Other `ddk_headers` targets to be re-exported.
