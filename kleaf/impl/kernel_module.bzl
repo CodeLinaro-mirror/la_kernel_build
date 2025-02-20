@@ -427,7 +427,7 @@ def _kernel_module_impl(ctx):
                mkdir -p {ext_mod}
                cp -r {ddk_makefiles}/* {ext_mod}/
              # Replace env var in cflags files
-               find {ext_mod} -name '*.cflags' -exec sed -i'' -e 's:$(ROOT_DIR):'"${{ROOT_DIR}}"':g' {{}} \\+
+               find {ext_mod} -name '*.cflags_shipped' -exec sed -i'' -e 's:$(ROOT_DIR):'"${{ROOT_DIR}}"':g' {{}} \\+
         """.format(
             ddk_makefiles = ctx.file.internal_ddk_makefiles_dir.path,
             ext_mod = ext_mod,
