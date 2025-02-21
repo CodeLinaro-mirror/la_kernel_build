@@ -48,7 +48,7 @@ load(":print_debug.bzl", "print_debug")
 _COLLECT_UNSTRIPPED_MODULES = True
 
 # Always strip modules for common kernels.
-_STRIP_MODULES = True
+_STRIP_MODULES = False
 
 # Always keep a copy of Module.symvers and .config for common kernels.
 _KEEP_MODULE_SYMVERS = True
