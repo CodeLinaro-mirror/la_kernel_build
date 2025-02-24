@@ -37,7 +37,6 @@ load(
     ":kernel.bzl",
     "kernel_abi",
     "kernel_build",
-    "kernel_build_config",
     "kernel_modules_install",
     "kernel_unstripped_modules_archive",
     "system_dlkm_image",
@@ -60,7 +59,6 @@ _GKI_ADD_VMLINUX = False
 def common_kernel(
         name,
         outs,
-        build_config = None,
         makefile = None,
         arch = None,
         visibility = None,
@@ -128,7 +126,6 @@ def common_kernel(
         name: name of the kernel_build().
         outs: See [kernel_build.outs](kernel.md#kernel_build-outs)
         arch: See [kernel_build.arch](kernel.md#kernel_build-arch)
-        build_config: See [kernel_build.build_config](kernel.md#kernel_build-build_config)
         makefile: See [kernel_build.makefile](kernel.md#kernel_build-makefile)
         defconfig: See [kernel_build.defconfig](kernel.md#kernel_build-defconfig)
         post_defconfig_fragments: See [kernel_build.post_defconfig_fragments](kernel.md#kernel_build-post_defconfig_fragments)
@@ -162,7 +159,6 @@ def common_kernel(
         name = name,
         outs = outs,
         arch = arch,
-        build_config = build_config,
         makefile = makefile,
         defconfig = defconfig,
         post_defconfig_fragments = post_defconfig_fragments,
@@ -218,19 +214,6 @@ def common_kernel(
         srcs = all_kmi_symbol_lists,
     )
 
-    if build_config:
-        kernel_build_config(
-            name = name + "_build_config",
-            srcs = [
-                # do not sort
-                build_config,
-                Label("//build/kernel/kleaf:gki_build_config_fragment"),
-            ],
-        )
-        build_config = name + "_build_config"
-    else:
-        build_config = Label("//build/kernel/kleaf:gki_build_config_fragment")
-
     kernel_build(
         name = name,
         srcs = [name + "_sources"],
@@ -244,7 +227,7 @@ def common_kernel(
             "certs/signing_key.pem",
             "certs/signing_key.x509",
         ],
-        build_config = build_config,
+        build_config = Label("//build/kernel/kleaf:gki_build_config_fragment"),
         makefile = makefile,
         check_defconfig = select({
             Label("//build/kernel/kleaf:gki_build_config_fragment_is_unset"): "minimized",
@@ -397,6 +380,7 @@ def common_kernel(
         kernel_build = name,
         extra_deps = filegroup_extra_deps,
         images = name + "_system_dlkm_image",
+        ddk_module_headers = ddk_module_headers,
         visibility = ["//visibility:private"],
     )
     target_mapping = CI_TARGET_MAPPING.get(name, {})
@@ -713,7 +697,6 @@ def _define_common_kernels_additional_tests(
         defconfig = defconfig,
         pre_defconfig_fragments = [Label("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragment")],
         base_kernel = native.package_relative_label(kernel_build_name),
-        build_config = Label("//build/kernel/kleaf/tests/defconfig_test:build.config.{}".format(arch)),
         make_goals = ["modules"],
         # We don't actually build the kernel_build target, so we don't care about outputs
         outs = [],
@@ -739,6 +722,12 @@ def _define_common_kernels_additional_tests(
         extra_tests.append(
             Label("//build/kernel/kleaf/tests/ddk_examples"),
         )
+
+        # Building pKVM module with DDK is only supported if the following file exists.
+        if native.glob(["arch/arm64/kvm/hyp/nvhe/Makefile.module"]):
+            extra_tests.append(
+                Label("//build/kernel/kleaf/tests/ddk_examples:pkvm_module_test"),
+            )
 
     native.test_suite(
         name = name,

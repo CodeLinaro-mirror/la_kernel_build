@@ -21,6 +21,7 @@ load(
 load(
     ":common_providers.bzl",
     "CompileCommandsInfo",
+    "KernelEnvToolchainsInfo",
 )
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
 
@@ -51,8 +52,40 @@ def _kernel_compile_commands_impl(ctx):
         ))
 
     script = ctx.actions.declare_file(ctx.attr.name + ".sh")
-    script_content = hermetic_tools.setup + """
-        OUTPUT=${1:-${BUILD_WORKSPACE_DIRECTORY}/compile_commands.json}
+
+    script_content = hermetic_tools.setup
+    script_content += ctx.attr._toolchains[KernelEnvToolchainsInfo].setup_env_var_cmd
+
+    # Handle rewritting clang path under user request
+    #  using the option --real_clang_path
+    script_content += """
+        # Default values
+        full_clang_path=0
+        destination=
+
+        # Parse command-line options
+        while [[ ${#} -gt 0 ]]; do
+          opt=${1}
+          case "${opt}" in
+            --real_clang_path)
+              full_clang_path=1
+              shift
+              ;;
+            *) # Positional argument
+              if [[ -z "${destination}" ]]; then
+                destination="${1}"
+                shift
+              else
+                echo "ERROR: Too many positional arguments." >&2
+                exit 1
+              fi
+              ;;
+          esac
+        done
+    """
+
+    script_content += """
+        OUTPUT=${destination:-${BUILD_WORKSPACE_DIRECTORY}/compile_commands.json}
         : > ${OUTPUT}.tmp
     """
 
@@ -83,6 +116,14 @@ def _kernel_compile_commands_impl(ctx):
             )
             direct_runfiles.append(info.compile_commands_with_vars)
 
+    # Handle full clang path rewrite if requested.
+    script_content += """
+        if [[ "${full_clang_path}" == "1" ]]; then
+            real_clang_path=$(realpath $(which clang))
+            sed -i "s:\\"command\\"\\: \\"clang:\\"command\\"\\: \\"${real_clang_path}:g" ${OUTPUT}.tmp
+        fi
+    """
+
     script_content += """
         echo '[' > ${OUTPUT}
         cat ${OUTPUT}.tmp >> ${OUTPUT}
@@ -96,7 +137,12 @@ def _kernel_compile_commands_impl(ctx):
         executable = script,
         runfiles = ctx.runfiles(
             files = direct_runfiles,
-            transitive_files = hermetic_tools.deps,
+            transitive_files = depset(
+                transitive = [
+                    hermetic_tools.deps,
+                    ctx.attr._toolchains[KernelEnvToolchainsInfo].all_files,
+                ],
+            ),
         ),
     )
 
@@ -126,6 +172,11 @@ kernel_compile_commands = rule(
         # The ACK source tree may be checked out anywhere; it is not necessarily //common
         "_allowlist_function_transition": attr.label(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
+        ),
+        "_toolchains": attr.label(
+            default = "//build/kernel/kleaf/impl:kernel_toolchains",
+            providers = [KernelEnvToolchainsInfo],
+            cfg = "exec",
         ),
     },
     executable = True,
