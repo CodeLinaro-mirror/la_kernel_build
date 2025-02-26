@@ -319,8 +319,11 @@ for EXT_MOD in ${EXT_MODULES}; do
       break
     fi
   done
-
-  if [ "$TARGET_BOARD_PLATFORM" = "msmnile" ]; then
+  if [[ "$TARGET_PRODUCT" = "gen4_gvm" ||
+	  "$TARGET_PRODUCT" = "gen5_gvm" ||
+	  "$TARGET_PRODUCT" = "gen5_gvm_gy" ]]; then
+     btgt="autogvm"
+  elif [ "$TARGET_BOARD_PLATFORM" = "msmnile_au" ]; then
      btgt="gen3auto"
   elif [ "$TARGET_BOARD_PLATFORM" = "sm6150" ]; then
      btgt="sdmsteppeauto"
@@ -343,7 +346,6 @@ for EXT_MOD in ${EXT_MODULES}; do
         "$filter_regex" "$build_target"
       exit 1
     fi
-
     # Make sure Bazel extensions are linked properly
     if [ ! -f "build/msm_kernel_extensions.bzl" ] \
           && [ -f "soc-repo/kleaf-scripts/msm_kernel_extensions.bzl" ]; then
@@ -371,7 +373,7 @@ for EXT_MOD in ${EXT_MODULES}; do
 
     # The Module.symvers file is named "<target>_<variant>_Modules.symvers, but other modules are
     # looking for just "Module.symvers". Concatenate any of them into one Module.symvers file.
-    cat "${OUT_DIR}/${EXT_MOD_REL}/${TARGET_BOARD_PLATFORM}_${VARIANT}"_*_Module.symvers \
+    cat "${OUT_DIR}/${EXT_MOD_REL}/${btgt}_${VARIANT}"_*_Module.symvers \
       > "${OUT_DIR}/${EXT_MOD_REL}/Module.symvers"
 
     # Intermediate directories aren't generated automatically, so we need to create them manually
