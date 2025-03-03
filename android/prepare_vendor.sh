@@ -250,6 +250,14 @@ if [ "${RECOMPILE_ABL}" != "0" ] && \
   RECOMPILE_ABL=1
 fi
 
+if [ "${RECOMPILE_MODULE}" != "0" ]; then
+  RECOMPILE_MODULE=1
+fi
+
+if [ "${RECOMPILE_DTBO}" != "0" ]; then
+  RECOMPILE_DTBO=1
+fi
+
 if [ "${RECOMPILE_ABL}" == "1" -o "${COPY_ABL_NEEDED}" == "1" ]; then
   rm -rf ${ANDROID_ABL_OUT_DIR}/abl-${TARGET_BUILD_VARIANT}
 fi
@@ -281,81 +289,84 @@ if [ "${COPY_NEEDED}" == "1" ]; then
   echo
   echo "  Preparing prebuilt folder ${ANDROID_KERNEL_OUT}"
 
-  first_stage_kos=$(mktemp)
-  if [ -e ${ANDROID_KP_OUT_DIR}/dist/modules.load ]; then
-    cat ${ANDROID_KP_OUT_DIR}/dist/modules.load | \
-      xargs -L 1 basename | \
-      xargs -L 1 find ${ANDROID_KP_OUT_DIR}/dist/ -name > ${first_stage_kos}
-  else
-    find ${ANDROID_KP_OUT_DIR}/dist/ -name \*.ko > ${first_stage_kos}
-  fi
 
-  rm -f ${ANDROID_KERNEL_OUT}/*.ko ${ANDROID_KERNEL_OUT}/modules.*
-  if [ -s "${first_stage_kos}" ]; then
-    cp $(cat ${first_stage_kos}) ${ANDROID_KERNEL_OUT}/
-  else
-    echo "  WARNING!! No first stage modules found"
-  fi
-
-  if [ -e ${ANDROID_KP_OUT_DIR}/dist/modules.blocklist ]; then
-    cp ${ANDROID_KP_OUT_DIR}/dist/modules.blocklist ${ANDROID_KERNEL_OUT}/modules.blocklist
-  fi
-
-  if [ -e ${ANDROID_KP_OUT_DIR}/dist/modules.load ]; then
-    cp ${ANDROID_KP_OUT_DIR}/dist/modules.load ${ANDROID_KERNEL_OUT}/modules.load
-  fi
-
-  unprotected_dlkm_kos=$(mktemp)
-  if [ -e ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.unprotectedlist ]; then
-    cat ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.unprotectedlist | \
-    tr " " "\n" | xargs -L 1 basename | \
-    xargs -L 1 find ${ANDROID_KP_OUT_DIR}/dist/ -name > ${unprotected_dlkm_kos}
-  else
-    echo "  vendor_dlkm.modules.unprotectedlist file is not found or is empty"
-  fi
-
-  system_dlkm_kos=$(mktemp)
-  if [ -s ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.load ]; then
-    xargs -L 1 -a "${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.load" basename | \
-    sed -e "s|^|${ANDROID_KP_OUT_DIR}/dist/|g" | \
-    grep -v -F -f ${unprotected_dlkm_kos} > "$system_dlkm_kos"
-  else
-    echo "  system_dlkm_kos.modules.load file is not found or is empty"
-  fi
-
-  rm -rf ${ANDROID_KERNEL_OUT}/system_dlkm/*
-  rm -rf ${ANDROID_PRODUCT_OUT}/system_dlkm*
-  system_dlkm_archive="${ANDROID_KP_OUT_DIR}/dist/system_dlkm_staging_archive.tar.gz"
-  if [ -e "$system_dlkm_archive" ]; then
-    mkdir -p "${ANDROID_KERNEL_OUT}/system_dlkm/"
-    # Unzip the system_dlkm staging tar copied from kernel_platform to system_dlkm out directory
-    tar -xf "$system_dlkm_archive" -C "${ANDROID_KERNEL_OUT}/system_dlkm/"
-  else
-    echo "  WARNING!! No system_dlkm (second stage) modules found"
-  fi
-
-  rm -f ${ANDROID_KERNEL_OUT}/vendor_dlkm/*.ko ${ANDROID_KERNEL_OUT}/vendor_dlkm/modules.*
-  second_stage_kos=$(find ${ANDROID_KP_OUT_DIR}/dist/ -name \*.ko | \
-	grep -v -F -f ${first_stage_kos} -f ${system_dlkm_kos} || true)
-  if [ -n "${second_stage_kos}" ]; then
-    mkdir -p ${ANDROID_KERNEL_OUT}/vendor_dlkm
-    cp ${second_stage_kos} ${ANDROID_KERNEL_OUT}/vendor_dlkm
-    if [ -e ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist ]; then
-      cp ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist \
-        ${ANDROID_KERNEL_OUT}/vendor_dlkm/modules.blocklist
+  if [ "${RECOMPILE_MODULE}" == "1" ]; then
+    first_stage_kos=$(mktemp)
+    if [ -e ${ANDROID_KP_OUT_DIR}/dist/modules.load ]; then
+      cat ${ANDROID_KP_OUT_DIR}/dist/modules.load | \
+        xargs -L 1 basename | \
+        xargs -L 1 find ${ANDROID_KP_OUT_DIR}/dist/ -name > ${first_stage_kos}
+    else
+      find ${ANDROID_KP_OUT_DIR}/dist/ -name \*.ko > ${first_stage_kos}
     fi
 
-    if [ -e ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.load ]; then
-      cp ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.load \
-        ${ANDROID_KERNEL_OUT}/vendor_dlkm/modules.load
+    rm -f ${ANDROID_KERNEL_OUT}/*.ko ${ANDROID_KERNEL_OUT}/modules.*
+    if [ -s "${first_stage_kos}" ]; then
+      cp $(cat ${first_stage_kos}) ${ANDROID_KERNEL_OUT}/
+    else
+      echo "  WARNING!! No first stage modules found"
     fi
 
-    if [ -e ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.blocklist ]; then
-      cp ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.blocklist \
-        ${ANDROID_KERNEL_OUT}/vendor_dlkm/system_dlkm.modules.blocklist
+    if [ -e ${ANDROID_KP_OUT_DIR}/dist/modules.blocklist ]; then
+      cp ${ANDROID_KP_OUT_DIR}/dist/modules.blocklist ${ANDROID_KERNEL_OUT}/modules.blocklist
     fi
-  else
-    echo "  WARNING!! No vendor_dlkm (second stage) modules found"
+
+    if [ -e ${ANDROID_KP_OUT_DIR}/dist/modules.load ]; then
+      cp ${ANDROID_KP_OUT_DIR}/dist/modules.load ${ANDROID_KERNEL_OUT}/modules.load
+    fi
+
+    unprotected_dlkm_kos=$(mktemp)
+    if [ -e ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.unprotectedlist ]; then
+      cat ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.unprotectedlist | \
+      tr " " "\n" | xargs -L 1 basename | \
+      xargs -L 1 find ${ANDROID_KP_OUT_DIR}/dist/ -name > ${unprotected_dlkm_kos}
+    else
+      echo "  vendor_dlkm.modules.unprotectedlist file is not found or is empty"
+    fi
+
+    system_dlkm_kos=$(mktemp)
+    if [ -s ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.load ]; then
+      xargs -L 1 -a "${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.load" basename | \
+      sed -e "s|^|${ANDROID_KP_OUT_DIR}/dist/|g" | \
+      grep -v -F -f ${unprotected_dlkm_kos} > "$system_dlkm_kos"
+    else
+      echo "  system_dlkm_kos.modules.load file is not found or is empty"
+    fi
+
+    rm -rf ${ANDROID_KERNEL_OUT}/system_dlkm/*
+    rm -rf ${ANDROID_PRODUCT_OUT}/system_dlkm*
+    system_dlkm_archive="${ANDROID_KP_OUT_DIR}/dist/system_dlkm_staging_archive.tar.gz"
+    if [ -e "$system_dlkm_archive" ]; then
+      mkdir -p "${ANDROID_KERNEL_OUT}/system_dlkm/"
+      # Unzip the system_dlkm staging tar copied from kernel_platform to system_dlkm out directory
+      tar -xf "$system_dlkm_archive" -C "${ANDROID_KERNEL_OUT}/system_dlkm/"
+    else
+      echo "  WARNING!! No system_dlkm (second stage) modules found"
+    fi
+
+    rm -f ${ANDROID_KERNEL_OUT}/vendor_dlkm/*.ko ${ANDROID_KERNEL_OUT}/vendor_dlkm/modules.*
+    second_stage_kos=$(find ${ANDROID_KP_OUT_DIR}/dist/ -name \*.ko | \
+    grep -v -F -f ${first_stage_kos} -f ${system_dlkm_kos} || true)
+    if [ -n "${second_stage_kos}" ]; then
+      mkdir -p ${ANDROID_KERNEL_OUT}/vendor_dlkm
+      cp ${second_stage_kos} ${ANDROID_KERNEL_OUT}/vendor_dlkm
+      if [ -e ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist ]; then
+        cp ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist \
+          ${ANDROID_KERNEL_OUT}/vendor_dlkm/modules.blocklist
+      fi
+
+      if [ -e ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.load ]; then
+        cp ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.load \
+          ${ANDROID_KERNEL_OUT}/vendor_dlkm/modules.load
+      fi
+
+      if [ -e ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.blocklist ]; then
+        cp ${ANDROID_KP_OUT_DIR}/dist/system_dlkm.modules.blocklist \
+          ${ANDROID_KERNEL_OUT}/vendor_dlkm/system_dlkm.modules.blocklist
+      fi
+    else
+      echo "  WARNING!! No vendor_dlkm (second stage) modules found"
+    fi
   fi
 
   if [ -e "${ANDROID_KP_OUT_DIR}/dist/board_extra_cmdline_${KERNEL_TARGET}_${KERNEL_VARIANT}" ];
@@ -415,9 +426,11 @@ if [ "${COPY_NEEDED}" == "1" ]; then
     echo "$KERNEL_VARIANT" > ${ANDROID_KERNEL_OUT}/_variant
   fi
 
-  rm ${first_stage_kos}
-  rm ${unprotected_dlkm_kos}
-  rm ${system_dlkm_kos}
+  if [ "${RECOMPILE_MODULE}" == "1" ]; then
+    rm ${first_stage_kos}
+    rm ${unprotected_dlkm_kos}
+    rm ${system_dlkm_kos}
+  fi
 fi
 
 
@@ -502,54 +515,58 @@ if [ -n "${ANDROID_PRODUCT_OUT}" ] && [ -n "${ANDROID_BUILD_TOP}" ]; then
   ANDROID_EXT_MODULES_OUT=${ANDROID_EXT_MODULES_COMMON_OUT}/kernel_platform
 
   ################################################################################
-  echo
-  echo "  setting up Android tree for compiling modules"
-  (
-    cd ${ROOT_DIR}
-    set -x
-    OUT_DIR=${ANDROID_EXT_MODULES_OUT} \
-    KERNEL_KIT=${ANDROID_KERNEL_OUT} \
-    ./build/build_module.sh
-    set +x
-  )
-
-  ################################################################################
-  echo
-  echo "  Compiling vendor devicetree overlays"
-  for project in $(cd ${ANDROID_BUILD_TOP} && find -L vendor/ -type d -name "*-devicetree")
-  do
-    if [ ! -e "${project}/Makefile" ]; then
-      echo "${project} does not have expected build configuration files, skipping..."
-      continue
-    fi
-
-    echo "Building ${project}"
-
+  if [ "${RECOMPILE_MODULE}" == "1" ]; then
+    echo
+    echo "  setting up Android tree for compiling modules"
     (
-      set -x
       cd ${ROOT_DIR}
+      set -x
       OUT_DIR=${ANDROID_EXT_MODULES_OUT} \
-      EXT_MODULES="${KP_TO_ANDROID}/${project}" \
       KERNEL_KIT=${ANDROID_KERNEL_OUT} \
-      ./build/build_module.sh dtbs
+      ./build/build_module.sh
       set +x
     )
-  done
+  fi
 
   ################################################################################
-  echo
-  echo "  Merging vendor devicetree overlays"
+  if [ "${RECOMPILE_DTBO}" == "1" ]; then
+    echo
+    echo "  Compiling vendor devicetree overlays"
+    for project in $(cd ${ANDROID_BUILD_TOP} && find -L vendor/ -type d -name "*-devicetree")
+    do
+      if [ ! -e "${project}/Makefile" ]; then
+        echo "${project} does not have expected build configuration files, skipping..."
+        continue
+      fi
 
-  rm -rf ${ANDROID_KERNEL_OUT}/dtbs
-  mkdir ${ANDROID_KERNEL_OUT}/dtbs
+      echo "Building ${project}"
 
-  (
-    cd ${ROOT_DIR}
-    OUT_DIR=${ANDROID_EXT_MODULES_OUT} ./build/android/merge_dtbs.sh \
-      ${ANDROID_KERNEL_OUT}/kp-dtbs \
-      ${ANDROID_EXT_MODULES_COMMON_OUT} \
-      ${ANDROID_KERNEL_OUT}/dtbs
-  )
+      (
+        set -x
+        cd ${ROOT_DIR}
+        OUT_DIR=${ANDROID_EXT_MODULES_OUT} \
+        EXT_MODULES="${KP_TO_ANDROID}/${project}" \
+        KERNEL_KIT=${ANDROID_KERNEL_OUT} \
+        ./build/build_module.sh dtbs
+        set +x
+      )
+    done
+
+    ################################################################################
+    echo
+    echo "  Merging vendor devicetree overlays"
+
+    rm -rf ${ANDROID_KERNEL_OUT}/dtbs
+    mkdir ${ANDROID_KERNEL_OUT}/dtbs
+
+    (
+      cd ${ROOT_DIR}
+      OUT_DIR=${ANDROID_EXT_MODULES_OUT} ./build/android/merge_dtbs.sh \
+        ${ANDROID_KERNEL_OUT}/kp-dtbs \
+        ${ANDROID_EXT_MODULES_COMMON_OUT} \
+        ${ANDROID_KERNEL_OUT}/dtbs
+    )
+  fi
 fi
 
 # remove bazel dir to avoid build issues
