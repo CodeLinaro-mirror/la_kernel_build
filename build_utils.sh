@@ -584,7 +584,9 @@ function build_boot_images() {
   fi
 
   DTB_FILE_LIST=$(find ${DIST_DIR} -name "*.dtb" | sort)
-  if [ -z "${DTB_FILE_LIST}" ]; then
+  if [ -n "${DTB_IMAGE}" ]; then
+    MKBOOTIMG_ARGS+=("--dtb" "${DTB_IMAGE}")
+  elif [ -z "${DTB_FILE_LIST}" ]; then
     if [ -z "${SKIP_VENDOR_BOOT}" ]; then
       echo "No *.dtb files found in ${DIST_DIR}"
       exit 1
