@@ -56,6 +56,7 @@ load(":print_debug.bzl", "print_debug")
 _COMMON_KERNEL_NAMES = {
     "kernel_aarch64": ["kernel_aarch64"],
     "kernel_aarch64_16k": ["kernel_aarch64_16k", "kernel_aarch64"],
+    "kernel_aarch64_autofdo": ["kernel_aarch64_autofdo", "kernel_aarch64"],
     "kernel_aarch64_interceptor": ["kernel_aarch64_interceptor", "kernel_aarch64"],
     "kernel_aarch64_debug": ["kernel_aarch64_debug", "kernel_aarch64"],
     "kernel_riscv64": ["kernel_riscv64"],
@@ -160,6 +161,12 @@ def _default_target_configs():
             # Assume TRIM_NONLISTED_KMI="" in build.config.gki.aarch64.16k
             "trim_nonlisted_kmi": False,
             "page_size": "16k",
+            # Assume BUILD_GKI_ARTIFACTS=1
+            "build_gki_artifacts": True,
+            "gki_boot_img_sizes": gki_boot_img_sizes,
+        }),
+        "kernel_aarch64_autofdo": dicts.add(aarch64_common, {
+            "trim_nonlisted_kmi": False,
             # Assume BUILD_GKI_ARTIFACTS=1
             "build_gki_artifacts": True,
             "gki_boot_img_sizes": gki_boot_img_sizes,
@@ -621,7 +628,8 @@ def _define_common_kernel(
         page_size = None,
         deprecation = None,
         ddk_headers_archive = None,
-        extra_dist = None):
+        extra_dist = None,
+        clang_autofdo_profile = None):
     json_target_config = dict(
         name = name,
         outs = outs,
@@ -724,6 +732,7 @@ def _define_common_kernel(
         ddk_module_defconfig_fragments = [
             Label("//build/kernel/kleaf/impl/defconfig:signing_modules_disabled"),
         ],
+        clang_autofdo_profile = clang_autofdo_profile,
     )
 
     kernel_abi(
