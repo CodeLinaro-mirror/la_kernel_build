@@ -37,6 +37,7 @@ def ddk_library(
         defconfig = None,
         autofdo_profile = None,
         debug_info_for_profiling = None,
+        pkvm_el2 = None,
         **kwargs):
     """**EXPERIMENTAL**. A library that may be used by a DDK module.
 
@@ -46,6 +47,7 @@ def ddk_library(
 
     Known issues:
         - (b/392186874) The generated .o.cmd files contain absolute paths and are not reproducible.
+        - (b/394411899) kernel_compile_commands() doesn't work on ddk_library yet.
 
     Args:
         name: name of module
@@ -65,6 +67,13 @@ def ddk_library(
         defconfig: see [`ddk_module.defconfig`](#ddk_module-defconfig)
         autofdo_profile: see [`ddk_module.autofdo_profile`](#ddk_module-autofdo_profile)
         debug_info_for_profiling: see [`ddk_module.debug_info_for_profiling`](#ddk_module-debug_info_for_profiling)
+        pkvm_el2: **EXPERIMENTAL**. If True, builds EL2 hypervisor code.
+
+            If True:
+            - The output list is the fixed `["kvm_nvhe.o"]`, plus relevant .o.cmd files
+            - The generated Makefile is modified to build EL2 hypervisor code.
+
+            Note: This is only supported in selected branches.
         **kwargs: Additional attributes to the internal rule.
             See complete list
             [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
@@ -88,6 +97,7 @@ def ddk_library(
         module_asopts = asopts,
         module_autofdo_profile = autofdo_profile,
         module_debug_info_for_profiling = debug_info_for_profiling,
+        module_pkvm_el2 = pkvm_el2,
         top_level_makefile = True,
         kbuild_has_linux_include = True,
         is_library = True,
@@ -113,10 +123,12 @@ def ddk_library(
         # _kernel_module_impl infers the list of outs from internal_ddk_makefiles_dir.
         outs = [],
         internal_ddk_makefiles_dir = ":{name}_makefiles".format(name = name),
-        # This is used in build_cleaner.
-        internal_module_symvers_name = "{name}_Module.symvers".format(name = name),
         internal_exclude_kernel_build_module_srcs = True,
         internal_ddk_config = name + "_config",
         internal_is_ddk_library = True,
+        internal_extra_make_goals = ["kleaf-objects"],
+        internal_compdb = "skip",
+        internal_modules_install = False,
+        internal_mnemonic = "DDK library",
         **kwargs
     )

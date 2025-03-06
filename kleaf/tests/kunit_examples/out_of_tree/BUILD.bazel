@@ -1,4 +1,4 @@
-# Copyright (C) 2024 The Android Open Source Project
+# Copyright (C) 2025 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,16 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load(
+    "@kleaf//build/kernel/kleaf:kernel.bzl",
+    "ddk_module",
+    "kunit_test",
+)
 
-exports_files([
-    "kunit_test.py",
-])
+ddk_module(
+    name = "x86_64_kunit_example_module",
+    srcs = ["mod.c"],
+    out = "mod.ko",
+    kernel_build = "@kleaf//common:kernel_x86_64",
+)
 
-bzl_library(
-    name = "bzl_definitions",
-    srcs = [
-        "kernel_unit_test.bzl",
-    ],
-    visibility = ["//build/kernel/kleaf:__subpackages__"],
+kunit_test(
+    name = "x86_64_kunit_example_test",
+    modules = [":x86_64_kunit_example_module"],
+    tags = ["external"],
+    test_name = "ddk-example",
+    deps = ["@kleaf//common:kunit_parser"],
 )

@@ -19,7 +19,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 
 import kunit_parser
 
@@ -54,11 +53,6 @@ class AdbDeviceHandle:
     def push(self, local: str, remote: str) -> None:
         subprocess.check_call(
             [self.adb_path, '-s', self.device, 'push', local, remote]
-        )
-
-    def pull(self, remote: str, local: str) -> None:
-        subprocess.check_call(
-            [self.adb_path, '-s', self.device, 'pull', remote, local]
         )
 
 
@@ -133,12 +127,10 @@ class TestRunner:
             self._device_handle.check_call('insmod', remote_path)
 
         # Extract and parse test results
-        with tempfile.TemporaryDirectory() as tmpdir:
-            self._device_handle.pull(
-                f'/sys/kernel/debug/kunit/{self._name}/results', tmpdir
-            )
-            with open(f'{tmpdir}/results') as results:
-                return kunit_parser.parse_run_tests(results.readlines())
+        results = self._device_handle.check_output(
+            'cat', f'/sys/kernel/debug/kunit/{self._name}/results'
+        )
+        return kunit_parser.parse_run_tests(results.splitlines())
 
     def _find_device(self) -> str:
         devices_output = subprocess.check_output(
@@ -175,10 +167,15 @@ if __name__ == '__main__':
             ' option'
         )
 
+    # Filter out non-module files
+    # TODO(b/381406396): Remove this once we have a mechanism to filter out
+    # non-module files in the build system.
+    filtered_modules = [m for m in args.modules if m.suffix == '.ko']
+
     with TestRunner(
         name=args.name,
         adb_path=args.adb_path,
-        modules=args.modules,
+        modules=filtered_modules,
         device=args.device,
     ) as tr:
         test_result = tr.run_test()
