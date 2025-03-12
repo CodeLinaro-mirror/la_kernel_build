@@ -1,4 +1,4 @@
-# Copyright (C) 2024 The Android Open Source Project
+# Copyright (C) 2025 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# --config=canary: Enable future features for Kleaf.
-#
-# Some of the features are experimental, most of them will be default in future
-# releases and some of them might get discontinued.
+load(":combine_depset_test.bzl", "combine_depset_test")
+load(":depset_equal_test.bzl", "depset_equal_test")
 
-# Set KCONFIG_WERROR=1 to treat kconfig warnings as errors.
-build:canary --kconfig_werror
+depset_equal_test(name = "depset_equal_test")
 
-build:canary --experimental_optimize_ddk_config_actions
+combine_depset_test(name = "combine_depset_test")
+
+test_suite(
+    name = "utils_test",
+    tests = None,  # All tests in this package
+)

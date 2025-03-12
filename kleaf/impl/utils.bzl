@@ -296,6 +296,40 @@ def _single_file(files, what = None):
         fail("{}: expected a single file!".format(what or ""))
     return files[0]
 
+def _depset_equal(x, y):
+    """Checks if two depsets are equal.
+
+    Slightly faster than x.to_list() == y.to_list() in some special cases.
+    """
+
+    if x == y:
+        return True
+    if not x:
+        return not y
+    if not y:
+        return False
+    return x.to_list() == y.to_list()
+
+# Intentionally use a non-None default argument here to be consistent with depset()'s
+# constructor function.
+def _combine_depset(x, y, order = "default"):
+    """Combines two depsets.
+
+    This may return x or y directly if the other one is empty. This is so that depset_equal() can
+    take advantage of the easy paths.
+
+    Args:
+        x: the first depset
+        y: the second depset
+        order: If a depset is formed, the order to be used. This should be consistent with
+            the order in x and y.
+    """
+    if not x:
+        return y
+    if not y:
+        return x
+    return depset(transitive = [x, y], order = order)
+
 # Utilities that applies to all Bazel stuff in general. These functions are
 # not Kleaf specific.
 utils = struct(
@@ -316,6 +350,8 @@ utils = struct(
     optional_single_path = _optional_single_path,
     optional_file = _optional_file,
     single_file = _single_file,
+    depset_equal = _depset_equal,
+    combine_depset = _combine_depset,
 )
 
 def _filter_module_srcs(files):
