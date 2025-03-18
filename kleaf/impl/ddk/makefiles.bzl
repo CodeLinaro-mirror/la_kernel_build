@@ -313,7 +313,8 @@ makefiles = rule(
         # module_X is the X attribute of the ddk_module. Prefixed with `module_`
         # because they aren't real srcs / hdrs / deps to the makefiles rule.
         "module_srcs": attr.label_list(allow_files = [".c", ".h", ".S", ".rs"]),
-        "module_hdrs": attr.label_list(allow_files = [".h"]),
+        # allow_files = True because https://github.com/bazelbuild/bazel/issues/7516
+        "module_hdrs": attr.label_list(allow_files = True),
         "module_includes": attr.string_list(),
         "module_linux_includes": attr.string_list(),
         "module_deps": attr.label_list(),
