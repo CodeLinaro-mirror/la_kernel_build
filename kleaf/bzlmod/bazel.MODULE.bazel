@@ -78,6 +78,12 @@ new_kleaf_local_repository(
     path = "external/dtc",
 )
 
+new_kleaf_local_repository(
+    name = "openssl",
+    build_file = "build/kernel/kleaf/openssl.BUILD",
+    path = "external/openssl",
+)
+
 kernel_toolchain_ext = use_extension("//build/kernel/kleaf:kernel_toolchain_ext.bzl", "kernel_toolchain_ext")
 use_repo(kernel_toolchain_ext, "kernel_toolchain_info")
 use_repo(kernel_toolchain_ext, "kleaf_clang_toolchain")
