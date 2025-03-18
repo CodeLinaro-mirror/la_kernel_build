@@ -218,10 +218,6 @@ if [ "${RECOMPILE_KERNEL}" == "1" -o "${COPY_NEEDED}" == "1" ]; then
 fi
 
 ################################################################################
-if [ "${RECOMPILE_ABL}" == "0" ]; then
-  EXTRA_KBUILD_ARGS="--skip abl ${EXTRA_KBUILD_ARGS}"
-fi
-
 if [ "${RECOMPILE_KERNEL}" == "1" ]; then
   echo
   echo "  Recompiling kernel"
@@ -237,15 +233,13 @@ fi
 # Set up recompile and copy variables for edk2
 ANDROID_ABL_OUT_DIR=${ANDROID_KERNEL_OUT}/kernel-abl
 
-if [ "${RECOMPILE_ABL}" != "0" ] && \
-   [ ! -e "${ANDROID_ABL_OUT_DIR}/abl-${TARGET_BUILD_VARIANT}/unsigned_abl.elf" ] || \
+if [ ! -e "${ANDROID_ABL_OUT_DIR}/abl-${TARGET_BUILD_VARIANT}/unsigned_abl.elf" ] || \
     ! diff -q "${ANDROID_ABL_OUT_DIR}/abl-${TARGET_BUILD_VARIANT}/unsigned_abl.elf" \
   "${ANDROID_KP_OUT_DIR}/dist/unsigned_abl_${TARGET_BUILD_VARIANT}.elf" ; then
   COPY_ABL_NEEDED=1
 fi
 
-if [ "${RECOMPILE_ABL}" != "0" ] && \
-   [ ! -e "${ANDROID_KP_OUT_DIR}/dist/unsigned_abl_${TARGET_BUILD_VARIANT}.elf" ] && \
+if [ ! -e "${ANDROID_KP_OUT_DIR}/dist/unsigned_abl_${TARGET_BUILD_VARIANT}.elf" ] && \
    [ "${COPY_ABL_NEEDED}" == "1" ]; then
   RECOMPILE_ABL=1
 fi
