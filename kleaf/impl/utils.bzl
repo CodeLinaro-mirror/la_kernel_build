@@ -24,6 +24,7 @@ load(
     ":common_providers.bzl",
     "DdkConfigInfo",
     "DdkHeadersInfo",
+    "DdkLibraryInfo",
     "DdkSubmoduleInfo",
     "KernelBuildExtModuleInfo",
     "KernelImagesInfo",
@@ -190,6 +191,9 @@ def _get_check_sandbox_cmd():
            fi
     """
 
+def _write_short_depset_arg(file):
+    return file.short_path
+
 def _write_depset_impl(subrule_ctx, d, out, *, _write_depset):
     """Writes a depset to a file.
 
@@ -203,7 +207,9 @@ def _write_depset_impl(subrule_ctx, d, out, *, _write_depset):
     Returns:
         A struct with the following fields:
         - depset_file: the declared output file.
-        - depset: a depset that contains `d` and `depset_file`
+        - depset_short_file: the declared output file, prefixed with short_ and
+            containing the short paths for `bazel run` environment.
+        - depset: a depset that contains `d`, `depset_file`, and `depset_short_file`
     """
     out_file = subrule_ctx.actions.declare_file("{}/{}".format(subrule_ctx.label.name, out))
 
@@ -217,9 +223,24 @@ def _write_depset_impl(subrule_ctx, d, out, *, _write_depset):
         mnemonic = "WriteDepset",
         progress_message = "Dumping depset to {} %{{label}}".format(out),
     )
+
+    short_file = subrule_ctx.actions.declare_file("{}/short_{}".format(subrule_ctx.label.name, out))
+
+    args = subrule_ctx.actions.args()
+    args.add(short_file)
+    args.add_all(d, map_each = _write_short_depset_arg)
+    subrule_ctx.actions.run(
+        executable = _write_depset,
+        arguments = [args],
+        outputs = [short_file],
+        mnemonic = "WriteDepsetShort",
+        progress_message = "Dumping depset to {} %{{label}}".format(out),
+    )
+
     return WrittenDepsetInfo(
         depset_file = out_file,
-        depset = depset([out_file], transitive = [d]),
+        depset_short_file = short_file,
+        depset = depset([out_file, short_file], transitive = [d]),
     )
 
 _write_depset = subrule(
@@ -238,6 +259,12 @@ def _optional_path(file):
     if file == None:
         return ""
     return file.path
+
+def _optional_short_path(file):
+    """If file is None, return empty string. Otherwise return its short path."""
+    if file == None:
+        return ""
+    return file.short_path
 
 def _optional_single_path(files, what = None):
     """If files is empty, return empty string.
@@ -284,6 +311,7 @@ utils = struct(
     get_check_sandbox_cmd = _get_check_sandbox_cmd,
     write_depset = _write_depset,
     optional_path = _optional_path,
+    optional_short_path = _optional_short_path,
     optional_single_path = _optional_single_path,
     optional_file = _optional_file,
     single_file = _single_file,
@@ -393,6 +421,7 @@ def _split_kernel_module_deps(deps, this_label):
     submodule_deps = []
     module_symvers_deps = []
     ddk_config_deps = []
+    ddk_library_deps = []
     for dep in deps:
         is_valid_dep = False
         if DdkHeadersInfo in dep:
@@ -410,6 +439,9 @@ def _split_kernel_module_deps(deps, this_label):
         if DdkConfigInfo in dep:
             ddk_config_deps.append(dep)
             is_valid_dep = True
+        if DdkLibraryInfo in dep:
+            ddk_library_deps.append(dep)
+            is_valid_dep = True
         if not is_valid_dep:
             fail("{}: {} is not a valid item in deps. Only kernel_module, ddk_module, ddk_headers, ddk_submodule are accepted.".format(this_label, dep.label))
     return struct(
@@ -418,6 +450,7 @@ def _split_kernel_module_deps(deps, this_label):
         submodules = submodule_deps,
         module_symvers_deps = module_symvers_deps,
         ddk_configs = ddk_config_deps,
+        ddk_library_deps = ddk_library_deps,
     )
 
 def _create_kernel_module_dep_info(kernel_module):

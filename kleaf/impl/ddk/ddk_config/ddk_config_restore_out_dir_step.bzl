@@ -33,7 +33,12 @@ def _ddk_config_restore_out_dir_step_impl(
         )
     cmd = """
         rsync -aL {out_dir}/.config ${{OUT_DIR}}/.config
-        rsync -aL --chmod=D+w {out_dir}/include/ ${{OUT_DIR}}/include/
+
+        if [[ "${{kleaf_do_not_rsync_out_dir_include}}" == "1" ]]; then
+            kleaf_out_dir_include_candidate="{out_dir}/include/"
+        else
+            rsync -aL --chmod=D+w {out_dir}/include/ ${{OUT_DIR}}/include/
+        fi
     """.format(
         out_dir = out_dir.path,
     )

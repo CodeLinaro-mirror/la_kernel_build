@@ -86,6 +86,8 @@ def _build_boot_or_vendor_boot(
             initramfs_staging_archive,
         ]
 
+    if gki_ramdisk_prebuilt_binary:
+        inputs += gki_ramdisk_prebuilt_binary.files.to_list()
 
     transitive_inputs = [
         mkbootimg.files,

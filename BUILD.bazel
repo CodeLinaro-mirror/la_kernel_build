@@ -14,6 +14,7 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_tools")
 load("//build/kernel/kleaf/impl:bison_wrapper.bzl", "bison_wrapper")
 load("//build/kernel/kleaf/impl:native_binary_with_arg.bzl", "native_binary_with_arg")
@@ -476,6 +477,23 @@ py_binary(
     main = "abi/extract_gki_protected_exports.py",
     visibility = ["//visibility:public"],
     deps = [":symbol_extraction"],
+)
+
+# Tools visible to all packages.
+py_library(
+    name = "xml_handler",
+    srcs = ["gki/xml_handler.py"],
+    imports = ["gki"],
+    visibility = ["//visibility:private"],
+)
+
+# Tools visible to all packages.
+py_binary(
+    name = "modinfo_summary",
+    srcs = ["gki/modinfo_summary.py"],
+    main = "gki/modinfo_summary.py",
+    visibility = ["//visibility:public"],
+    deps = [":xml_handler"],
 )
 
 # Boostrap tool for DDK development.

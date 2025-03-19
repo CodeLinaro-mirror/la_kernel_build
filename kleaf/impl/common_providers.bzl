@@ -20,7 +20,8 @@ WrittenDepsetInfo = provider(
     doc = "Describes a depset written to a file",
     fields = {
         "depset_file": "The text file, where each line is a path to an item in the depset",
-        "depset": "A depset containing the text file and the original depset",
+        "depset_short_file": "Same as depset_file, but each line is the short_path to an item in the depset.",
+        "depset": "A depset containing both text files and the original depset",
     },
 )
 
@@ -485,8 +486,19 @@ DdkSubmoduleInfo = provider(
     },
 )
 
+DdkConditionalFilegroupInfo = provider(
+    "Provides attributes for [`ddk_conditional_filegroup`](#ddk_conditional_filegroup)",
+    fields = {
+        "config": "`ddk_conditional_filegroup.config`",
+        "value": """bool or str. `ddk_conditional_filegroup.value`
+
+This may be a special value `True` when it is set to `True` in `ddk_module`.
+        """,
+    },
+)
+
 DdkConfigInfo = provider(
-    doc = "A provider that describes information of a `_ddk_config` target to dependent `_ddk_config` targets.",
+    doc = "Describes a pair of kconfig/defconfig depsets.",
     fields = {
         "kconfig": """A [depset](https://bazel.build/extending/depsets) containing the Kconfig file
             of this and its dependencies. Uses `postorder` ordering (dependencies first).""",
@@ -494,6 +506,14 @@ DdkConfigInfo = provider(
         "defconfig": """A [depset](https://bazel.build/extending/depsets) containing the Kconfig
             file of this and its dependencies. Uses `postorder` ordering (dependencies first).""",
         "defconfig_written": "WrittenDepsetInfo representing defconfig",
+        "kernel_build_ddk_config_env": """
+            Optional `ddk_config_env` from `kernel_build`.
+            This should be None if the rule doesn't have a reference to the `kernel_build`,
+            and not None otherwise.
+
+            This environment itself is not used in the subrule, but it is kept as a reference
+            to ensure the `kernel_build` of this target and `deps` are consistent.
+        """,
     },
 )
 
@@ -543,6 +563,13 @@ DdkIncludeInfo = provider(
         "direct_files": "depset of direct file dependencies of this target.",
         "includes": "A list of `includes` attribute of this target. Not prefixed.",
         "linux_includes": "Like `includes` but added to `LINUXINCLUDE`. Not prefixed.",
+    },
+)
+
+DdkLibraryInfo = provider(
+    """Describes info from a ddk_library""",
+    fields = {
+        "files": "A depset of .o_shipped/.o.cmd_shipped files",
     },
 )
 

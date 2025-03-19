@@ -28,6 +28,9 @@ def ddk_submodule(
         includes = None,
         local_defines = None,
         copts = None,
+        removed_copts = None,
+        asopts = None,
+        linkopts = None,
         conditional_srcs = None,
         autofdo_profile = None,
         debug_info_for_profiling = None,
@@ -157,6 +160,27 @@ def ddk_submodule(
 
             These are not exported to downstream targets that depends on the
             `ddk_module` that includes the current target.
+        removed_copts: See [`ddk_module.removed_copts`](#ddk_module-removed_copts).
+
+            These are only effective in the current submodule, not other submodules declared in the
+            same [`ddk_module.deps`](#ddk_module-deps).
+
+            These are not exported to downstream targets that depends on the
+            `ddk_module` that includes the current target.
+        asopts: See [`ddk_module.asopts`](#ddk_module-asopts).
+
+            These are only effective in the current submodule, not other submodules declared in the
+            same [`ddk_module.deps`](#ddk_module-deps).
+
+            These are not exported to downstream targets that depends on the
+            `ddk_module` that includes the current target.
+        linkopts: See [`ddk_module.linkopts`](#ddk_module-linkopts).
+
+            These are only effective in the current submodule, not other submodules declared in the
+            same [`ddk_module.deps`](#ddk_module-deps).
+
+            These are not exported to downstream targets that depends on the
+            `ddk_module` that includes the current target.
         autofdo_profile: See [`ddk_module.autofdo_profile`](#ddk_module-autofdo_profile).
 
             These are only effective in the current submodule, not other submodules declared in the
@@ -189,6 +213,9 @@ def ddk_submodule(
         module_deps = deps,
         module_local_defines = local_defines,
         module_copts = copts,
+        module_removed_copts = removed_copts,
+        module_asopts = asopts,
+        module_linkopts = linkopts,
         module_autofdo_profile = autofdo_profile,
         module_debug_info_for_profiling = debug_info_for_profiling,
         top_level_makefile = False,

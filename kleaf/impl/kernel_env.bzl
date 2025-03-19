@@ -16,7 +16,9 @@
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("@kernel_toolchain_info//:dict.bzl", "VARS")
 load(":abi/force_add_vmlinux_utils.bzl", "force_add_vmlinux_utils")
 load(
     ":common_providers.bzl",
@@ -36,6 +38,7 @@ load(":kgdb.bzl", "kgdb")
 load(":set_kernel_dir.bzl", "set_kernel_dir")
 load(":stamp.bzl", "stamp")
 load(":status.bzl", "status")
+load(":utils.bzl", "utils")
 
 visibility("//build/kernel/kleaf/...")
 
@@ -142,14 +145,35 @@ def _get_kconfig_werror_setup(ctx):
         return ""
     return "export KCONFIG_WERROR=1"
 
-def _kernel_env_impl(ctx):
-    srcs = [
+def _get_build_config_inputs_impl(_subrule_ctx, *, srcs, build_config):
+    """Gets the list of build config files needed for the build config step.
+
+    This can be an overestimate."""
+
+    # If kernel_build.build_config is not set (build config-less builds), we shouldn't
+    # need any build configs. Return early to avoid the big depset expansion in srcs.
+    if not build_config or not build_config.files:
+        return depset()
+
+    # The depset expansion is unavoidable to reduce the list of inputs fed
+    # into the action. This reduces incremental build times by increasing time in the analysis
+    # phase.
+    inputs = [
         s
-        for s in ctx.files.srcs
+        for s in depset(transitive = [target.files for target in srcs]).to_list()
         if "/build.config" in s.path or s.path.startswith("build.config")
     ]
+    transitive_inputs = [build_config.files]
+    if KernelBuildConfigInfo in build_config:
+        transitive_inputs.append(build_config[KernelBuildConfigInfo].deps)
+    for target in srcs:
+        if KernelBuildConfigInfo in target:
+            transitive_inputs.append(target[KernelBuildConfigInfo].deps)
+    return depset(inputs, transitive = transitive_inputs)
 
-    build_config = ctx.file.build_config
+_get_build_config_inputs = subrule(implementation = _get_build_config_inputs_impl)
+
+def _kernel_env_impl(ctx):
     kconfig_ext = ctx.file.kconfig_ext
     dtstree_makefile = None
     dtstree_srcs = []
@@ -162,15 +186,11 @@ def _kernel_env_impl(ctx):
 
     hermetic_tools = hermetic_toolchain.get(ctx)
 
-    inputs = [
-        build_config,
-    ]
-    inputs += srcs
-
-    transitive_inputs = []
-    for target in [ctx.attr.build_config] + ctx.attr.srcs:
-        if KernelBuildConfigInfo in target:
-            transitive_inputs.append(target[KernelBuildConfigInfo].deps)
+    inputs = []
+    transitive_inputs = [_get_build_config_inputs(
+        srcs = ctx.attr.srcs,
+        build_config = ctx.attr.build_config,
+    )]
 
     tools = [
         setup_env,
@@ -247,13 +267,47 @@ def _kernel_env_impl(ctx):
     else:
         bin_dir_and_workspace_root = ctx.bin_dir.path
 
+    quoted_space_and_extra_kcflags = ""
+    if ctx.attr.kcflags:
+        quoted_space_and_extra_kcflags = shell.quote(" " + (" ".join(ctx.attr.kcflags)))
+
     command += """
           export DEPMOD=depmod
           export DTC=$(command -v dtc)
           export LLVM=1
         # create a build environment
           source {build_utils_sh}
-          export BUILD_CONFIG={build_config}
+    """.format(
+        build_utils_sh = ctx.file._build_utils_sh.path,
+    )
+
+    if ctx.attr.build_config and ctx.attr.build_config.files:
+        command += """
+            export BUILD_CONFIG={build_config}
+        """.format(
+            build_config = utils.optional_single_path(ctx.files.build_config),
+        )
+    else:
+        command += """
+            export KLEAF_INTERNAL_NO_BUILD_CONFIG=1
+        """
+
+        # Set branch specific constants.
+        for key, value in VARS.items():
+            command += """
+                export {quoted_key}={quoted_value}
+            """.format(
+                quoted_key = shell.quote(key),
+                quoted_value = shell.quote(value),
+            )
+
+    if ctx.file.clang_autofdo_profile:
+        set_clang_autofdo_profile_cmd = "export CLANG_AUTOFDO_PROFILE=${ROOT_DIR}/" + ctx.file.clang_autofdo_profile.path
+    else:
+        set_clang_autofdo_profile_cmd = ""
+
+    command += """
+          export KCFLAGS="${{KCFLAGS}}"{quoted_space_and_extra_kcflags}
           {set_kernel_dir_cmd}
           {set_localversion_cmd}
           {set_arch_cmd}
@@ -262,6 +316,7 @@ def _kernel_env_impl(ctx):
           {set_ndk_triple_cmd}
         # Variables from resolved toolchain
           {toolchains_setup_env_var_cmd}
+          {set_clang_autofdo_profile_cmd}
         # TODO(b/236012223) Remove the warning after deprecation.
           {make_goals_deprecation_warning}
         # Enforce check configs.
@@ -301,8 +356,7 @@ def _kernel_env_impl(ctx):
 
           cat {post_env_script} >> {out}
         """.format(
-        build_utils_sh = ctx.file._build_utils_sh.path,
-        build_config = build_config.path,
+        quoted_space_and_extra_kcflags = quoted_space_and_extra_kcflags,
         set_kernel_dir_cmd = set_kernel_dir_ret.cmd,
         set_localversion_cmd = stamp.set_localversion_cmd(ctx),
         set_arch_cmd = _get_set_arch_cmd(ctx),
@@ -310,6 +364,7 @@ def _kernel_env_impl(ctx):
         check_arch_cmd = _get_check_arch_cmd(ctx),
         set_ndk_triple_cmd = _get_set_ndk_triple_cmd(),
         toolchains_setup_env_var_cmd = toolchains.kernel_setup_env_var_cmd,
+        set_clang_autofdo_profile_cmd = set_clang_autofdo_profile_cmd,
         make_goals_deprecation_warning = make_goals_deprecation_warning,
         kconfig_werror_setup = kconfig_werror_setup,
         out = out_file.path,
@@ -356,6 +411,8 @@ def _kernel_env_impl(ctx):
     ]
     if kconfig_ext:
         setup_inputs.append(kconfig_ext)
+    if ctx.file.clang_autofdo_profile:
+        setup_inputs.append(ctx.file.clang_autofdo_profile)
     setup_inputs += dtstree_srcs
 
     env_info = KernelEnvInfo(
@@ -505,7 +562,7 @@ def _get_env_setup_cmds(ctx):
             export KERNEL_DIR=${{KLEAF_REPO_WORKSPACE_ROOT:+$KLEAF_REPO_WORKSPACE_ROOT/}}${{KERNEL_DIR}}
         fi
 
-        ## Set up KCPPFLAGS and KCPPFLAGS_COMPAT
+        ## Set up KCPPFLAGS, KCPPFLAGS_COMPAT, and KRUSTFLAGS
 
         # Replace ${{ROOT_DIR}} with "/proc/self/cwd" in the file name
         # references in the binaries (e.g. debug info).
@@ -515,6 +572,7 @@ def _get_env_setup_cmds(ctx):
         # top directory, all paths should resolve correctly even on another
         # machine.
         export KCPPFLAGS="-ffile-prefix-map=${{ROOT_DIR}}=/proc/self/cwd"
+        export KRUSTFLAGS="--remap-path-prefix=${{ROOT_DIR}}=/proc/self/cwd"
 
         # For Kleaf local (non-sandbox) builds, $ROOT_DIR is under execroot but
         # $ROOT_DIR/$KERNEL_DIR is a symlink to the real source tree under
@@ -526,6 +584,7 @@ def _get_env_setup_cmds(ctx):
         # ${{ROOT_DIR}}/${{KERNEL_DIR}} before calling realpath.
         if [[ "$(realpath ${{ROOT_DIR}}/${{KERNEL_DIR}})" != "${{ROOT_DIR}}/${{KERNEL_DIR}}" ]]; then
             export KCPPFLAGS="$KCPPFLAGS -ffile-prefix-map=$(realpath ${{ROOT_DIR}}/${{KERNEL_DIR}}/..)=/proc/self/cwd"
+            export KRUSTFLAGS="$KRUSTFLAGS --remap-path-prefix=$(realpath ${{ROOT_DIR}}/${{KERNEL_DIR}}/..)=/proc/self/cwd"
         fi
         export KCPPFLAGS_COMPAT="$KCPPFLAGS"
 
@@ -593,15 +652,14 @@ kernel_env = rule(
           ```
               kernel_env(
                   name = "kernel_aarch64_env,
-                  build_config = "build.config.gki.aarch64",
                   srcs = glob(["build.config.*"]),
               )
           ```
           """,
     attrs = {
         "build_config": attr.label(
-            mandatory = True,
-            allow_single_file = True,
+            # Allow filegroup with 0 or 1 files.
+            allow_files = True,
             doc = "label referring to the main build config",
         ),
         "makefile": attr.label(doc = "Makefile below KERNEL_DIR", allow_single_file = True),
@@ -639,6 +697,8 @@ kernel_env = rule(
             values = ["true", "false", "auto"],
         ),
         "make_goals": attr.string_list(doc = "`MAKE_GOALS`"),
+        "kcflags": attr.string_list(),
+        "clang_autofdo_profile": attr.label(allow_single_file = True),
         "_build_utils_sh": attr.label(
             allow_single_file = True,
             default = Label("//build/kernel:build_utils"),
@@ -661,5 +721,8 @@ kernel_env = rule(
         ),
     } | _kernel_env_additional_attrs(),
     toolchains = [hermetic_toolchain.type],
-    subrules = [set_kernel_dir],
+    subrules = [
+        set_kernel_dir,
+        _get_build_config_inputs,
+    ],
 )

@@ -50,3 +50,15 @@ FILEGROUP_DEF_BUILD_FRAGMENT_NAME = "filegroup_decl_build_frag.txt"
 FILEGROUP_DEF_ARCHIVE_SUFFIX = "_filegroup_decl.tar.gz"
 
 SIGNED_GKI_ARTIFACTS_ARCHIVE = "signed/boot-img.tar.gz"
+
+DDK_MODULE_SRCS_ALLOWED_EXTENSIONS = [
+    # keep sorted
+    ".S",
+    ".c",
+    ".cmd_shipped",
+    ".h",
+    ".o_shipped",
+    ".rs",
+]
+
+DDK_CONDITIONAL_TRUE = "__kleaf_ddk_conditional_srcs_true_value__"

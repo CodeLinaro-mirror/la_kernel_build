@@ -120,9 +120,16 @@ bazel_dep(
 
 bazel_dep(
     name = "stardoc",
-    version = "0.6.2",
+    version = "0.7.2",
     dev_dependency = True,
     repo_name = "io_bazel_stardoc",
+)
+
+# TODO: b/392907760 - Drop this once rules_cc no longer depends on protobuf
+bazel_dep(
+    name = "protobuf",
+    version = "27.0",
+    dev_dependency = True,
 )
 
 bazel_dep(
@@ -133,11 +140,6 @@ bazel_dep(
 local_path_override(
     module_name = "abseil-py",
     path = "external/python/absl-py",
-)
-
-local_path_override(
-    module_name = "apple_support",
-    path = "external/bazelbuild-apple_support",
 )
 
 local_path_override(
@@ -161,11 +163,6 @@ local_path_override(
 )
 
 local_path_override(
-    module_name = "rules_java",
-    path = "external/bazelbuild-rules_java",
-)
-
-local_path_override(
     module_name = "rules_license",
     path = "external/bazelbuild-rules_license",
 )
@@ -178,4 +175,9 @@ local_path_override(
 local_path_override(
     module_name = "rules_python",
     path = "external/bazelbuild-rules_python",
+)
+
+local_path_override(
+    module_name = "rules_shell",
+    path = "external/bazelbuild-rules_shell",
 )
