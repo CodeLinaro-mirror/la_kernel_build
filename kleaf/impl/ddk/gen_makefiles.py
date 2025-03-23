@@ -106,11 +106,23 @@ def _gen_makefile(
     """
     content = _get_license_str()
 
+    content += """
+        ifneq ($(origin EXTRA_SYMBOLS), undefined)
+        $(error EXTRA_SYMBOLS cannot be set for DDK targets. Use the deps attribute instead.)
+        endif
+    """
+
     for module_symvers in module_symvers_list:
-        content += textwrap.dedent(f"""\
-            # Include symbol: {module_symvers}
-            EXTRA_SYMBOLS += $(COMMON_OUT_DIR)/{module_symvers}
+        if is_library:
+            # TODO - b/395014894: Propagate Module.symvers to linking stage
+            content += textwrap.dedent(f"""\
+                # Skipping {module_symvers} for ddk_library
             """)
+        else:
+            content += textwrap.dedent(f"""\
+                # Include symbol: {module_symvers}
+                EXTRA_SYMBOLS += $(COMMON_OUT_DIR)/{module_symvers}
+                """)
 
     if is_library:
         # ddk_library does not support conditional_srcs for now, because we can't get
