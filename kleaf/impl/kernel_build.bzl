@@ -1544,6 +1544,7 @@ def _build_main_action(
 
     # all inputs that |command| needs
     transitive_inputs = [target.files for target in ctx.attr.srcs]
+    transitive_inputs += [target.files for target in ctx.attr._implicit_deps]
     transitive_inputs += [target.files for target in ctx.attr.deps]
     transitive_inputs.append(
         ctx.attr.config[KernelSerializedEnvInfo].inputs,
@@ -2073,6 +2074,10 @@ _kernel_build = rule(
             cfg = "exec",
             executable = True,
             doc = "label referring to the script to process outputs",
+        ),
+        "_implicit_deps": attr.label_list(
+            allow_files = True,
+            default = ["@openssl//:lib64"],
         ),
         "deps": attr.label_list(
             allow_files = True,
