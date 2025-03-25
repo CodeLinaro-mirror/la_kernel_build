@@ -224,5 +224,7 @@ def ddk_submodule(
         target_type = "submodule",
         top_level_makefile = False,
         kbuild_has_linux_include = False,
+        # Use our own stamping in generated .modinfo
+        follow_stamp_flag = True,
         **kwargs
     )

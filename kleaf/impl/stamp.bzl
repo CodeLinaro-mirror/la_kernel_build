@@ -180,18 +180,19 @@ _ext_mod_get_localversion_file = subrule(
     },
 )
 
-def _ext_mod_write_localversion(ctx, ext_mod):
+def _ext_mod_write_localversion(ctx, ext_mod, follow_stamp_flag):
     """Return command and inputs to get the SCM version for an external module.
 
     Args:
         ctx: [ctx](https://bazel.build/rules/lib/ctx).
             Must have `hermetic_tools` in toolchain.
         ext_mod: Defines the directory of the external module
+        follow_stamp_flag: If true, respects --config=stamp. Otherwise don't do stamping.
     """
 
     localversion_file = _ext_mod_get_localversion_file(
         ext_mod = ext_mod,
-        follow_stamp_flag = True,
+        follow_stamp_flag = follow_stamp_flag,
         hermetic_tools = hermetic_toolchain.get(ctx),
         info_file = ctx.info_file,
     )

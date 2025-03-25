@@ -275,13 +275,21 @@ def generate_all_files(
 
 def _get_ddk_modinfo(
     output_dir: pathlib.Path,
+    localversion_file: pathlib.Path | None,
 ) -> pathlib.Path:
     os.makedirs(output_dir, exist_ok=True)
     ddk_modinfo = output_dir / _DDK_MODINFO_SOURCE
-    ddk_modinfo.write_text(textwrap.dedent("""\
+    text = textwrap.dedent("""\
         #include <linux/compiler.h>
         static const char __UNIQUE_ID(built_with)[] __used __section(".modinfo") __aligned(1) = "built_with=DDK";
-        """))
+        """)
+    if localversion_file:
+        localversion = localversion_file.read_text().strip().removeprefix("-")
+        if localversion:
+            text += textwrap.dedent(f"""\
+                static const char __UNIQUE_ID(scmversion)[] __used __section(".modinfo") __aligned(1) = "scmversion={localversion}";
+                """)
+    ddk_modinfo.write_text(text)
     return ddk_modinfo
 
 
@@ -300,6 +308,7 @@ def _generate_kbuild_and_extra(
         kbuild_has_linux_include: bool,
         is_library: bool,
         is_pkvm_el2: bool,
+        localversion_file: pathlib.Path | None,
         **unused_kwargs
 ):
     """Generates all relevant Kbuild files and extra flag files.
@@ -370,7 +379,8 @@ def _generate_kbuild_and_extra(
     if not is_library:
         # For modinfo tagging
         _handle_ddk_modinfo(rel_srcs, kernel_module_out,
-            out_cflags_path, package / gen_cflags_subpath.parent)
+            out_cflags_path, package / gen_cflags_subpath.parent,
+            localversion_file)
 
     with open(kbuild, "w") as out_file, \
          open(out_cflags_path, "a") as out_cflags, \
@@ -525,7 +535,8 @@ def _handle_ddk_modinfo(
         rel_srcs: list[dict[str, Any]],
         kernel_module_out: pathlib.Path,
         out_cflags_path: pathlib.Path,
-        package: pathlib.Path
+        package: pathlib.Path,
+        localversion_file: pathlib.Path | None,
 ):
     """Adds ddk_modinfo.c or implicitly include it."""
     rel_srcs_flat = _get_rel_srcs_flat(rel_srcs)
@@ -536,7 +547,7 @@ def _handle_ddk_modinfo(
     if kernel_module_out.with_suffix(".c") == _DDK_MODINFO_SOURCE:
         die("%s is not allowed to be the output file", kernel_module_out)
 
-    ddk_modinfo = _get_ddk_modinfo(out_cflags_path.parent)
+    ddk_modinfo = _get_ddk_modinfo(out_cflags_path.parent, localversion_file)
     # Depending on the number of files, choose an appropriate path for tagging.
     if len(rel_srcs_flat) > 1:
         rel_srcs.append(
@@ -548,6 +559,7 @@ def _handle_ddk_modinfo(
                     -include $(ROOT_DIR)/{str(package / ddk_modinfo.name)}
                 """))
             out_cflags.write("\n")
+
 
 def _handle_src(
         src: pathlib.Path,
@@ -798,6 +810,7 @@ if __name__ == "__main__":
                         action=SubmoduleLinuxIncludeDirAction)
     parser.add_argument("--is-library", action="store_true")
     parser.add_argument("--pkvm-el2-out", type=pathlib.Path)
+    parser.add_argument("--localversion-file", type=pathlib.Path)
     args = parser.parse_args()
 
     die_exception = None

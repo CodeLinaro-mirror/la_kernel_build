@@ -612,6 +612,8 @@ def ddk_module(
         internal_exclude_kernel_build_module_srcs = True,
         internal_ddk_config = name + "_config",
         internal_mnemonic = "DDK module",
+        # Don't ask Kbuild to stamp it
+        internal_follow_stamp_flag = False,
         **kwargs
     )
 
@@ -644,5 +646,7 @@ def ddk_module(
         target_type = "module",
         top_level_makefile = True,
         kbuild_has_linux_include = True,
+        # Use our own stamping in generated .modinfo
+        follow_stamp_flag = True,
         **private_kwargs
     )

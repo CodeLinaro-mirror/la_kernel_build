@@ -34,6 +34,8 @@ load(
     "get_ddk_transitive_include_infos",
     "get_headers_depset",
 )
+load(":hermetic_toolchain.bzl", "hermetic_toolchain")
+load(":stamp.bzl", "stamp")
 load(":utils.bzl", "kernel_utils")
 
 visibility("//build/kernel/kleaf/...")
@@ -460,7 +462,16 @@ def _makefiles_impl(ctx):
 
     module_srcs_ret = _handle_module_srcs(ctx, ddk_library_deps)
 
+    package_short_path = paths.join(ctx.label.workspace_root, ctx.label.package)
+    localversion_file = stamp.ext_mod_get_localversion_file(
+        ext_mod = package_short_path,
+        follow_stamp_flag = ctx.attr.follow_stamp_flag,
+        hermetic_tools = hermetic_toolchain.get(ctx),
+        info_file = ctx.info_file,
+    )
+
     args = ctx.actions.args()
+    inputs = []
 
     # Though flag_per_line is designed for the absl flags library and
     # gen_makefiles.py uses absl flags library, this outputs the following
@@ -475,6 +486,7 @@ def _makefiles_impl(ctx):
     args.use_param_file("--flagfile=%s")
 
     args.add("--kernel-module-srcs-json", module_srcs_ret.srcs_json)
+    inputs.append(module_srcs_ret.srcs_json)
     if ctx.attr.module_out:
         args.add("--kernel-module-out", ctx.attr.module_out)
     args.add("--output-makefiles", output_makefiles.path)
@@ -518,15 +530,19 @@ def _makefiles_impl(ctx):
         pre_opts_json = _get_autofdo_copts(ctx),
     )
     args.add("--copts-file", copts_file)
+    inputs.append(copts_file)
 
     removed_copts_file = _handle_opts(ctx, "removed_copts.json", ctx.attr.module_removed_copts)
     args.add("--removed-copts-file", removed_copts_file)
+    inputs.append(removed_copts_file)
 
     asopts_file = _handle_opts(ctx, "asopts.json", ctx.attr.module_asopts)
     args.add("--asopts-file", asopts_file)
+    inputs.append(asopts_file)
 
     linkopts_file = _handle_opts(ctx, "linkopts.json", ctx.attr.module_linkopts)
     args.add("--linkopts-file", linkopts_file)
+    inputs.append(linkopts_file)
 
     submodule_makefiles = depset(transitive = [dep.files for dep in submodule_deps])
     args.add_all("--submodule-makefiles", submodule_makefiles, expand_directories = False)
@@ -540,15 +556,13 @@ def _makefiles_impl(ctx):
     if ctx.attr.module_pkvm_el2:
         args.add("--pkvm-el2-out", _PKVM_EL2_OUT)
 
+    if localversion_file:
+        args.add("--localversion-file", localversion_file)
+        inputs.append(localversion_file)
+
     ctx.actions.run(
         mnemonic = "DdkMakefiles",
-        inputs = depset([
-            copts_file,
-            removed_copts_file,
-            asopts_file,
-            linkopts_file,
-            module_srcs_ret.srcs_json,
-        ], transitive = [submodule_makefiles, module_srcs_ret.gen_srcs_depset]),
+        inputs = depset(inputs, transitive = [submodule_makefiles, module_srcs_ret.gen_srcs_depset]),
         outputs = [output_makefiles],
         executable = ctx.executable._gen_makefile,
         arguments = [args],
@@ -650,6 +664,7 @@ makefiles = rule(
             doc = "Whether to add LINUXINCLUDE to Kbuild",
             default = True,
         ),
+        "follow_stamp_flag": attr.bool(),
         "internal_target_fail_message": attr.string(
             doc = "For testing only. Assert that this target to fail to build with the given message.",
         ),
@@ -669,5 +684,9 @@ makefiles = rule(
     },
     subrules = [
         _get_outs_list,
+        stamp.ext_mod_get_localversion_file,
+    ],
+    toolchains = [
+        hermetic_toolchain.type,
     ],
 )

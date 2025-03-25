@@ -453,7 +453,11 @@ def _kernel_module_impl(ctx):
             modules_staging_dir = modules_staging_dws.directory.path,
         )
 
-    scmversion_ret = stamp.ext_mod_write_localversion(ctx, ext_mod)
+    scmversion_ret = stamp.ext_mod_write_localversion(
+        ctx = ctx,
+        ext_mod = ext_mod,
+        follow_stamp_flag = ctx.attr.internal_follow_stamp_flag,
+    )
     inputs += scmversion_ret.deps
     command += scmversion_ret.cmd
 
@@ -837,6 +841,10 @@ _kernel_module = rule(
         ),
         "internal_is_ddk_library": attr.bool(
             doc = "If true, outputs are placed in DdkLibraryInfo",
+        ),
+        "internal_follow_stamp_flag": attr.bool(
+            doc = "If false, don't stamp the output even if --config=stamp",
+            default = True,
         ),
         "internal_compdb": attr.string(
             doc = """

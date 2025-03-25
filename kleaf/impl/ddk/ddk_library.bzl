@@ -103,6 +103,8 @@ def ddk_library(
         top_level_makefile = True,
         kbuild_has_linux_include = True,
         target_type = "library",
+        # Don't generate stamps in DDK library to avoid double stamping
+        follow_stamp_flag = False,
         **private_kwargs
     )
 
@@ -132,5 +134,7 @@ def ddk_library(
         internal_compdb = "skip",
         internal_modules_install = False,
         internal_mnemonic = "DDK library",
+        # Don't ask Kbuild to stamp it
+        internal_follow_stamp_flag = False,
         **kwargs
     )
