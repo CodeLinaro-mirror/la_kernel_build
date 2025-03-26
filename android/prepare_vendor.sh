@@ -211,6 +211,17 @@ if [ ! -f "${ROOT_DIR}/build/abl_extensions.bzl" ] \
   ln -fs "../bootable/bootloader/edk2/abl_extensions.bzl" "${ROOT_DIR}/build/abl_extensions.bzl"
 fi
 
+if [ "${TECHPACK_BUILD}" != "0" ] \
+      && [ -f "${ANDROID_BUILD_TOP}/device/qcom/${TARGET_BOARD_PLATFORM}/techpack_modules.bzl" ]; then
+  ln -fs "../../../device/qcom/${TARGET_BOARD_PLATFORM}/techpack_modules.bzl" "${ROOT_DIR}/soc-repo/kleaf-scripts/techpack_modules.bzl"
+  USE_TECHPACK_BUILD=1
+fi
+
+if [ "${TECHPACK_BUILD}" != "0" ] \
+      && [ -e "${ANDROID_BUILD_TOP}/vendor" ]; then
+  ln -fs "../vendor" "${ROOT_DIR}/vendor"
+fi
+
 # If prepare_vendor.sh fails and nobody checked the error code, make sure the android build fails
 # by removing the kernel Image which is needed to build boot.img
 if [ "${RECOMPILE_KERNEL}" == "1" -o "${COPY_NEEDED}" == "1" ]; then
@@ -561,6 +572,11 @@ if [ -n "${ANDROID_PRODUCT_OUT}" ] && [ -n "${ANDROID_BUILD_TOP}" ]; then
       ${ANDROID_EXT_MODULES_COMMON_OUT} \
       ${ANDROID_KERNEL_OUT}/dtbs
   )
+fi
+
+if [ "${USE_TECHPACK_BUILD}" == "1" -a "${RECOMPILE_KERNEL}" == "1" ] \
+      && [ -e ${ANDROID_KERNEL_OUT}/vendor_dlkm ]; then
+  touch ${ANDROID_KERNEL_OUT}/techpack.built
 fi
 
 # remove bazel dir to avoid build issues
