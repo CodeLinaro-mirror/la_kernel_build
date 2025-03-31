@@ -22,6 +22,7 @@ WrittenDepsetInfo = provider(
         "depset_file": "The text file, where each line is a path to an item in the depset",
         "depset_short_file": "Same as depset_file, but each line is the short_path to an item in the depset.",
         "depset": "A depset containing both text files and the original depset",
+        "original_depset": "The original depset",
     },
 )
 
@@ -197,7 +198,6 @@ KernelBuildInfo = provider(
         "base_kernel_files": """A [depset](https://bazel.build/extending/depsets) containing
             [Default outputs](https://docs.bazel.build/versions/main/skylark/rules.html#default-outputs)
             of the rule specified by `base_kernel`""",
-        "interceptor_output": "`interceptor` log. See [`interceptor`](https://android.googlesource.com/kernel/tools/interceptor/) project.",
         "kernel_release": "The file `kernel.release`.",
     },
 )
@@ -327,6 +327,7 @@ KernelBuildFilegroupDeclInfo = provider(
             `outs`, `implcit_outs`, `internal_outs`.""",
         "module_env_archive": "Archive preparing an environment to build modules. May be `None`.",
         "has_base_kernel": "Whether the original `kernel_build()` has a not-None `base_kernel`.",
+        "copy_module_symvers_outputs": "The output `<name>_Module.symvers` file.",
     },
 )
 
@@ -520,8 +521,8 @@ DdkConfigInfo = provider(
 DdkConfigOutputsInfo = provider(
     doc = "Describes output of a `ddk_config` target.",
     fields = {
-        "out_dir": "Output directory",
-        "kconfig_ext": "The directory for KCONFIG_EXT",
+        "out_dir": "Output directory. None if using OUT_DIR from kernel_build directly.",
+        "kconfig_ext": "The directory for KCONFIG_EXT. None if using KCONFIG_EXT_PREFIX from kernel_build directly.",
     },
 )
 

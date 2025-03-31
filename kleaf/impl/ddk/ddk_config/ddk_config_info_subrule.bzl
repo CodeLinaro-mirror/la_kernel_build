@@ -123,7 +123,7 @@ ddk_config_info_subrule = subrule(
 
 def _empty_ddk_config_info_impl(_subrule_ctx, *, kernel_build_ddk_config_env):
     """Create an empty DdkConfigInfo."""
-    empty = depset()
+    empty = depset(order = "postorder")
     written = utils.write_depset(empty, "empty_depset.txt")
     return DdkConfigInfo(
         kconfig = empty,
@@ -151,12 +151,14 @@ def _combine_ddk_config_info_impl(subrule_ctx, *, child, parent, parent_label):
     """
 
     # Parent goes first.
-    kconfig = depset(
-        transitive = [parent.kconfig, child.kconfig],
+    kconfig = utils.combine_depset(
+        parent.kconfig,
+        child.kconfig,
         order = "postorder",
     )
-    defconfig = depset(
-        transitive = [parent.defconfig, child.defconfig],
+    defconfig = utils.combine_depset(
+        parent.defconfig,
+        child.defconfig,
         order = "postorder",
     )
 

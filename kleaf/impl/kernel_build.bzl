@@ -19,6 +19,7 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("@kernel_toolchain_info//:dict.bzl", "VARS")
 load(
     "//build/kernel/kleaf/artifact_tests:kernel_test.bzl",
     "kernel_build_test",
@@ -119,7 +120,6 @@ def kernel_build(
         trim_nonlisted_kmi = None,
         kmi_symbol_list_strict_mode = None,
         collect_unstripped_modules = None,
-        enable_interceptor = None,
         kbuild_symtypes = None,
         strip_modules = None,
         module_signing_key = None,
@@ -447,8 +447,6 @@ def kernel_build(
           and the KMI resulting from the build, to ensure
           they match 1-1.
         collect_unstripped_modules: If `True`, provide all unstripped in-tree.
-        enable_interceptor: If set to `True`, enable interceptor so it can be
-          used in [`kernel_compile_commands`](#kernel_compile_commands).
         kbuild_symtypes: The value of `KBUILD_SYMTYPES`.
 
           This can be set to one of the following:
@@ -783,7 +781,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         config = config_target_name,
         keep_module_symvers = keep_module_symvers,
         keep_dot_config = keep_dot_config,
-        srcs = srcs,
+        srcs = srcs + all_kmi_symbol_lists,
         outs = kernel_utils.transform_kernel_build_outs(name, "outs", outs),
         module_outs = kernel_utils.transform_kernel_build_outs(name, "module_outs", module_outs),
         implicit_outs = kernel_utils.transform_kernel_build_outs(name, "implicit_outs", implicit_outs),
@@ -797,7 +795,6 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         kernel_uapi_headers = uapi_headers_target_name,
         collect_unstripped_modules = collect_unstripped_modules,
         combined_abi_symbollist = abi_symbollist_target_name,
-        enable_interceptor = enable_interceptor,
         strip_modules = strip_modules,
         src_protected_exports_list = protected_exports_list,
         src_protected_modules_list = protected_modules_list,
@@ -904,6 +901,7 @@ def _skip_build_checks(ctx, what):
         "kasan",
         "kasan_sw_tags",
         "kasan_generic",
+        "kcov",
         "kcsan",
         "kgdb",
         "debug",
@@ -935,6 +933,7 @@ def _get_post_defconfig_fragments(
         Label("//build/kernel/kleaf/impl/defconfig:debug"),
         Label("//build/kernel/kleaf/impl/defconfig:gcov"),
         Label("//build/kernel/kleaf/impl/defconfig:lto"),
+        Label("//build/kernel/kleaf/impl/defconfig:kcov"),
         Label("//build/kernel/kleaf/impl/defconfig:rust"),
         Label("//build/kernel/kleaf/impl/defconfig:rust_ashmem"),
         Label("//build/kernel/kleaf/impl/defconfig:zstd_dwarf_compression"),
@@ -1030,6 +1029,7 @@ def _get_trim_post_defconfig_fragment_target(
             Label("//build/kernel/kleaf/impl:force_disable_trim_is_true"): False,
             Label("//build/kernel/kleaf:debug_is_true"): False,
             Label("//build/kernel/kleaf:gcov_is_true"): False,
+            Label("//build/kernel/kleaf:kcov_is_true"): False,
             Label("//build/kernel/kleaf:kasan_is_true"): False,
             Label("//build/kernel/kleaf:kcsan_is_true"): False,
             Label("//build/kernel/kleaf:kgdb_is_true"): False,
@@ -1059,50 +1059,89 @@ def _progress_message_suffix(ctx):
 
 def _create_kbuild_mixed_tree(ctx):
     """Adds actions that creates the `KBUILD_MIXED_TREE`."""
-    hermetic_tools = hermetic_toolchain.get(ctx)
-    base_kernel_files = depset()
-    outputs = []
-    kbuild_mixed_tree = None
-    cmd = ""
-    arg = ""
-    if base_kernel_utils.get_base_kernel(ctx):
-        # Create a directory for KBUILD_MIXED_TREE. Flatten the directory structure of the files
-        # that base_kernel_utils.get_base_kernel(ctx) provides. declare_directory is sufficient because the directory should
-        # only change when the dependent base_kernel_utils.get_base_kernel(ctx) changes.
-        kbuild_mixed_tree = ctx.actions.declare_directory("{}_kbuild_mixed_tree".format(ctx.label.name))
-        outputs = [kbuild_mixed_tree]
-        base_kernel_files = base_kernel_utils.get_base_kernel(ctx)[KernelBuildMixedTreeInfo].files
-        kbuild_mixed_tree_command = hermetic_tools.setup + """
-          # Restore GKI artifacts for mixed build
-            export KBUILD_MIXED_TREE=$(realpath {kbuild_mixed_tree})
-            rm -rf ${{KBUILD_MIXED_TREE}}
-            mkdir -p ${{KBUILD_MIXED_TREE}}
-            for base_kernel_file in {base_kernel_files}; do
-              cp -a -t ${{KBUILD_MIXED_TREE}} $(readlink -m ${{base_kernel_file}})
-            done
-        """.format(
-            base_kernel_files = " ".join([file.path for file in base_kernel_files.to_list()]),
-            kbuild_mixed_tree = kbuild_mixed_tree.path,
-        )
-        debug.print_scripts(ctx, kbuild_mixed_tree_command, what = "kbuild_mixed_tree")
-        ctx.actions.run_shell(
-            mnemonic = "KernelBuildKbuildMixedTree",
-            inputs = depset(transitive = [base_kernel_files]),
-            outputs = [kbuild_mixed_tree],
-            tools = hermetic_tools.deps,
-            progress_message = "Creating KBUILD_MIXED_TREE{}".format(_progress_message_suffix(ctx)),
-            command = kbuild_mixed_tree_command,
+
+    if not base_kernel_utils.get_base_kernel(ctx):
+        return struct(
+            inputs = depset(),
+            cmd = "",
+            base_kernel_files = depset(),
+            arg = "",
         )
 
-        cmd = """
-            export KBUILD_MIXED_TREE=$(realpath {kbuild_mixed_tree})
+    if VARS.get("KLEAF_INTERNAL_KBUILD_MIXED_TREE_IS_OBJTREE") != "1":
+        return _create_kbuild_mixed_tree_legacy(ctx)
+
+    # Return a command line that copies KBUILD_MIXED_TREE files to $OUT_DIR
+    # (which is $objtree when building in-tree modules)
+    base_kernel_files = base_kernel_utils.get_base_kernel(ctx)[KernelBuildMixedTreeInfo].files
+    cmd = """
+        # Restore GKI artifacts for mixed build
+        export KBUILD_MIXED_TREE=${OUT_DIR}
+        mkdir -p ${KBUILD_MIXED_TREE}
+    """
+
+    # This to_list() is acceptable because GKI's outs/module_outs is a small list
+    for base_kernel_file in base_kernel_files.to_list():
+        # Flatten the directory structure of the files that base_kernel_utils.get_base_kernel(ctx)
+        # provides because KBUILD_MIXED_TREE accepts a flattened directory.
+        cmd += """
+            cp -a -t ${{KBUILD_MIXED_TREE}} $(readlink -m {base_kernel_file})
         """.format(
-            kbuild_mixed_tree = kbuild_mixed_tree.path,
+            base_kernel_file = base_kernel_file.path,
         )
 
-        arg = "--srcdir ${KBUILD_MIXED_TREE}"
+    arg = "--srcdir ${KBUILD_MIXED_TREE}"
     return struct(
-        outputs = outputs,
+        inputs = base_kernel_files,
+        cmd = cmd,
+        base_kernel_files = base_kernel_files,
+        arg = arg,
+    )
+
+def _create_kbuild_mixed_tree_legacy(ctx):
+    """Legacy way of handling KBUILD_MIXED_TREE before 6.13"""
+    hermetic_tools = hermetic_toolchain.get(ctx)
+
+    # Create a directory for KBUILD_MIXED_TREE.
+    # Flatten the directory structure of the files that base_kernel_utils.get_base_kernel(ctx)
+    # provides because KBUILD_MIXED_TREE accepts a flattened directory.
+    # declare_directory is sufficient because the directory should
+    # only change when the dependent base_kernel_utils.get_base_kernel(ctx) changes.
+    kbuild_mixed_tree = ctx.actions.declare_directory("{}_kbuild_mixed_tree".format(ctx.label.name))
+    returned_inputs = depset([kbuild_mixed_tree])
+    base_kernel_files = base_kernel_utils.get_base_kernel(ctx)[KernelBuildMixedTreeInfo].files
+    kbuild_mixed_tree_command = hermetic_tools.setup + """
+        # Restore GKI artifacts for mixed build
+        export KBUILD_MIXED_TREE=$(realpath {kbuild_mixed_tree})
+        rm -rf ${{KBUILD_MIXED_TREE}}
+        mkdir -p ${{KBUILD_MIXED_TREE}}
+        for base_kernel_file in {base_kernel_files}; do
+            cp -a -t ${{KBUILD_MIXED_TREE}} $(readlink -m ${{base_kernel_file}})
+        done
+    """.format(
+        # This to_list() is acceptable because GKI's outs/module_outs is a small list
+        base_kernel_files = " ".join([file.path for file in base_kernel_files.to_list()]),
+        kbuild_mixed_tree = kbuild_mixed_tree.path,
+    )
+    debug.print_scripts(ctx, kbuild_mixed_tree_command, what = "kbuild_mixed_tree")
+    ctx.actions.run_shell(
+        mnemonic = "KernelBuildKbuildMixedTree",
+        inputs = depset(transitive = [base_kernel_files]),
+        outputs = [kbuild_mixed_tree],
+        tools = hermetic_tools.deps,
+        progress_message = "Creating KBUILD_MIXED_TREE{}".format(_progress_message_suffix(ctx)),
+        command = kbuild_mixed_tree_command,
+    )
+
+    cmd = """
+        export KBUILD_MIXED_TREE=$(realpath {kbuild_mixed_tree})
+    """.format(
+        kbuild_mixed_tree = kbuild_mixed_tree.path,
+    )
+
+    arg = "--srcdir ${KBUILD_MIXED_TREE}"
+    return struct(
+        inputs = returned_inputs,
         cmd = cmd,
         base_kernel_files = base_kernel_files,
         arg = arg,
@@ -1180,35 +1219,6 @@ def _write_module_names_to_file(ctx, filename, names):
 # In other words, a step is a weaker form of an [Action](https://bazel.build/rules/lib/Action),
 # but because the `OUT_DIR` needs to be kept between the steps, they are stuffed into the main
 # action.
-
-def _get_interceptor_step(ctx):
-    """Returns a step for interceptor.
-
-    This is a special step that doesn't have a `cmd`, but provides a `command_prefix` instead.
-
-    Returns:
-      A struct with these fields:
-
-      * inputs
-      * tools
-      * outputs
-      * command_prefix
-      * output_file
-    """
-    interceptor_output = None
-    interceptor_command_prefix = ""
-    if ctx.attr.enable_interceptor:
-        interceptor_output = ctx.actions.declare_file("{name}/interceptor_output.bin".format(name = ctx.label.name))
-        interceptor_command_prefix = "interceptor -r -l {interceptor_output} --".format(
-            interceptor_output = interceptor_output.path,
-        )
-    return struct(
-        inputs = [],
-        tools = [],
-        outputs = [interceptor_output] if interceptor_output else [],
-        command_prefix = interceptor_command_prefix,
-        output_file = interceptor_output,
-    )
 
 def _get_grab_intree_modules_step(ctx, has_any_modules, modules_staging_dir, ruledir, all_module_names):
     """Returns a step for grabbing the in-tree modules from `OUT_DIR`.
@@ -1496,6 +1506,59 @@ _get_dot_config = subrule(
     implementation = _get_dot_config_impl,
 )
 
+def _gen_symvers_step(all_output_names_minus_modules, kbuild_mixed_tree_ret):
+    """Creates a step that generates various .symvers files.
+
+    Args:
+        all_output_names_minus_modules: all non-module output names in *outs
+        kbuild_mixed_tree_ret: from _create_kbuild_mixed_tree
+    """
+    inputs = []
+    cmd = ""
+
+    # After 6.13, Kbuild no longer generates vmlinux.symvers. Manually generates this by
+    # filtering vmlinux lines from Module.symvers if the caller is requesting vmlinux.symvers in
+    # outs.
+    if "vmlinux.symvers" in all_output_names_minus_modules:
+        cmd += """
+            if [[ ! -f ${OUT_DIR}/vmlinux.symvers ]]; then
+                if [[ ! -f ${OUT_DIR}/Module.symvers ]]; then
+                    echo "ERROR: Can't generate vmlinux.symvers because Kbuild did not generate Module.symvers." >&2
+                    exit 1
+                fi
+                grep "\\<vmlinux\\s\\+EXPORT" ${OUT_DIR}/Module.symvers > ${OUT_DIR}/vmlinux.symvers
+            fi
+        """
+
+    # After 6.13, for mixed builds, Kbuild only generates modules-only.symvers. Manually
+    # concatenate it with vmlinux.symvers to form Module.symvers.
+    if "Module.symvers" in all_output_names_minus_modules and kbuild_mixed_tree_ret.base_kernel_files:  # is mixed build
+        # This to_list() is acceptable because GKI's outs/module_outs is a small list
+        symvers_srcs = [
+            file
+            for file in kbuild_mixed_tree_ret.base_kernel_files.to_list()
+            if file.basename == "vmlinux.symvers"
+        ]
+        cmd += """
+            if [[ ! -f ${{OUT_DIR}}/Module.symvers ]]; then
+                if [[ ! -f ${{OUT_DIR}}/modules-only.symvers ]]; then
+                    echo "ERROR: Can't generate Module.symvers because Kbuild did not generate modules-only.symvers." >&2
+                    exit 1
+                fi
+                cat {symvers_srcs} ${{OUT_DIR}}/modules-only.symvers > ${{OUT_DIR}}/Module.symvers
+            fi
+        """.format(
+            symvers_srcs = " ".join([file.path for file in symvers_srcs]),
+        )
+        inputs += symvers_srcs
+
+    return struct(
+        inputs = inputs,
+        tools = [],
+        cmd = cmd,
+        outputs = [],
+    )
+
 def _get_modinst_step(ctx, modules_staging_dir):
     module_strip_flag = "INSTALL_MOD_STRIP="
     if ctx.attr.strip_modules:
@@ -1537,18 +1600,7 @@ def _get_modinst_step(ctx, modules_staging_dir):
          # Set variables and create dirs for modules
            mkdir -p {modules_staging_dir}
          # Install modules
-           if grep -q -E -e "\\bmodules\\b|[.]ko\\b" <<< "{make_goals}" ; then
-               if grep -q -E -e "[.]ko\\b" <<< "{make_goals}" ; then
-                   # For single_module builds, we need to generate our own
-                   # modules.order since `make` deletes it, but it's needed for
-                   # `modules_install`. We don't really care about the module
-                   # ordering here. With fw_devlink enabled in GKI, the probe
-                   # ordering should be handled based on device dependencies.
-                   : > ${{OUT_DIR}}/modules.order
-                   for module in {make_goals}; do
-                       echo ${{module}} | sed -n "s:\\([.]\\)ko\\>.*:\\1o:p"  >> ${{OUT_DIR}}/modules.order
-                   done
-               fi
+           if grep -q "\\bmodules\\b" <<< "{make_goals}" ; then
                make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} DEPMOD=true O=${{OUT_DIR}} {module_strip_flag} INSTALL_MOD_PATH=$(realpath {modules_staging_dir}) modules_install
            else
                # Workaround as this file is required, hence just produce a placeholder.
@@ -1558,7 +1610,7 @@ def _get_modinst_step(ctx, modules_staging_dir):
         modules_staging_dir = modules_staging_dir,
         internal_outs_under_out_dir = " ".join(["${{OUT_DIR}}/{}".format(item) for item in _kernel_build_internal_outs]),
         module_strip_flag = module_strip_flag,
-        make_goals = " ".join(ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals),
+        make_goals = ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals,
     )
 
     if base_kernel:
@@ -1618,7 +1670,10 @@ def _build_main_action(
     modules_staging_dir = modules_staging_archive_self.dirname + "/staging"
 
     # Individual steps of the final command.
-    interceptor_step = _get_interceptor_step(ctx)
+    gen_symvers_step = _gen_symvers_step(
+        all_output_names_minus_modules = all_output_names.non_modules,
+        kbuild_mixed_tree_ret = kbuild_mixed_tree_ret,
+    )
     cache_dir_step = cache_dir.get_step(
         ctx = ctx,
         common_config_tags = ctx.attr.config[KernelEnvAttrInfo].common_config_tags,
@@ -1654,7 +1709,6 @@ def _build_main_action(
         modules_staging_dir = modules_staging_dir,
     )
     steps = (
-        interceptor_step,
         cache_dir_step,
         modinst_step,
         grab_intree_modules_step,
@@ -1679,35 +1733,9 @@ def _build_main_action(
     command += """
            {kbuild_mixed_tree_cmd}
          # Actual kernel build
-           if grep -q "\\bdtbs\\b" <<< "{make_goals}" ; then
-               # TODO(b/359683179): if we build dtbs with the individual kernel
-               # modules, then not all of the kernel modules are found in the
-               # OUT_DIR. Building dtbs first, fixes this issue.
-               {interceptor_command_prefix} make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} dtbs
-           fi
-           make_subgoals=$(echo "{make_goals}" | sed "s:\\<dtbs\\>::" || true)
-           # Allow an empty/unspecified make_goals attribute to trigger just
-           # "make" in the kernel directory to build the default target.
-           #
-           # We check against the blank/whitespace character class to account
-           # for the case where the make_goals attribute isn't set, in which case
-           # we default to MAKE_GOALS, and MAKE_GOALS is defined as just
-           # whitespace--for example:
-           #
-           # MAKE_GOALS="
-           # "
-           #
-           # This aligns with the expectation of an empty/unspecified make_goals
-           # attribute building the default target.
-           if [[ -n "${{make_subgoals}}" ]] || [[ "{make_goals}" =~ ^[[:space:]]*$ ]]; then
-               if grep -q -E -e "[.]ko\\b" <<< "${{make_subgoals}}" ; then
-                   # TODO(b/359681021) Follow up with the upstream maintainer to
-                   # see what needs to be done to drop KBUILD_MODPOST_WARN=1.
-                   {interceptor_command_prefix} make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} KBUILD_MODPOST_WARN=1 ${{make_subgoals}}
-               else
-                   {interceptor_command_prefix} make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} ${{make_subgoals}}
-               fi
-           fi
+           make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} {make_goals}
+         # Generate .symvers files that might be missing from Kbuild.
+           {gen_symvers_cmd}
          # Install modules
            {modinst_cmd}
          # Archive headers in OUT_DIR
@@ -1749,6 +1777,7 @@ def _build_main_action(
          # Create last_build symlink in cache_dir
            {cache_dir_post_cmd}
          """.format(
+        gen_symvers_cmd = gen_symvers_step.cmd,
         cache_dir_post_cmd = cache_dir_step.post_cmd,
         kbuild_mixed_tree_cmd = kbuild_mixed_tree_ret.cmd,
         search_and_cp_output = ctx.executable._search_and_cp_output.path,
@@ -1769,7 +1798,6 @@ def _build_main_action(
         modules_staging_dir = modules_staging_dir,
         modules_staging_archive_self = modules_staging_archive_self.path,
         out_dir_kernel_headers_tar = out_dir_kernel_headers_tar.path,
-        interceptor_command_prefix = interceptor_step.command_prefix,
         label = ctx.label,
         make_goals = " ".join(make_goals),
         copy_module_symvers_cmd = copy_module_symvers_step.cmd,
@@ -1781,8 +1809,8 @@ def _build_main_action(
     transitive_inputs.append(
         ctx.attr.config[KernelSerializedEnvInfo].inputs,
     )
+    transitive_inputs.append(kbuild_mixed_tree_ret.inputs)
     inputs = []
-    inputs += kbuild_mixed_tree_ret.outputs
     for step in steps:
         inputs += step.inputs
 
@@ -1820,7 +1848,6 @@ def _build_main_action(
     return struct(
         all_output_files = all_output_files,
         out_dir_kernel_headers_tar = out_dir_kernel_headers_tar,
-        interceptor_output = interceptor_step.output_file,
         modules_staging_archive_self = modules_staging_archive_self,
         unstripped_dir = grab_unstripped_modules_step.unstripped_dir,
         ruledir = ruledir,
@@ -1976,7 +2003,7 @@ def _create_infos(
         },
         fake_system_map = False,
         extra_restore_outputs_cmd = kbuild_mixed_tree_ret.cmd,
-        extra_inputs = depset(kbuild_mixed_tree_ret.outputs),
+        extra_inputs = kbuild_mixed_tree_ret.inputs,
     )
 
     orig_env_info = ctx.attr.config[KernelBuildOriginalEnvInfo]
@@ -1985,7 +2012,6 @@ def _create_infos(
         out_dir_kernel_headers_tar = main_action_ret.out_dir_kernel_headers_tar,
         outs = depset(all_output_files["outs"].values()),
         base_kernel_files = kbuild_mixed_tree_ret.base_kernel_files,
-        interceptor_output = main_action_ret.interceptor_output,
     )
 
     kernel_build_uname_info = KernelBuildUnameInfo(
@@ -2003,25 +2029,8 @@ def _create_infos(
             for dep in ext_mod_serialized_env_info_deps
         },
         fake_system_map = True,
-        extra_restore_outputs_cmd = """
-            (
-                {kbuild_mixed_tree_cmd}
-              # Stitch together the GKI symbols and device module symbols
-              # together for proper linking during the modpost step. This will
-              # also help detect CRC differences between the GKI and device
-              # builds if the same symbol is defined twice with different CRC
-              # values.
-                if [[ -f "${{KBUILD_MIXED_TREE}}/Module.symvers" ]]; then
-                  cp ${{KBUILD_MIXED_TREE}}/Module.symvers ${{OUT_DIR}}/Module.symvers.tmp
-                  grep -v -e "\\bvmlinux\\b" ${{OUT_DIR}}/Module.symvers >> ${{OUT_DIR}}/Module.symvers.tmp
-                  cat ${{OUT_DIR}}/Module.symvers.tmp | sort -u > ${{OUT_DIR}}/Module.symvers
-                  rm -f ${{OUT_DIR}}/Module.symvers.tmp
-                fi
-            )
-        """.format(
-            kbuild_mixed_tree_cmd = kbuild_mixed_tree_ret.cmd,
-        ),
-        extra_inputs = depset(kbuild_mixed_tree_ret.outputs, transitive = [module_srcs.module_scripts]),
+        extra_restore_outputs_cmd = "",
+        extra_inputs = depset(transitive = [module_srcs.module_scripts]),
     )
 
     # External modules do not need implicit_outs because they are unsigned.
@@ -2039,10 +2048,10 @@ def _create_infos(
         },
         fake_system_map = False,
         extra_restore_outputs_cmd = kbuild_mixed_tree_ret.cmd,
-        extra_inputs = depset(
-            kbuild_mixed_tree_ret.outputs,
-            transitive = [module_srcs.module_scripts],
-        ),
+        extra_inputs = depset(transitive = [
+            kbuild_mixed_tree_ret.inputs,
+            module_srcs.module_scripts,
+        ]),
     )
 
     # For ddk_config()
@@ -2157,7 +2166,6 @@ def _create_infos(
     output_group_info = OutputGroupInfo(**output_group_kwargs)
 
     kbuild_mixed_tree_files = all_output_files["outs"].values() + all_output_files["module_outs"].values()
-    kbuild_mixed_tree_files.append(all_output_files["internal_outs"]["Module.symvers"])
     kbuild_mixed_tree_info = KernelBuildMixedTreeInfo(
         files = depset(kbuild_mixed_tree_files),
     )
@@ -2202,6 +2210,7 @@ def _create_infos(
         ruledir = main_action_ret.ruledir,
         module_env_archive = module_scripts_archive,
         has_base_kernel = base_kernel_utils.get_base_kernel(ctx) != None,
+        copy_module_symvers_outputs = main_action_ret.module_symvers_outputs,
     )
 
     default_info_files = all_output_files["outs"].values() + all_output_files["module_outs"].values()
@@ -2360,7 +2369,6 @@ _kernel_build = rule(
             allow_files = True,
         ),
         "collect_unstripped_modules": attr.bool(),
-        "enable_interceptor": attr.bool(),
         "_verify_ksymtab": attr.label(
             default = "//build/kernel:abi_verify_ksymtab",
             executable = True,
