@@ -1247,7 +1247,7 @@ def _get_modinst_step(ctx, modules_staging_dir):
         modules_staging_dir = modules_staging_dir,
         internal_outs_under_out_dir = " ".join(["${{OUT_DIR}}/{}".format(item) for item in _kernel_build_internal_outs]),
         module_strip_flag = module_strip_flag,
-        make_goals = ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals,
+        make_goals = " ".join(ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals),
     )
 
     if base_kernel:
