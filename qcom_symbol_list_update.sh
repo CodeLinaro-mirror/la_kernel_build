@@ -5,11 +5,12 @@
 set -o errexit
 set -o pipefail
 
-readonly DEFAULT_TARGET=pineapple
-readonly DEFAULT_BRANCH=android14-6.1
+readonly DEFAULT_TARGET=canoe
+readonly DEFAULT_BRANCH=android16-6.12
 readonly ACK_PROJECT=kernel/common
 readonly ACK_REPO="https://android.googlesource.com/${ACK_PROJECT}"
-readonly SYMBOL_LIST=android/abi_gki_aarch64_qcom
+DOWNSTREAM_SYMBOL_LIST=android/abi_gki_aarch64_qcom
+readonly UPSTREAM_SYMBOL_LIST=gki/aarch64/symbols/qcom
 
 ROOT_DIR="$(readlink -f "$(dirname "$0")/../..")"
 readonly ROOT_DIR
@@ -17,10 +18,10 @@ readonly ROOT_DIR
 print_usage() {
 	name=$(basename "$0")
 	cat << EOF
-$name - update the msm-kernel ABI symbol list
+$name - update the soc-repo ABI symbol list
 
 This script will pull down the latest symbol list from upstream ACK, update
-the list with the latest symbols from the msm-kernel build, then create a
+the list with the latest symbols from the soc-repo build, then create a
 commit suitable for pushing back to ACK.
 
 Usage: $name [-s <SHORT DESCRIPTION>] [-l <LONG DESCRIPTION>] [-b <BUG>]
@@ -109,7 +110,7 @@ main() {
 		esac
 	done
 
-	cd "${ROOT_DIR}/msm-kernel"
+	cd "${ROOT_DIR}/soc-repo"
 
 	# Get the remote name or create the remote if it's not already there
 	if ! remote=$(git remote -v | awk "\$2==\"$ACK_REPO\" {print \$1; exit}") \
@@ -128,26 +129,27 @@ main() {
 	ack_branch="${branch:-$DEFAULT_BRANCH}"
 
 	# Update our symbol list to the ACK tip
-	if ! git show "${remote}/${ack_branch}:${SYMBOL_LIST}" > "$SYMBOL_LIST"; then
-		git checkout "$SYMBOL_LIST"
+	if ! git show "${remote}/${ack_branch}:${UPSTREAM_SYMBOL_LIST}" > \
+		"$DOWNSTREAM_SYMBOL_LIST"; then
+		git checkout "$DOWNSTREAM_SYMBOL_LIST"
 		exit 1
 	fi
 
 	if tree_has_changes; then
-		git commit --quiet -m 'Temporary ACK sync' "$SYMBOL_LIST"
+		git commit --quiet -m 'Temporary ACK sync' "$DOWNSTREAM_SYMBOL_LIST"
 	fi
 
 	# Add any additional symbols passed in by the user (sorting/dedup will
 	# be taken care of later by Bazel)
 	for s in $(echo "$manual_additions" | tr ',' ' '); do
-		printf "  %s\n" "$s" >> android/abi_gki_aarch64_qcom
+		printf "  %s\n" "$s" >> "$DOWNSTREAM_SYMBOL_LIST"
 	done
 
 	# Add new symbols from our build
 	(
 		cd ..
 		./tools/bazel run \
-			"//msm-kernel:${target:-$DEFAULT_TARGET}_gki_abi_update_symbol_list"
+			"//soc-repo:${target:-$DEFAULT_TARGET}_perf_abi_update_symbol_list"
 	)
 
 	if ! tree_has_changes; then
@@ -158,7 +160,7 @@ main() {
 	# Commit our changes
 	local -r commit_msg="$(mktemp)"
 	cat << EOF > "$commit_msg"
-ANDROID: $(basename "$SYMBOL_LIST"): ${short_desc:-<SHORT DESCRIPTION>}
+ANDROID: $(basename "$DOWNSTREAM_SYMBOL_LIST"): ${short_desc:-<SHORT DESCRIPTION>}
 
 $(printf "%s\n" "${long_desc:-<DESCRIPTION>}" | fmt)
 
