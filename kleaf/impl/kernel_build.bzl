@@ -56,6 +56,7 @@ load(
     "MODULES_STAGING_ARCHIVE",
     "MODULE_OUTS_FILE_OUTPUT_GROUP",
     "MODULE_OUTS_FILE_SUFFIX",
+    "MODULE_SYMVERS_FILE_SUFFIX",
     "TOOLCHAIN_VERSION_FILENAME",
 )
 load(":debug.bzl", "debug")
@@ -1177,9 +1178,10 @@ def _get_copy_module_symvers_step(ctx):
     outputs = []
 
     if ctx.attr.keep_module_symvers:
-        module_symvers_copy = ctx.actions.declare_file("{}/{}_Module.symvers".format(
+        module_symvers_copy = ctx.actions.declare_file("{}/{}{}".format(
             ctx.label.name,
             ctx.label.name,
+            MODULE_SYMVERS_FILE_SUFFIX,
         ))
         outputs.append(module_symvers_copy)
         copy_module_symvers_cmd = """
@@ -1245,7 +1247,7 @@ def _get_modinst_step(ctx, modules_staging_dir):
         modules_staging_dir = modules_staging_dir,
         internal_outs_under_out_dir = " ".join(["${{OUT_DIR}}/{}".format(item) for item in _kernel_build_internal_outs]),
         module_strip_flag = module_strip_flag,
-        make_goals = ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals,
+        make_goals = " ".join(ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals),
     )
 
     if base_kernel:
