@@ -1003,7 +1003,7 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_library")
 
 ddk_library(<a href="#ddk_library-name">name</a>, <a href="#ddk_library-kernel_build">kernel_build</a>, <a href="#ddk_library-srcs">srcs</a>, <a href="#ddk_library-deps">deps</a>, <a href="#ddk_library-hdrs">hdrs</a>, <a href="#ddk_library-includes">includes</a>, <a href="#ddk_library-linux_includes">linux_includes</a>, <a href="#ddk_library-local_defines">local_defines</a>, <a href="#ddk_library-copts">copts</a>,
             <a href="#ddk_library-removed_copts">removed_copts</a>, <a href="#ddk_library-asopts">asopts</a>, <a href="#ddk_library-config">config</a>, <a href="#ddk_library-kconfig">kconfig</a>, <a href="#ddk_library-defconfig">defconfig</a>, <a href="#ddk_library-autofdo_profile">autofdo_profile</a>,
-            <a href="#ddk_library-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_library-kwargs">**kwargs</a>)
+            <a href="#ddk_library-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_library-pkvm_el2">pkvm_el2</a>, <a href="#ddk_library-kwargs">**kwargs</a>)
 </pre>
 
 **EXPERIMENTAL**. A library that may be used by a DDK module.
@@ -1037,6 +1037,7 @@ Known issues:
 | <a id="ddk_library-defconfig"></a>defconfig |  see [`ddk_module.defconfig`](#ddk_module-defconfig)   |  `None` |
 | <a id="ddk_library-autofdo_profile"></a>autofdo_profile |  see [`ddk_module.autofdo_profile`](#ddk_module-autofdo_profile)   |  `None` |
 | <a id="ddk_library-debug_info_for_profiling"></a>debug_info_for_profiling |  see [`ddk_module.debug_info_for_profiling`](#ddk_module-debug_info_for_profiling)   |  `None` |
+| <a id="ddk_library-pkvm_el2"></a>pkvm_el2 |  **EXPERIMENTAL**. If True, builds EL2 hypervisor code.<br><br>If True: - The output list is the fixed `["kvm_nvhe.o"]`, plus relevant .o.cmd files - The generated Makefile is modified to build EL2 hypervisor code.<br><br>Note: This is only supported in selected branches.   |  `None` |
 | <a id="ddk_library-kwargs"></a>kwargs |  Additional attributes to the internal rule. See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 
@@ -1048,8 +1049,9 @@ Known issues:
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_module")
 
 ddk_module(<a href="#ddk_module-name">name</a>, <a href="#ddk_module-kernel_build">kernel_build</a>, <a href="#ddk_module-srcs">srcs</a>, <a href="#ddk_module-deps">deps</a>, <a href="#ddk_module-hdrs">hdrs</a>, <a href="#ddk_module-textual_hdrs">textual_hdrs</a>, <a href="#ddk_module-includes">includes</a>, <a href="#ddk_module-conditional_srcs">conditional_srcs</a>,
-           <a href="#ddk_module-linux_includes">linux_includes</a>, <a href="#ddk_module-out">out</a>, <a href="#ddk_module-local_defines">local_defines</a>, <a href="#ddk_module-copts">copts</a>, <a href="#ddk_module-removed_copts">removed_copts</a>, <a href="#ddk_module-asopts">asopts</a>, <a href="#ddk_module-linkopts">linkopts</a>, <a href="#ddk_module-config">config</a>,
-           <a href="#ddk_module-kconfig">kconfig</a>, <a href="#ddk_module-defconfig">defconfig</a>, <a href="#ddk_module-generate_btf">generate_btf</a>, <a href="#ddk_module-autofdo_profile">autofdo_profile</a>, <a href="#ddk_module-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_module-kwargs">**kwargs</a>)
+           <a href="#ddk_module-crate_root">crate_root</a>, <a href="#ddk_module-linux_includes">linux_includes</a>, <a href="#ddk_module-out">out</a>, <a href="#ddk_module-local_defines">local_defines</a>, <a href="#ddk_module-copts">copts</a>, <a href="#ddk_module-removed_copts">removed_copts</a>, <a href="#ddk_module-asopts">asopts</a>, <a href="#ddk_module-linkopts">linkopts</a>,
+           <a href="#ddk_module-config">config</a>, <a href="#ddk_module-kconfig">kconfig</a>, <a href="#ddk_module-defconfig">defconfig</a>, <a href="#ddk_module-generate_btf">generate_btf</a>, <a href="#ddk_module-autofdo_profile">autofdo_profile</a>, <a href="#ddk_module-debug_info_for_profiling">debug_info_for_profiling</a>,
+           <a href="#ddk_module-kwargs">**kwargs</a>)
 </pre>
 
 Defines a DDK (Driver Development Kit) module.
@@ -1337,6 +1339,7 @@ $(LINUXINCLUDE)
 | <a id="ddk_module-textual_hdrs"></a>textual_hdrs |  See [`ddk_headers.textual_hdrs`](#ddk_headers-textual_hdrs). DEPRECATED. Use `hdrs`.   |  `None` |
 | <a id="ddk_module-includes"></a>includes |  See [`ddk_headers.includes`](#ddk_headers-includes)   |  `None` |
 | <a id="ddk_module-conditional_srcs"></a>conditional_srcs |  A dictionary that specifies sources conditionally compiled based on configs.<br><br>Example:<br><br><pre><code>conditional_srcs = {&#10;    "CONFIG_FOO": {&#10;        True: ["foo.c"],&#10;        False: ["notfoo.c"]&#10;    }&#10;}</code></pre><br><br>In the above example, if `CONFIG_FOO` is `y` or `m`, `foo.c` is compiled. Otherwise, `notfoo.c` is compiled instead.   |  `None` |
+| <a id="ddk_module-crate_root"></a>crate_root |  For Rust modules, the file that will be passed to rustc to be used for building this module.<br><br>Currently, each `.ko` may only contain a single Rust crate. Modules with multiple crates are not yet supported. Hence, only a single file may be passed into crate_root.<br><br>Unlike `rust_binary`, this must always be set for Rust modules. No defaults are assumed.   |  `None` |
 | <a id="ddk_module-linux_includes"></a>linux_includes |  See [`ddk_headers.linux_includes`](#ddk_headers-linux_includes)<br><br>Unlike `ddk_headers.linux_includes`, `ddk_module.linux_includes` is **NOT** applied to dependent `ddk_module`s.   |  `None` |
 | <a id="ddk_module-out"></a>out |  The output module file. This should usually be `"{name}.ko"`.<br><br>This is required if this target does not contain submodules.   |  `None` |
 | <a id="ddk_module-local_defines"></a>local_defines |  List of defines to add to the compile and assemble command line.<br><br>**Order matters**. To prevent buildifier from sorting the list, use the `# do not sort` magic line.<br><br>Each string is prepended with `-D` and added to the compile/assemble command line for this target, but not to its dependents.<br><br>Unlike [`cc_library.local_defines`](https://bazel.build/reference/be/c-cpp#cc_library.local_defines), this is not subject to ["Make" variable substitution](https://bazel.build/reference/be/make-variables) or [`$(location)` substitution](https://bazel.build/reference/be/make-variables#predefined_label_variables).<br><br>Each string is treated as a single Bourne shell token. Unlike [`cc_library.local_defines`](https://bazel.build/reference/be/c-cpp#cc_library.local_defines), this is not subject to [Bourne shell tokenization](https://bazel.build/reference/be/common-definitions#sh-tokenization). The behavior is similar to `cc_library` with the `no_copts_tokenization` [feature](https://bazel.build/reference/be/functions#package.features). For details about `no_copts_tokenization`, see [`cc_library.copts`](https://bazel.build/reference/be/c-cpp#cc_library.copts).   |  `None` |
@@ -1361,7 +1364,8 @@ $(LINUXINCLUDE)
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_submodule")
 
 ddk_submodule(<a href="#ddk_submodule-name">name</a>, <a href="#ddk_submodule-out">out</a>, <a href="#ddk_submodule-srcs">srcs</a>, <a href="#ddk_submodule-deps">deps</a>, <a href="#ddk_submodule-hdrs">hdrs</a>, <a href="#ddk_submodule-includes">includes</a>, <a href="#ddk_submodule-local_defines">local_defines</a>, <a href="#ddk_submodule-copts">copts</a>, <a href="#ddk_submodule-removed_copts">removed_copts</a>, <a href="#ddk_submodule-asopts">asopts</a>,
-              <a href="#ddk_submodule-linkopts">linkopts</a>, <a href="#ddk_submodule-conditional_srcs">conditional_srcs</a>, <a href="#ddk_submodule-autofdo_profile">autofdo_profile</a>, <a href="#ddk_submodule-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_submodule-kwargs">**kwargs</a>)
+              <a href="#ddk_submodule-linkopts">linkopts</a>, <a href="#ddk_submodule-conditional_srcs">conditional_srcs</a>, <a href="#ddk_submodule-crate_root">crate_root</a>, <a href="#ddk_submodule-autofdo_profile">autofdo_profile</a>, <a href="#ddk_submodule-debug_info_for_profiling">debug_info_for_profiling</a>,
+              <a href="#ddk_submodule-kwargs">**kwargs</a>)
 </pre>
 
 Declares a DDK (Driver Development Kit) submodule.
@@ -1447,6 +1451,7 @@ dependencies are stable, it is recommended to:
 | <a id="ddk_submodule-asopts"></a>asopts |  See [`ddk_module.asopts`](#ddk_module-asopts).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).<br><br>These are not exported to downstream targets that depends on the `ddk_module` that includes the current target.   |  `None` |
 | <a id="ddk_submodule-linkopts"></a>linkopts |  See [`ddk_module.linkopts`](#ddk_module-linkopts).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).<br><br>These are not exported to downstream targets that depends on the `ddk_module` that includes the current target.   |  `None` |
 | <a id="ddk_submodule-conditional_srcs"></a>conditional_srcs |  See [`ddk_module.conditional_srcs`](#ddk_module-conditional_srcs).   |  `None` |
+| <a id="ddk_submodule-crate_root"></a>crate_root |  See [`ddk_module.crate_root`](#ddk_module-crate_root).   |  `None` |
 | <a id="ddk_submodule-autofdo_profile"></a>autofdo_profile |  See [`ddk_module.autofdo_profile`](#ddk_module-autofdo_profile).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).   |  `None` |
 | <a id="ddk_submodule-debug_info_for_profiling"></a>debug_info_for_profiling |  See [`ddk_module.debug_info_for_profiling`](#ddk_module-debug_info_for_profiling).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).   |  `None` |
 | <a id="ddk_submodule-kwargs"></a>kwargs |  Additional attributes to the internal rule, e.g. [`visibility`](https://docs.bazel.build/versions/main/visibility.html). See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
@@ -2012,5 +2017,29 @@ from the tarball, a source file would `#include <linux/time.h>`.
 | :------------- | :------------- | :------------- |
 | <a id="kernel_uapi_headers_cc_library-name"></a>name |  Name of target.   |  none |
 | <a id="kernel_uapi_headers_cc_library-kernel_build"></a>kernel_build |  [`kernel_build`](#kernel_build)   |  none |
+
+
+<a id="kunit_test"></a>
+
+## kunit_test
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kunit_test")
+
+kunit_test(<a href="#kunit_test-name">name</a>, <a href="#kunit_test-test_name">test_name</a>, <a href="#kunit_test-modules">modules</a>, <a href="#kunit_test-deps">deps</a>, <a href="#kunit_test-kwargs">**kwargs</a>)
+</pre>
+
+A kunit test.
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="kunit_test-name"></a>name |  name of the test   |  none |
+| <a id="kunit_test-test_name"></a>test_name |  name of the kunit test suite   |  none |
+| <a id="kunit_test-modules"></a>modules |  list of modules to be installed for kunit test   |  none |
+| <a id="kunit_test-deps"></a>deps |  dependencies for kunit test runner   |  none |
+| <a id="kunit_test-kwargs"></a>kwargs |  additional arguments for py_test   |  none |
 
 
