@@ -55,6 +55,7 @@ load("//build/kernel/kleaf/impl:kernel_modules_install.bzl", _kernel_modules_ins
 load("//build/kernel/kleaf/impl:kernel_uapi_headers_cc_library.bzl", _kernel_uapi_headers_cc_library = "kernel_uapi_headers_cc_library")
 load("//build/kernel/kleaf/impl:kernel_unstripped_modules_archive.bzl", _kernel_unstripped_modules_archive = "kernel_unstripped_modules_archive")
 load("//build/kernel/kleaf/impl:merged_kernel_uapi_headers.bzl", _merged_kernel_uapi_headers = "merged_kernel_uapi_headers")
+load("//build/kernel/kleaf/impl/testing:kernel_unit_test.bzl", _kunit_test = "kunit_test")
 
 # Re-exports. This is the list of public rules and macros.
 android_filegroup = _android_filegroup
@@ -92,3 +93,4 @@ unsparsed_image = _unsparsed_image
 
 # Tests
 kernel_module_test = _kernel_module_test
+kunit_test = _kunit_test
