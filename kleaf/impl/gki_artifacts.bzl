@@ -76,10 +76,10 @@ def _gki_artifacts_impl(ctx):
             export BUILD_GKI_BOOT_IMG{var_name}_SIZE={size}
         """.format(var_name = var_name, size = size)
 
-    # b/283225390: boot images with --gcov may overflow the boot image size
+    # b/283225390: boot images with --gcov and --kasan_generic may overflow the boot image size
     #   check when adding AVB hash footer.
     skip_avb_cmd = ""
-    if ctx.attr._gcov[BuildSettingInfo].value:
+    if ctx.attr._gcov[BuildSettingInfo].value or ctx.attr._kasan_generic[BuildSettingInfo].value:
         skip_avb_cmd = """
             export BUILD_GKI_BOOT_SKIP_AVB=1
         """
@@ -186,6 +186,7 @@ For example:
             cfg = "exec",
         ),
         "_gcov": attr.label(default = "//build/kernel/kleaf:gcov"),
+        "_kasan_generic": attr.label(default = "//build/kernel/kleaf:kasan_generic"),
         "_testkey": attr.label(default = "//tools/mkbootimg:gki/testdata/testkey_rsa4096.pem", allow_single_file = True),
     },
     toolchains = [hermetic_toolchain.type],
