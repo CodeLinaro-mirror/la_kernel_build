@@ -16,8 +16,8 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 load("//build/bazel_common_rules/docs:docs.bzl", "docs")
-load("//build/kernel/kleaf/tests:empty_test.bzl", "empty_test")
 load("//build/kernel/kleaf/impl:ddk/gen_ddk_headers.bzl", "gen_ddk_headers")
+load("//build/kernel/kleaf/tests:empty_test.bzl", "empty_test")
 load(":constants.bzl", "LTO_VALUES")
 load(":print_flags.bzl", "print_flags")
 
@@ -698,4 +698,19 @@ config_setting(
 config_setting(
     name = "socrepo_true",
     flag_values = {":socrepo": "true"},
+)
+
+string_flag(
+    name = "microxr_kernel_build",
+    build_setting_default = "false",
+)
+
+config_setting(
+    name = "microxr_kernel_build_false",
+    flag_values = {":microxr_kernel_build": "false"},
+)
+
+config_setting(
+    name = "microxr_kernel_build_true",
+    flag_values = {":microxr_kernel_build": "true"},
 )
