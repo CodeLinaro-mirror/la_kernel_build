@@ -32,6 +32,10 @@ load("//build/kernel/kleaf/impl:kernel_sbom.bzl", "kernel_sbom")
 load("//build/kernel/kleaf/impl:merge_kzip.bzl", "merge_kzip")
 load("//build/kernel/kleaf/impl:out_headers_allowlist_archive.bzl", "out_headers_allowlist_archive")
 load(
+    "//build/kernel/kleaf/tests:runtime_protection_presence_test/symbol_presence_test.bzl",
+    "symbol_presence_test",
+)
+load(
     ":constants.bzl",
     "DEFAULT_GKI_OUTS",
     "X86_64_OUTS",
@@ -937,6 +941,7 @@ def _define_common_kernel(
         kernel_modules_install = name + "_modules_install",
         modules = (module_implicit_outs or []),
         arch = arch,
+        protected_exports_list = protected_exports_list,
     )
 
     native.test_suite(
@@ -1091,7 +1096,8 @@ def _define_common_kernels_additional_tests(
         kernel_build_name,
         kernel_modules_install,
         modules,
-        arch):
+        arch,
+        protected_exports_list):
     fake_modules_options = Label("//build/kernel/kleaf/artifact_tests:fake_modules_options.txt")
 
     kernel_images(
@@ -1134,13 +1140,28 @@ def _define_common_kernels_additional_tests(
         arch = arch,
     )
 
+    # Note that these tests deliberately refers to //common explicitly, so this test is only
+    # included when we are building //common:kernel_aarch64 (GKI).
+    extra_tests = []
+    if native.package_relative_label(kernel_build_name) == native.package_relative_label("//common:kernel_aarch64"):
+        # This test internally adds the needed checks.
+        symbol_presence_test(
+            name = name + "_runtime_protection_symbol_presence_test",
+            kernel_build = kernel_build_name,
+            protected_exports_list = protected_exports_list,
+            visibility = ["//visibility:private"],
+        )
+        extra_tests.append(
+            name + "_runtime_protection_symbol_presence_test",
+        )
+
     native.test_suite(
         name = name,
         tests = [
             name + "_empty",
             name + "_fake",
             name + "_device_modules_test",
-        ],
+        ] + extra_tests,
     )
 
 def define_db845c(
