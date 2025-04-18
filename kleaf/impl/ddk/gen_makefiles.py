@@ -47,6 +47,8 @@ _VALUE_OPT_RE = re.compile(r"^\$\([^)]+\)$")
 # hyp-obj-y builds hypervisor code
 _PKVM_EL2_OBJ = "hyp-obj"
 
+_DDK_MODINFO_SOURCE = "ddk_modinfo.c"
+
 Opts = list[dict[str, str | bool]]
 
 class DieException(SystemExit):
@@ -106,11 +108,23 @@ def _gen_makefile(
     """
     content = _get_license_str()
 
+    content += """
+        ifneq ($(origin EXTRA_SYMBOLS), undefined)
+        $(error EXTRA_SYMBOLS cannot be set for DDK targets. Use the deps attribute instead.)
+        endif
+    """
+
     for module_symvers in module_symvers_list:
-        content += textwrap.dedent(f"""\
-            # Include symbol: {module_symvers}
-            EXTRA_SYMBOLS += $(COMMON_OUT_DIR)/{module_symvers}
+        if is_library:
+            # TODO - b/395014894: Propagate Module.symvers to linking stage
+            content += textwrap.dedent(f"""\
+                # Skipping {module_symvers} for ddk_library
             """)
+        else:
+            content += textwrap.dedent(f"""\
+                # Include symbol: {module_symvers}
+                EXTRA_SYMBOLS += $(COMMON_OUT_DIR)/{module_symvers}
+                """)
 
     if is_library:
         # ddk_library does not support conditional_srcs for now, because we can't get
@@ -150,12 +164,12 @@ def _should_apply_cflags(src: pathlib.Path) -> bool:
 def _merge_directories(
         output_makefiles: pathlib.Path,
         submodule_makefile_dir: pathlib.Path,
-        ddk_markers: set[pathlib.Path],
+        ddk_modinfos: set[pathlib.Path],
     ):
     """Merges the content of submodule_makefile_dir into output_makefiles.
 
     File of the same relative path are concatenated.
-    ddk_markers is modified during this keep track of where it' been copied.
+    ddk_modinfos is modified during this keep track of where it' been copied.
     """
 
     if not submodule_makefile_dir.is_dir():
@@ -170,10 +184,10 @@ def _merge_directories(
             with open(dst_path, "a") as dst, \
                     open(submodule_file, "r") as src:
                 if dst_path.suffix in (".c", ".rs", ".h"):
-                    if dst_path.name == "ddk_marker.c":
-                        if file_rel in ddk_markers:
+                    if dst_path.name == _DDK_MODINFO_SOURCE:
+                        if file_rel in ddk_modinfos:
                             continue
-                        ddk_markers.add(file_rel)
+                        ddk_modinfos.add(file_rel)
                     dst.write(f"// {submodule_file}\n")
                 elif dst_path.suffix == ".S":
                     dst.write(f"/* {submodule_file} */\n")
@@ -250,25 +264,25 @@ def generate_all_files(
             pkvm_el2_out=pkvm_el2_out,
         )
 
-    ddk_markers: set[pathlib.Path] = set()
+    ddk_modinfos: set[pathlib.Path] = set()
     for submodule_makefile_dir in submodule_makefiles:
         _merge_directories(
-            output_makefiles, submodule_makefile_dir, ddk_markers)
+            output_makefiles, submodule_makefile_dir, ddk_modinfos)
     _append_submodule_linux_include_dirs(output_makefiles,
                                          linux_include_dirs,
                                          submodule_linux_include_dirs)
 
 
-def _get_ddk_marker(
+def _get_ddk_modinfo(
     output_dir: pathlib.Path,
 ) -> pathlib.Path:
     os.makedirs(output_dir, exist_ok=True)
-    ddk_marker = output_dir / "ddk_marker.c"
-    ddk_marker.write_text(textwrap.dedent("""\
+    ddk_modinfo = output_dir / _DDK_MODINFO_SOURCE
+    ddk_modinfo.write_text(textwrap.dedent("""\
         #include <linux/compiler.h>
         static const char __UNIQUE_ID(built_with)[] __used __section(".modinfo") __aligned(1) = "built_with=DDK";
         """))
-    return ddk_marker
+    return ddk_modinfo
 
 
 def _generate_kbuild_and_extra(
@@ -286,6 +300,7 @@ def _generate_kbuild_and_extra(
         kbuild_has_linux_include: bool,
         is_library: bool,
         is_pkvm_el2: bool,
+        copy_rule_hack: bool,
         **unused_kwargs
 ):
     """Generates all relevant Kbuild files and extra flag files.
@@ -306,6 +321,7 @@ def _generate_kbuild_and_extra(
         kbuild_has_linux_include: Whether to write LINUXINCLUDE to Kbuild files
         is_library: If set, outer target is a ddk_library
         is_pkvm_el2: If set, building pKVM EL2
+        copy_rule_hack: Employ hack for COPY rule
         **unused_kwargs: unused
     """
     kernel_module_srcs_json_content = json.load(kernel_module_srcs_json)
@@ -353,9 +369,10 @@ def _generate_kbuild_and_extra(
     out_asflags_path = output_makefiles / gen_asflags_subpath
     out_ldflags_path = output_makefiles / gen_ldflags_subpath
 
-    # For modinfo tagging
-    _handle_ddk_marker(rel_srcs, kernel_module_out,
-        out_cflags_path, package / gen_cflags_subpath.parent)
+    if not is_library:
+        # For modinfo tagging
+        _handle_ddk_modinfo(rel_srcs, kernel_module_out,
+            out_cflags_path, package / gen_cflags_subpath.parent)
 
     with open(kbuild, "w") as out_file, \
          open(out_cflags_path, "a") as out_cflags, \
@@ -390,7 +407,8 @@ def _generate_kbuild_and_extra(
                     kernel_module_out=kernel_module_out,
                     is_pkvm_el2=is_pkvm_el2,
                     obj_suffix=obj_suffix,
-                    is_crate_root = src_item.get("is_crate_root", False)
+                    dep_type = src_item.get("type", "srcs"),
+                    copy_rule_hack=copy_rule_hack
                 )
 
             if config is not None and value != True: # pylint: disable=singleton-comparison
@@ -504,31 +522,31 @@ def _check_srcs_valid(rel_srcs: list[dict[str, Any]],
             kernel_module_out)
 
 
-def _handle_ddk_marker(
+def _handle_ddk_modinfo(
         rel_srcs: list[dict[str, Any]],
         kernel_module_out: pathlib.Path,
         out_cflags_path: pathlib.Path,
         package: pathlib.Path
 ):
-    """Adds ddk_marker.c or implicitly include it."""
+    """Adds ddk_modinfo.c or implicitly include it."""
     rel_srcs_flat = _get_rel_srcs_flat(rel_srcs)
-    # Avoid possible collisions if there is an existing ddk_marker.c file.
-    #  or if the output .ko is named ddk_marker.ko
-    if any([src.name == "ddk_marker.c" for src in rel_srcs_flat]):
-        die("ddk_marker.c is not allowed to be a source file")
-    if kernel_module_out.with_suffix(".c") == "ddk_marker.c":
-        die("ddk_marker.ko is not allowed to be the output file")
+    # Avoid possible collisions if there is an existing ddk_modinfo.c file.
+    #  or if the output .ko is named ddk_modinfo.ko
+    if any([src.name == _DDK_MODINFO_SOURCE for src in rel_srcs_flat]):
+        die("%s is not allowed to be a source file", _DDK_MODINFO_SOURCE)
+    if kernel_module_out.with_suffix(".c") == _DDK_MODINFO_SOURCE:
+        die("%s is not allowed to be the output file", kernel_module_out)
 
-    ddk_marker = _get_ddk_marker(out_cflags_path.parent)
+    ddk_modinfo = _get_ddk_modinfo(out_cflags_path.parent)
     # Depending on the number of files, choose an appropriate path for tagging.
     if len(rel_srcs_flat) > 1:
         rel_srcs.append(
-            {"files": [kernel_module_out.parent / ddk_marker.name]})
+            {"files": [kernel_module_out.parent / ddk_modinfo.name]})
     else:
         with open(out_cflags_path, "w") as out_cflags:
             out_cflags.write("\n")
             out_cflags.write(textwrap.dedent(f"""\
-                    -include $(ROOT_DIR)/{str(package / ddk_marker.name)}
+                    -include $(ROOT_DIR)/{str(package / ddk_modinfo.name)}
                 """))
             out_cflags.write("\n")
 
@@ -538,7 +556,8 @@ def _handle_src(
         kernel_module_out: pathlib.Path,
         is_pkvm_el2: bool,
         obj_suffix: str,
-        is_crate_root: bool,
+        dep_type: str,
+        copy_rule_hack: bool,
 ):
     """Writes rules to build a single source file.
 
@@ -548,11 +567,12 @@ def _handle_src(
         kernel_module_out: The final .ko file, used as an anchor for checks
         is_pkvm_el2: If true, builds pKVM EL2 code
         obj_suffix: Suffix to `obj-`
-        is_crate_root: If true, this source file is from the `crate_root` attribute.
+        dep_type: Type of the dependency:
+            * srcs
+            * crate_root
+            * library, for deps with DdkLibraryInfo
+        copy_rule_hack: Employ hack for COPY rule
     """
-    # Ignore non-exported headers specified in srcs
-    if src.suffix in (".h",):
-        return
     if src.suffix not in _SOURCE_SUFFIXES:
         die("Invalid source %s", src)
     if not src.is_relative_to(kernel_module_out.parent):
@@ -560,7 +580,7 @@ def _handle_src(
             src, kernel_module_out.parent)
 
     # Ignore non-crate-root .rs. Only crate-root .rs is added.
-    if src.suffix == ".rs" and not is_crate_root:
+    if src.suffix == ".rs" and dep_type != "crate_root":
         return
 
     if src.suffix == ".cmd_shipped":
@@ -585,6 +605,15 @@ def _handle_src(
         out_file.write(textwrap.dedent(f"""\
                         {object_to_build}-{obj_suffix} += {out}
                     """))
+
+        # HACK: http://b/402888498 - COPY rule doesn't work, so hack it up.
+        # TODO: http://b/402888498 - Figure out why it doesn't work, and remove
+        #   this hack to use the pattern rule provided by Kbuild.
+        if copy_rule_hack and src.suffix in (".o_shipped", ".cmd_shipped"):
+            out_file.write(textwrap.dedent(f"""\
+                $(obj)/{out}: $(src)/{src.relative_to(kernel_module_out.parent)}
+                \t$(call cmd,copy)
+            """))
 
 
 def _handle_linux_includes(out_file: TextIO, kbuild_has_linux_include: bool,
@@ -772,6 +801,7 @@ if __name__ == "__main__":
                         action=SubmoduleLinuxIncludeDirAction)
     parser.add_argument("--is-library", action="store_true")
     parser.add_argument("--pkvm-el2-out", type=pathlib.Path)
+    parser.add_argument("--copy-rule-hack", action="store_true")
     args = parser.parse_args()
 
     die_exception = None

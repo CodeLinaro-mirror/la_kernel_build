@@ -19,6 +19,7 @@ Makefile and Kbuild files are required.
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("@kernel_toolchain_info//:dict.bzl", "VARS")
 load("//build/kernel/kleaf:directory_with_structure.bzl", dws = "directory_with_structure")
 load(
     "//build/kernel/kleaf/artifact_tests:kernel_test.bzl",
@@ -54,6 +55,18 @@ load(":stamp.bzl", "stamp")
 load(":utils.bzl", "kernel_utils")
 
 visibility("//build/kernel/kleaf/...")
+
+def _module_output_cmd():
+    """If the branch supports MO, return a command that uses it. Otherwise uses VPATH.
+
+    6.13 supports MO, which allows building external modules to be built
+    in a separate output directory. Between 6.10 and 6.13, VPATH needs to be
+    set to workaround the issue.
+    """
+
+    if VARS.get("KLEAF_INTERNAL_EXT_MODULE_SEPARATE_BUILD_DIR") != "1":
+        return "VPATH=${ROOT_DIR}/${KERNEL_DIR}"
+    return "MO=${OUT_DIR}/${ext_mod_rel}"
 
 def kernel_module(
         name,
@@ -410,6 +423,17 @@ def _kernel_module_impl(ctx):
         restore_out_dir_cmd = cache_dir_step.cmd,
     )
 
+    command += """
+        # For DDK modules with all sources generated, {ext_mod}/ may not even exist. Create it.
+        if [[ ! -d "{ext_mod}" ]]; then
+            mkdir -p "{ext_mod}"
+        fi
+        # Set variables
+        ext_mod_rel=$(realpath ${{ROOT_DIR}}/{ext_mod} --relative-to ${{KERNEL_DIR}})
+    """.format(
+        ext_mod = ext_mod,
+    )
+
     if kernel_uapi_headers_dws:
         command += """
                 # create dirs for modules
@@ -449,7 +473,6 @@ def _kernel_module_impl(ctx):
     if ctx.file.internal_ddk_makefiles_dir:
         command += """
              # Restore Makefile and Kbuild
-               mkdir -p {ext_mod}
                cp -r {ddk_makefiles}/* {ext_mod}/
 
              # Replace env var in cflags/asflags files
@@ -495,16 +518,14 @@ def _kernel_module_impl(ctx):
         make_filter = " 2> >(sed '/Skipping BTF generation/d' >&2) "
 
     command += """
-             # Set variables
-               ext_mod_rel=$(realpath ${{ROOT_DIR}}/{ext_mod} --relative-to ${{KERNEL_DIR}})
-
              # Actual kernel module build
-               make -C {ext_mod} ${{TOOL_ARGS}} M=${{ext_mod_rel}} O=${{OUT_DIR}} \\
-                    KERNEL_SRC=${{ROOT_DIR}}/${{KERNEL_DIR}} VPATH=${{ROOT_DIR}}/${{KERNEL_DIR}} \\
+               make -C {ext_mod} ${{TOOL_ARGS}} M=${{ext_mod_rel}} O=${{OUT_DIR}} {mo_cmd} \\
+                    KERNEL_SRC=${{ROOT_DIR}}/${{KERNEL_DIR}} \\
                     {extra_make_goals} \\
                     {make_filter} {make_redirect}
     """.format(
         ext_mod = ext_mod,
+        mo_cmd = _module_output_cmd(),
         extra_make_goals = " ".join(ctx.attr.internal_extra_make_goals),
         make_filter = make_filter,
         make_redirect = modpost_warn.make_redirect,
@@ -516,17 +537,22 @@ def _kernel_module_impl(ctx):
     """
     for goal in compile_commands_utils.additional_make_goals(ctx):
         command += """
-            make -C {ext_mod} ${{TOOL_ARGS}} M=${{ext_mod_rel}} VPATH=${{ROOT_DIR}}/${{KERNEL_DIR}} O=${{OUT_DIR}} KERNEL_SRC=${{ROOT_DIR}}/${{KERNEL_DIR}} {goal} {make_filter} {make_redirect}
+            make -C {ext_mod} ${{TOOL_ARGS}} M=${{ext_mod_rel}} O=${{OUT_DIR}} {mo_cmd} KERNEL_SRC=${{ROOT_DIR}}/${{KERNEL_DIR}} {goal} {make_filter} {make_redirect}
         """.format(
             ext_mod = ext_mod,
+            mo_cmd = _module_output_cmd(),
             goal = goal,
             make_filter = make_filter,
             make_redirect = modpost_warn.make_redirect,
         )
     command += """
         {get_compdb_outputs}
+
+        # Grab *.gcno files
+        {grab_gcno_step_cmd}
     """.format(
         get_compdb_outputs = compile_commands_step.cmd,
+        grab_gcno_step_cmd = grab_gcno_step.cmd,
     )
 
     # For ddk_library etc., directly copy output files in the main action.
@@ -553,7 +579,8 @@ def _kernel_module_impl(ctx):
         command += """
              # Install into staging directory
                make -C {ext_mod} ${{TOOL_ARGS}} DEPMOD=true M=${{ext_mod_rel}} \
-                   O=${{OUT_DIR}} KERNEL_SRC=${{ROOT_DIR}}/${{KERNEL_DIR}}     \
+                   O=${{OUT_DIR}} {mo_cmd}                                     \
+                   KERNEL_SRC=${{ROOT_DIR}}/${{KERNEL_DIR}}                    \
                    INSTALL_MOD_PATH=$(realpath {modules_staging_dir})          \
                    INSTALL_MOD_DIR=extra/{ext_mod}                             \
                    KERNEL_UAPI_HEADERS_DIR=$(realpath {kernel_uapi_headers_dir}) \
@@ -578,8 +605,6 @@ def _kernel_module_impl(ctx):
 
              # Grab unstripped modules
                {grab_unstripped_cmd}
-             # Grab *.gcno files
-               {grab_gcno_step_cmd}
              # Grab *.cmd
                {grab_cmd_cmd}
              # Move Module.symvers
@@ -590,6 +615,7 @@ def _kernel_module_impl(ctx):
                """.format(
             label = ctx.label,
             ext_mod = ext_mod,
+            mo_cmd = _module_output_cmd(),
             generate_btf = int(ctx.attr.generate_btf),
             module_symvers = module_symvers.path,
             modules_staging_dir = modules_staging_dws.directory.path,
@@ -602,7 +628,6 @@ def _kernel_module_impl(ctx):
             check_no_remaining = check_no_remaining.path,
             grab_modules_order_cmd = grab_modules_order_cmd,
             drop_modules_order_cmd = drop_modules_order_cmd,
-            grab_gcno_step_cmd = grab_gcno_step.cmd,
             grab_cmd_cmd = grab_cmd_step.cmd,
         )
 
@@ -782,7 +807,7 @@ def _kernel_module_impl(ctx):
             )]),
         ),
         ModuleSymversFileInfo(
-            module_symvers = depset([module_symvers]),
+            module_symvers = depset([module_symvers]) if module_symvers else depset(),
         ),
         DdkLibraryInfo(
             files = depset(default_info_files if ctx.attr.internal_is_ddk_library else []),
@@ -790,7 +815,7 @@ def _kernel_module_impl(ctx):
     ]
 
 def _kernel_module_additional_attrs():
-    return cache_dir.attrs() | stamp.ext_mod_attrs() | {
+    return cache_dir.attrs() | {
         attr_name: attr.label(default = label)
         for attr_name, label in compile_commands_utils.config_settings_raw().items()
     }
@@ -868,7 +893,6 @@ _kernel_module = rule(
             cfg = "exec",
             executable = True,
         ),
-        "_config_is_stamp": attr.label(default = "//build/kernel/kleaf:config_stamp"),
         "_preserve_cmd": attr.label(default = "//build/kernel/kleaf/impl:preserve_cmd"),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
         "_debug_modpost_warn": attr.label(default = "//build/kernel/kleaf:debug_modpost_warn"),
@@ -877,6 +901,7 @@ _kernel_module = rule(
     toolchains = [hermetic_toolchain.type],
     subrules = [
         empty_ddk_config_info,
+        stamp.ext_mod_get_localversion_file,
     ],
 )
 

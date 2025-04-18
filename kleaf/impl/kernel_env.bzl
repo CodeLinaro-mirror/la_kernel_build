@@ -90,18 +90,6 @@ def _get_check_arch_cmd(ctx):
         exit_cmd = exit_cmd,
     )
 
-def _get_set_ndk_triple_cmd():
-    """Returns command that sets NDK_TRIPLE."""
-    return """
-        if [[ "${ARCH}" == "arm64" ]]; then
-            export NDK_TRIPLE="${AARCH64_NDK_TRIPLE}"
-        elif [[ "${ARCH}" == "x86_64" ]]; then
-            export NDK_TRIPLE="${X86_64_NDK_TRIPLE}"
-        elif [[ "${ARCH}" == "arm" ]]; then
-            export NDK_TRIPLE="${ARM_NDK_TRIPLE}"
-        fi
-    """
-
 def _get_make_goals(ctx):
     # Fallback to goals from build.config
     make_goals = ["${MAKE_GOALS}"]
@@ -313,7 +301,6 @@ def _kernel_env_impl(ctx):
           {set_arch_cmd}
           source {setup_env}
           {check_arch_cmd}
-          {set_ndk_triple_cmd}
         # Variables from resolved toolchain
           {toolchains_setup_env_var_cmd}
           {set_clang_autofdo_profile_cmd}
@@ -323,6 +310,15 @@ def _kernel_env_impl(ctx):
           {kconfig_werror_setup}
         # Identify the build user as 'kleaf' to recognize a kleaf-built kernel
           export KBUILD_BUILD_USER=kleaf
+
+        # Make it so that Rust symbol names do not change when the version
+        # string of rustc changes. Note that since the version string includes
+        # the date and commit hash from the build environment, even a respin of
+        # rustc could cause symbol names to change without this option.
+        #
+        # https://github.com/rust-lang/rust/blob/617aad8c2e8783f6df8e5d1f8bb1e4bcdc70aa7b/compiler/rustc_span/src/def_id.rs#L179-L189
+          export RUSTC_FORCE_RUSTC_VERSION=rustc-android
+
         # Add a comment with config_tags for debugging
           cp -p {config_tags_comment_file} {out}
           chmod +w {out}
@@ -362,7 +358,6 @@ def _kernel_env_impl(ctx):
         set_arch_cmd = _get_set_arch_cmd(ctx),
         setup_env = setup_env.path,
         check_arch_cmd = _get_check_arch_cmd(ctx),
-        set_ndk_triple_cmd = _get_set_ndk_triple_cmd(),
         toolchains_setup_env_var_cmd = toolchains.kernel_setup_env_var_cmd,
         set_clang_autofdo_profile_cmd = set_clang_autofdo_profile_cmd,
         make_goals_deprecation_warning = make_goals_deprecation_warning,

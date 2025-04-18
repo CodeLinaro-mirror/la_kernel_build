@@ -52,6 +52,7 @@ build --flag_alias=kasan=//build/kernel/kleaf:kasan
 build --flag_alias=kasan_sw_tags=//build/kernel/kleaf:kasan_sw_tags
 build --flag_alias=kasan_generic=//build/kernel/kleaf:kasan_generic
 build --flag_alias=kcsan=//build/kernel/kleaf:kcsan
+build --flag_alias=kcov=//build/kernel/kleaf:kcov
 build --flag_alias=lto=//build/kernel/kleaf:lto
 build --flag_alias=notrim=//build/kernel/kleaf/impl:force_disable_trim
 build --flag_alias=debug=//build/kernel/kleaf:debug
@@ -67,6 +68,10 @@ build --flag_alias=norust_ashmem=no//build/kernel/kleaf:rust_ashmem
 build --flag_alias=nozstd_dwarf_compression=no//build/kernel/kleaf:zstd_dwarf_compression
 build --flag_alias=kconfig_werror=//build/kernel/kleaf:kconfig_werror
 build --flag_alias=nokconfig_werror=no//build/kernel/kleaf:kconfig_werror
+
+# flags that control the build process
+build --flag_alias=experimental_optimize_ddk_config_actions=//build/kernel/kleaf:optimize_ddk_config_actions
+build --flag_alias=noexperimental_optimize_ddk_config_actions=no//build/kernel/kleaf:optimize_ddk_config_actions
 
 # flags that control the distribution
 build --flag_alias=kbuild_symtypes=//build/kernel/kleaf:kbuild_symtypes

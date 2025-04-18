@@ -32,6 +32,7 @@ load(
 )
 load("//build/kernel/kleaf/impl:kernel_sbom.bzl", "kernel_sbom")
 load("//build/kernel/kleaf/impl:out_headers_allowlist_archive.bzl", "out_headers_allowlist_archive")
+load("//build/kernel/kleaf/tests:runtime_protection_presence_test/symbol_presence_test.bzl", "symbol_presence_test")
 load("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragments_menuconfig_test.bzl", "pre_defconfig_fragments_menuconfig_test")
 load(
     ":kernel.bzl",
@@ -63,8 +64,8 @@ def common_kernel(
         arch = None,
         visibility = None,
         defconfig = None,
+        pre_defconfig_fragments = None,
         post_defconfig_fragments = None,
-        enable_interceptor = None,
         kmi_symbol_list = None,
         additional_kmi_symbol_lists = None,
         trim_nonlisted_kmi = None,
@@ -128,8 +129,8 @@ def common_kernel(
         arch: See [kernel_build.arch](kernel.md#kernel_build-arch)
         makefile: See [kernel_build.makefile](kernel.md#kernel_build-makefile)
         defconfig: See [kernel_build.defconfig](kernel.md#kernel_build-defconfig)
+        pre_defconfig_fragments: See [kernel_build.pre_defconfig_fragments](kernel.md#kernel_build-pre_defconfig_fragments)
         post_defconfig_fragments: See [kernel_build.post_defconfig_fragments](kernel.md#kernel_build-post_defconfig_fragments)
-        enable_interceptor: See [kernel_build.enable_interceptor](kernel.md#kernel_build-enable_interceptor)
         kmi_symbol_list: See [kernel_build.kmi_symbol_list](kernel.md#kernel_build-kmi_symbol_list)
         additional_kmi_symbol_lists: See [kernel_build.additional_kmi_symbol_lists](kernel.md#kernel_build-additional_kmi_symbol_lists)
         trim_nonlisted_kmi: See [kernel_build.trim_nonlisted_kmi](kernel.md#kernel_build-trim_nonlisted_kmi)
@@ -161,9 +162,9 @@ def common_kernel(
         arch = arch,
         makefile = makefile,
         defconfig = defconfig,
+        pre_defconfig_fragments = pre_defconfig_fragments,
         post_defconfig_fragments = post_defconfig_fragments,
         visibility = visibility,
-        enable_interceptor = enable_interceptor,
         kmi_symbol_list = kmi_symbol_list,
         additional_kmi_symbol_lists = additional_kmi_symbol_lists,
         trim_nonlisted_kmi = trim_nonlisted_kmi,
@@ -230,12 +231,12 @@ def common_kernel(
         build_config = Label("//build/kernel/kleaf:gki_build_config_fragment"),
         makefile = makefile,
         check_defconfig = select({
-            Label("//build/kernel/kleaf:gki_build_config_fragment_is_unset"): "minimized",
+            Label("//build/kernel/kleaf:gki_build_config_fragment_is_unset"): "match" if pre_defconfig_fragments else "minimized",
             "//conditions:default": "disabled",
         }),
         defconfig = defconfig,
+        pre_defconfig_fragments = pre_defconfig_fragments,
         post_defconfig_fragments = post_defconfig_fragments,
-        enable_interceptor = enable_interceptor,
         visibility = visibility,
         collect_unstripped_modules = _COLLECT_UNSTRIPPED_MODULES,
         strip_modules = _STRIP_MODULES,
@@ -273,9 +274,6 @@ def common_kernel(
         deprecation = deprecation,
         enable_add_vmlinux = _GKI_ADD_VMLINUX,
     )
-
-    if enable_interceptor:
-        return
 
     # A subset of headers in OUT_DIR that only contains scripts/. This is useful
     # for DDK headers interpolation.
@@ -462,8 +460,10 @@ def common_kernel(
         kernel_modules_install = name + "_modules_install",
         modules = (module_implicit_outs or []),
         arch = arch,
+        page_size = page_size,
         makefile = makefile,
         defconfig = defconfig,
+        protected_exports_list = protected_exports_list,
     )
 
     native.test_suite(
@@ -649,7 +649,9 @@ def _define_common_kernels_additional_tests(
         defconfig,
         kernel_modules_install,
         modules,
-        arch):
+        arch,
+        page_size,
+        protected_exports_list):
     fake_modules_options = Label("//build/kernel/kleaf/artifact_tests:fake_modules_options.txt")
 
     initramfs(
@@ -688,11 +690,13 @@ def _define_common_kernels_additional_tests(
         base_kernel_label = native.package_relative_label(kernel_build_name),
         base_kernel_module = min(modules) if modules else None,
         arch = arch,
+        page_size = page_size,
     )
 
     kernel_build(
         name = name + "_test_device_kernel",
         arch = arch,
+        page_size = page_size,
         makefile = makefile,
         defconfig = defconfig,
         pre_defconfig_fragments = [Label("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragment")],
@@ -719,15 +723,27 @@ def _define_common_kernels_additional_tests(
     # is only included when we are building //common:kernel_aarch64.
     extra_tests = []
     if native.package_relative_label(kernel_build_name) == native.package_relative_label("//common:kernel_aarch64"):
-        extra_tests.append(
+        extra_tests += [
+            Label("//build/kernel/kleaf/tests/built_with_ddk_test"),
             Label("//build/kernel/kleaf/tests/ddk_examples"),
-        )
+        ]
 
         # Building pKVM module with DDK is only supported if the following file exists.
         if native.glob(["arch/arm64/kvm/hyp/nvhe/Makefile.module"]):
             extra_tests.append(
                 Label("//build/kernel/kleaf/tests/ddk_examples:pkvm_module_test"),
             )
+
+        # This test internally adds the needed checks.
+        symbol_presence_test(
+            name = name + "_runtime_protection_symbol_presence_test",
+            kernel_build = kernel_build_name,
+            protected_exports_list = protected_exports_list,
+            visibility = ["//visibility:private"],
+        )
+        extra_tests.append(
+            name + "_runtime_protection_symbol_presence_test",
+        )
 
     native.test_suite(
         name = name,
