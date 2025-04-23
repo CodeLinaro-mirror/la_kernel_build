@@ -698,7 +698,11 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
             kleaf_repo,
             ddk_workspace=ddk_workspace,
             prebuilts_dir=prebuilts_dir,
-            local=True)
+            local=True,
+            # b/412612971: For Bazel 7, --incompatible_sandbox_hermetic_tmp
+            # causes the DDK workspace (below /tmp) to be invisible within
+            # sandboxes.
+            extra_build_flags=["--noincompatible_sandbox_hermetic_tmp"])
 
     def test_setup_with_downloaded_prebuilts(self):
         """Tests that init_ddk --prebuilts_dir & --local=false works."""
@@ -743,7 +747,11 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
             build_id=build_id,
             # build bots have no repo, so we cannot check if `repo sync`
             # actually works. Skip sync and rely on the mount point.
-            sync=False)
+            sync=False,
+            # b/412612971: For Bazel 7, --incompatible_sandbox_hermetic_tmp
+            # causes the DDK workspace (below /tmp) to be invisible within
+            # sandboxes.
+            extra_build_flags=["--noincompatible_sandbox_hermetic_tmp"])
 
     def _run_ddk_workspace_setup_test(self,
                                       kleaf_repo: pathlib.Path,
@@ -753,7 +761,8 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
                                       url_fmt: str | None = None,
                                       build_id: str | None = None,
                                       sync: bool | None = None,
-                                      build_targets: Iterable[str] = ()):
+                                      build_targets: Iterable[str] = (),
+                                      extra_build_flags: Iterable[str] = ()):
         """Tests a DDKv2 workspace setup.
 
         Args:
@@ -766,6 +775,8 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
             sync: See init_ddk.py
             build_targets: If not empty, build the given list of targets below
                 the workspace. Otherwise run build tests.
+            extra_build_flags: iterable of extra flags for the main build
+                command.
         """
         # kleaf_repo relative to ddk_workspace
         kleaf_repo_rel = self._force_relative_to(
@@ -826,7 +837,7 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
 
         self._check_call("clean", ["--expunge"], cwd=ddk_workspace)
 
-        args = []
+        args = list(extra_build_flags)
         # Switch base kernel when using prebuilts
         if prebuilts_dir:
             args.append("--//tests:kernel=@gki_prebuilts//kernel_aarch64")
