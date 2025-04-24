@@ -21,11 +21,12 @@ import pathlib
 import shutil
 import subprocess
 import sys
-from typing import Iterable
+from typing import Iterable, TypeVar
 import xml.dom.minidom
 import xml.parsers.expat
 
 _FAKE_KERNEL_VERSION = "99.99.99"
+_FIXED_WORKSPACE_STATUS_FILE = "workspace_status.json"
 
 
 @dataclasses.dataclass
@@ -72,6 +73,23 @@ class LocalversionResult(PathPopen):
         if self.suffix:
             ret += self.suffix
         return ret
+
+
+T = TypeVar('T')
+
+
+def load_attribute_from_json(json_file: pathlib.Path, attr_name: str, attr_type: type[T]) \
+        -> T | None:
+    """Returns value of attribute of given type from json file."""
+    if json_file.is_file():
+        json_file_content = json.loads(json_file.read_text())
+        if value := json_file_content.get(attr_name):
+            if not isinstance(value, attr_type):
+                logging.error("'%s' in %s is not of type %s: %s",
+                              attr_name, json_file, attr_type, value)
+                sys.exit(1)
+            return value
+    return None
 
 
 def get_localversion_from_script(bin: pathlib.Path | None, project: pathlib.Path, *args) \
@@ -379,6 +397,11 @@ class Stamp(object):
         if not self.use_kleaf_localversion:
             return get_localversion_from_script(self.setlocalversion, project)
 
+        if (scmversion := load_attribute_from_json(
+            project / _FIXED_WORKSPACE_STATUS_FILE, "SCMVERSION", str
+        )) is not None:
+            return PresetResult(project, scmversion)
+
         return get_localversion_from_git(project)
 
     def get_ext_modules(self) -> list[pathlib.Path]:
@@ -424,6 +447,12 @@ class Stamp(object):
         env_val = os.environ.get("SOURCE_DATE_EPOCH")
         if env_val:
             return PresetResult(rel_path, env_val)
+
+        if (source_date_epoch := load_attribute_from_json(
+            rel_path / _FIXED_WORKSPACE_STATUS_FILE, "SOURCE_DATE_EPOCH", int
+        )) is not None:
+            return PresetResult(rel_path, f"{source_date_epoch}")
+
         if shutil.which("git"):
             args = [
                 "git", "-C",
