@@ -171,9 +171,9 @@ class KleafProjectSetterTest(parameterized.TestCase):
         expected: str,
     ):
         """Helper method for checking path in a prebuilt extension."""
-        download_configs = prebuilts_dir / "download_configs.json"
-        download_configs.parent.mkdir(parents=True)
-        download_configs.write_text("{}")
+        ci_target_mapping = prebuilts_dir / "ci_target_mapping.json"
+        ci_target_mapping.parent.mkdir(parents=True)
+        ci_target_mapping.write_text("{}")
         try:
             init_ddk.KleafProjectSetter(
                 build_id=None,
@@ -216,6 +216,43 @@ class KleafProjectSetterTest(parameterized.TestCase):
                 expected=str(prebuilts_dir_abs),
             )
 
+    def test_repo_name(self):
+        """Tests that repo_name in ci_target_mapping.json is respected."""
+        with tempfile.TemporaryDirectory() as tmp:
+            ddk_workspace = pathlib.Path(tmp) / "ddk_workspace"
+            # Verify the right local_artifact_path is set for prebuilts
+            #  in a relative to workspace directory.
+            prebuilts_dir = ddk_workspace / "prebuilts_dir"
+
+            ci_target_mapping = prebuilts_dir / "ci_target_mapping.json"
+            ci_target_mapping.parent.mkdir(parents=True)
+            ci_target_mapping.write_text(f"""{{
+                "repo_name": "my_gki_prebuilts"
+            }}""")
+            try:
+                init_ddk.KleafProjectSetter(
+                    build_id=None,
+                    build_target=None,
+                    ddk_workspace=ddk_workspace,
+                    kleaf_repo=None,
+                    local=False,
+                    prebuilts_dir=prebuilts_dir,
+                    url_fmt=None,
+                    superproject_tool="repo",
+                    sync=False,
+                ).run()
+            except:  # pylint: disable=bare-except
+                pass
+            finally:
+                module_bazel = ddk_workspace / init_ddk._MODULE_BAZEL_FILE
+                self.assertTrue(module_bazel.exists())
+                content = module_bazel.read_text()
+                self.assertIn(textwrap.dedent("""\
+                    kernel_prebuilt_ext.declare_kernel_prebuilts(
+                        name = "my_gki_prebuilts",
+                        local_artifact_path = "prebuilts_dir",
+                    """), content)
+
     def test_download_works_for_local_file(self):
         """Tests that local files can be downloaded."""
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -246,19 +283,19 @@ class KleafProjectSetterTest(parameterized.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ddk_workspace = pathlib.Path(tmp) / "ddk_workspace"
             prebuilts_dir = ddk_workspace / "prebuilts_dir"
-            download_configs = ddk_workspace / "download_configs.json"
-            download_configs.parent.mkdir(parents=True, exist_ok=True)
-            download_configs.write_text(
-                json.dumps({
+            ci_target_mapping = ddk_workspace / "ci_target_mapping.json"
+            ci_target_mapping.parent.mkdir(parents=True, exist_ok=True)
+            ci_target_mapping.write_text(
+                json.dumps({"download_configs": {
                     "non-existent-file": {
                         "target_suffix": "non-existent-file",
                         "mandatory": False,
                         "remote_filename_fmt": "non-existent-file",
                     }
-                })
+                }})
             )
-            with open(download_configs, "r", encoding="utf-8"):
-                url_fmt = f"file://{str(download_configs.parent)}/{{filename}}"
+            with open(ci_target_mapping, "r", encoding="utf-8"):
+                url_fmt = f"file://{str(ci_target_mapping.parent)}/{{filename}}"
                 init_ddk.KleafProjectSetter(
                     build_id="12345",
                     build_target=None,
@@ -372,14 +409,14 @@ class KleafProjectSetterTest(parameterized.TestCase):
 
             remote_prebuilts_dir = tmp / "remote_prebuilts_dir"
             remote_prebuilts_dir.mkdir(parents=True, exist_ok=True)
-            download_configs = remote_prebuilts_dir / "download_configs.json"
-            download_configs.write_text(json.dumps({
+            ci_target_mapping = remote_prebuilts_dir / "ci_target_mapping.json"
+            ci_target_mapping.write_text(json.dumps({"download_configs": {
                 "manifest.xml": {
                     "target_suffix": "init_ddk_files",
                     "mandatory": False,
                     "remote_filename_fmt": "manifest_{build_number}.xml",
                 },
-            }))
+            }}))
 
             build_id = "12345"
             downloaded_manifest = (remote_prebuilts_dir /
