@@ -387,8 +387,13 @@ class KleafProjectSetter:
             if can_download:
                 self._download_ci_target_mapping(meta_files_dir)
 
-            with open(meta_files_dir / "ci_target_mapping.json", "r") as f:
-                self._ci_target_mapping = json.load(f)
+            if (meta_files_dir / "ci_target_mapping.json").is_file():
+                with open(meta_files_dir / "ci_target_mapping.json", "r") as f:
+                    self._ci_target_mapping = json.load(f)
+                return
+
+            with open(meta_files_dir / "download_configs.json", "r") as f:
+                self._ci_target_mapping = {"download_configs": json.load(f)}
 
     def _download_ci_target_mapping(self, meta_files_dir: pathlib.Path):
         """Downloads ci_target_mapping.json"""
@@ -398,9 +403,15 @@ class KleafProjectSetter:
             )
         meta_files_dir.mkdir(parents=True, exist_ok=True)
 
-        ci_target_mapping_file = meta_files_dir / "ci_target_mapping.json"
-        with open(ci_target_mapping_file, "w+", encoding="utf-8") as f:
-            self._download("ci_target_mapping.json", pathlib.Path(f.name))
+        ci_target_mapping = meta_files_dir / "ci_target_mapping.json"
+        self._download("ci_target_mapping.json", ci_target_mapping,
+                       mandatory=False)
+        if ci_target_mapping.is_file():
+            return
+
+        # Legacy behavior: read download_configs.json as well.
+        download_configs = meta_files_dir / "download_configs.json"
+        self._download("download_configs.json", download_configs)
 
     def _download_prebuilts(self) -> None:
         """Downloads prebuilts from a given build_id when provided."""

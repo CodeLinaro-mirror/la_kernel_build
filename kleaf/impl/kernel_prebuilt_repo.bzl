@@ -172,17 +172,38 @@ def _download_remote_file(repository_ctx, local_filename, remote_filename_fmt, f
 
 def _get_ci_target_mapping(repository_ctx):
     if repository_ctx.attr.local_artifact_path:
+        # If local_artifact_path is set, try local_artifact_path/ci_target_mapping.json...
         path = repository_ctx.workspace_root.get_child(repository_ctx.attr.local_artifact_path).get_child("ci_target_mapping.json")
-    else:
-        _download_remote_file(
-            repository_ctx = repository_ctx,
-            local_filename = "ci_target_mapping.json",
-            remote_filename_fmt = "ci_target_mapping.json",
-            file_mandatory = True,
-        ).wait()
-        path = _get_local_path(repository_ctx, "ci_target_mapping.json")
-    content = repository_ctx.read(path)
-    return json.decode(content)
+        if path.exists:
+            content = repository_ctx.read(path)
+            return json.decode(content)
+
+        # then try local_artifact_path/download_configs.json
+        download_configs_path = repository_ctx.workspace_root.get_child(repository_ctx.attr.local_artifact_path).get_child("download_configs.json")
+        content = repository_ctx.read(download_configs_path)
+        return {"download_configs": json.decode(content)}
+
+    # If local_artifact_path is not set, try downloading ci_target_mapping.json...
+    ci_target_mapping_result = _download_remote_file(
+        repository_ctx = repository_ctx,
+        local_filename = "ci_target_mapping.json",
+        remote_filename_fmt = "ci_target_mapping.json",
+    ).wait()
+    path = _get_local_path(repository_ctx, "ci_target_mapping.json")
+    if getattr(ci_target_mapping_result, "success"):
+        content = repository_ctx.read(path)
+        return json.decode(content)
+
+    # then try downloading download_configs.json.
+    _download_remote_file(
+        repository_ctx = repository_ctx,
+        local_filename = "download_configs.json",
+        remote_filename_fmt = "download_configs.json",
+        mandatory = True,
+    ).wait()
+    download_configs_path = _get_local_path(repository_ctx, "download_configs.json")
+    content = repository_ctx.read(download_configs_path)
+    return {"download_configs": json.decode(content)}
 
 def _kernel_prebuilt_repo_impl(repository_ctx):
     ci_target_mapping = _get_ci_target_mapping(repository_ctx)
