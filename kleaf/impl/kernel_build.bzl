@@ -122,6 +122,7 @@ def kernel_build(
         pack_module_env = None,
         sanitizers = None,
         ddk_module_defconfig_fragments = None,
+        clang_autofdo_profile = None,
         **kwargs):
     """Defines a kernel build target with all dependent targets.
 
@@ -436,6 +437,11 @@ def kernel_build(
           in `ddk_module`s building against this kernel.
           Unlike `defconfig_fragments`, `ddk_module_defconfig_fragments` is not applied
           to this `kernel_build` target, nor dependent legacy `kernel_module`s.
+        clang_autofdo_profile: Path to an AutoFDO profile,
+          For example:
+          ```
+            clang_autofdo_profile = "//toolchain/pgo-profiles/kernel:aarch64/android15-6.6/kernel.afdo"
+          ```
         **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
@@ -540,6 +546,7 @@ def kernel_build(
         target_platform = name + "_platform_target",
         exec_platform = name + "_platform_exec",
         defconfig_fragments = defconfig_fragments,
+        clang_autofdo_profile = clang_autofdo_profile,
         **internal_kwargs
     )
 
@@ -1962,6 +1969,7 @@ def _create_infos(
         ruledir = main_action_ret.ruledir,
         module_env_archive = module_scripts_archive,
         has_base_kernel = base_kernel_utils.get_base_kernel(ctx) != None,
+        copy_module_symvers_outputs = main_action_ret.module_symvers_outputs,
     )
 
     default_info_files = all_output_files["outs"].values() + all_output_files["module_outs"].values()
