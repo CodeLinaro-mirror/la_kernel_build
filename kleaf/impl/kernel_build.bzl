@@ -39,6 +39,7 @@ load(
     "KernelBuildAbiInfo",
     "KernelBuildExtModuleInfo",
     "KernelBuildFilegroupDeclInfo",
+    "KernelBuildGeneratedHeadersForModuleInfo",
     "KernelBuildInTreeModulesInfo",
     "KernelBuildInfo",
     "KernelBuildMixedTreeInfo",
@@ -125,6 +126,7 @@ def kernel_build(
         module_signing_key = None,
         system_trusted_key = None,
         modules_prepare_force_generate_headers = None,
+        generated_headers_for_module = None,
         defconfig = None,
         pre_defconfig_fragments = None,
         post_defconfig_fragments = None,
@@ -476,8 +478,13 @@ def kernel_build(
 
           This is to allow for dynamic setting of `CONFIG_SYSTEM_TRUSTED_KEY` from Bazel.
         dtstree: Device tree support.
-        modules_prepare_force_generate_headers: If `True` it forces generation of
-          additional headers as part of modules_prepare.
+        modules_prepare_force_generate_headers: For 6.12 and earlier: If `True` it forces generation
+            of additional headers as part of modules_prepare. This is replaced by
+            `generated_headers_for_module` on `base_kernel` for 6.13 and later.
+        generated_headers_for_module: **INTERNAL FOR ACK ONLY.** For 6.13 and later, this
+            is a list of additional generated headers below $OUT_DIR for building external modules.
+            This replaces `modules_prepare_force_generate_headers`. If a non-empty list, an
+            archive with the given list of generated headers is created.
         defconfig: Label to the base defconfig.
 
             As a convention, files should usually be named `<device>_defconfig`
@@ -805,6 +812,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         ddk_module_defconfig_fragments = ddk_module_defconfig_fragments,
         ddk_module_headers = ddk_module_headers,
         arch = arch,
+        generated_headers_for_module = generated_headers_for_module,
         **kwargs
     )
 
@@ -1506,6 +1514,47 @@ _get_dot_config = subrule(
     implementation = _get_dot_config_impl,
 )
 
+def _pack_generated_headers_for_module_step_impl(subrule_ctx, base_kernel, generated_headers_for_module):
+    """Returns a step that packages generated headers for external modules.
+
+    Args:
+        subrule_ctx: subrule_ctx
+        base_kernel: from base_kernel_utils.get_base_kernel()
+        generated_headers_for_module: list of header paths to be packaged below $OUT_DIR.
+    Returns:
+        A struct with the following extra fields:
+
+        * archive: the archive to be provided to downstream targets.
+    """
+    if base_kernel:
+        archive = base_kernel[KernelBuildGeneratedHeadersForModuleInfo].archive
+        return struct(inputs = [], tools = [], cmd = "", outputs = [], archive = archive)
+
+    if not generated_headers_for_module:
+        return struct(inputs = [], tools = [], cmd = "", outputs = [], archive = None)
+
+    out = subrule_ctx.actions.declare_file(
+        "{name}/{name}_generated_headers_for_module.tar.gz".format(name = subrule_ctx.label.name),
+    )
+    cmd = """
+        tar czf {out} -C ${{OUT_DIR}} {generated_headers_for_module}
+    """.format(
+        out = out.path,
+        generated_headers_for_module = " ".join(generated_headers_for_module),
+    )
+
+    return struct(
+        inputs = [],
+        tools = [],
+        cmd = cmd,
+        outputs = [out],
+        archive = out,
+    )
+
+_pack_generated_headers_for_module_step = subrule(
+    implementation = _pack_generated_headers_for_module_step_impl,
+)
+
 def _gen_symvers_step(ctx, all_output_names_minus_modules, kbuild_mixed_tree_ret):
     """Creates a step that generates various .symvers files.
 
@@ -1678,6 +1727,10 @@ def _build_main_action(
     modules_staging_dir = modules_staging_archive_self.dirname + "/staging"
 
     # Individual steps of the final command.
+    pack_generated_headers_for_module_step = _pack_generated_headers_for_module_step(
+        base_kernel = base_kernel_utils.get_base_kernel(ctx),
+        generated_headers_for_module = ctx.attr.generated_headers_for_module,
+    )
     gen_symvers_step = _gen_symvers_step(
         ctx = ctx,
         all_output_names_minus_modules = all_output_names.non_modules,
@@ -1720,6 +1773,7 @@ def _build_main_action(
     steps = (
         cache_dir_step,
         modinst_step,
+        pack_generated_headers_for_module_step,
         grab_intree_modules_step,
         grab_unstripped_modules_step,
         grab_symtypes_step,
@@ -1755,6 +1809,8 @@ def _build_main_action(
                        --transform "s,.*$OUT_DIR,,"                     \
                        --transform "s,^/,,"                             \
                        --null -T -
+         # Separately archive headers in OUT_DIR for building modules
+           {pack_generated_headers_for_module_cmd}
          # Grab outputs. If unable to find from OUT_DIR, look at KBUILD_MIXED_TREE as well.
            {search_and_cp_output} --srcdir ${{OUT_DIR}} {kbuild_mixed_tree_arg} {dtstree_arg} --dstdir {ruledir} {all_output_names_minus_modules}
          # Archive modules_staging_dir
@@ -1795,6 +1851,7 @@ def _build_main_action(
         ruledir = ruledir,
         all_output_names_minus_modules = " ".join(all_output_names.non_modules),
         modinst_cmd = modinst_step.cmd,
+        pack_generated_headers_for_module_cmd = pack_generated_headers_for_module_step.cmd,
         grab_intree_modules_cmd = grab_intree_modules_step.cmd,
         grab_unstripped_intree_modules_cmd = grab_unstripped_modules_step.cmd,
         grab_symtypes_cmd = grab_symtypes_step.cmd,
@@ -1873,6 +1930,7 @@ def _build_main_action(
         gcno_mapping = grab_gcno_step.gcno_mapping,
         gcno_dir = grab_gcno_step.gcno_dir,
         module_symvers_outputs = copy_module_symvers_step.outputs,
+        generated_headers_for_module_archive = pack_generated_headers_for_module_step.archive,
     )
 
 def create_serialized_env_info(
@@ -2033,6 +2091,14 @@ def _create_infos(
         kernel_release = all_output_files["internal_outs"]["include/config/kernel.release"],
     )
 
+    extract_module_generated_archive_cmd = ""
+    module_env_extra_inputs_direct = []
+    if main_action_ret.generated_headers_for_module_archive:
+        extract_module_generated_archive_cmd = """
+            tar xf {} -C ${{OUT_DIR}}
+        """.format(main_action_ret.generated_headers_for_module_archive.path)
+        module_env_extra_inputs_direct.append(main_action_ret.generated_headers_for_module_archive)
+
     # For kernel_module()
     ext_mod_serialized_env_info_deps = all_output_files["internal_outs"].values()
     mod_min_env = create_serialized_env_info(
@@ -2044,8 +2110,13 @@ def _create_infos(
             for dep in ext_mod_serialized_env_info_deps
         },
         fake_system_map = True,
-        extra_restore_outputs_cmd = "",
-        extra_inputs = depset(transitive = [module_srcs.module_scripts]),
+        extra_restore_outputs_cmd = extract_module_generated_archive_cmd,
+        extra_inputs = depset(
+            module_env_extra_inputs_direct,
+            transitive = [
+                module_srcs.module_scripts,
+            ],
+        ),
     )
 
     # External modules do not need implicit_outs because they are unsigned.
@@ -2062,11 +2133,14 @@ def _create_infos(
             for dep in ext_mod_full_serialized_env_info_dependencies
         },
         fake_system_map = False,
-        extra_restore_outputs_cmd = kbuild_mixed_tree_ret.cmd,
-        extra_inputs = depset(transitive = [
-            kbuild_mixed_tree_ret.inputs,
-            module_srcs.module_scripts,
-        ]),
+        extra_restore_outputs_cmd = extract_module_generated_archive_cmd + kbuild_mixed_tree_ret.cmd,
+        extra_inputs = depset(
+            module_env_extra_inputs_direct,
+            transitive = [
+                kbuild_mixed_tree_ret.inputs,
+                module_srcs.module_scripts,
+            ],
+        ),
     )
 
     # For ddk_config()
@@ -2184,6 +2258,9 @@ def _create_infos(
     kbuild_mixed_tree_info = KernelBuildMixedTreeInfo(
         files = depset(kbuild_mixed_tree_files),
     )
+    generated_headers_for_module_info = KernelBuildGeneratedHeadersForModuleInfo(
+        archive = main_action_ret.generated_headers_for_module_archive,
+    )
 
     cmds_info = KernelCmdsInfo(
         srcs = depset([target.files for target in ctx.attr.srcs]),
@@ -2226,6 +2303,7 @@ def _create_infos(
         module_env_archive = module_scripts_archive,
         has_base_kernel = base_kernel_utils.get_base_kernel(ctx) != None,
         copy_module_symvers_outputs = main_action_ret.module_symvers_outputs,
+        generated_headers_for_module_archive = main_action_ret.generated_headers_for_module_archive,
     )
 
     default_info_files = all_output_files["outs"].values() + all_output_files["module_outs"].values()
@@ -2255,6 +2333,7 @@ def _create_infos(
         serialized_env_info,
         orig_env_info,
         kbuild_mixed_tree_info,
+        generated_headers_for_module_info,
         kernel_build_info,
         kernel_build_module_info,
         kernel_build_uapi_info,
@@ -2434,10 +2513,12 @@ _kernel_build = rule(
             providers = [DdkHeadersInfo],
         ),
         "arch": attr.string(),
+        "generated_headers_for_module": attr.string_list(),
     } | _kernel_build_additional_attrs() | gcov_attrs(),
     toolchains = [hermetic_toolchain.type],
     subrules = [
         _get_dot_config,
+        _pack_generated_headers_for_module_step,
         rustavailable,
     ],
 )
