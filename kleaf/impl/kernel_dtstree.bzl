@@ -14,16 +14,16 @@
 
 """Specify a kernel DTS tree."""
 
-visibility("//build/kernel/kleaf/...")
+load(
+    ":common_providers.bzl",
+    "DtstreeInfo",
+)
 
-DtstreeInfo = provider("DTS tree info", fields = {
-    "srcs": "DTS tree sources",
-    "makefile": "DTS tree makefile",
-})
+visibility("//build/kernel/kleaf/...")
 
 def _kernel_dtstree_impl(ctx):
     return DtstreeInfo(
-        srcs = ctx.files.srcs,
+        srcs = depset(transitive = [target.files for target in ctx.attr.srcs]),
         makefile = ctx.file.makefile,
     )
 
