@@ -267,8 +267,10 @@ class BazelWrapper(object):
         if self.known_args.use_prebuilt_gki:
             self.transformed_command_args.append("--use_prebuilt_gki")
             self.transformed_command_args.append("--config=internet")
-            self.env[
-                "KLEAF_DOWNLOAD_BUILD_NUMBER_MAP"] = f"gki_prebuilts={self.known_args.use_prebuilt_gki}"
+            self.env["KLEAF_DOWNLOAD_BUILD_NUMBER_MAP"] = ",".join([
+                f"gki_prebuilts={self.known_args.use_prebuilt_gki}",
+                f"gki_prebuilts_aarch64_16k={self.known_args.use_prebuilt_gki}",
+            ])
 
         if self.known_args.make_jobs is not None:
             self.env["KLEAF_MAKE_JOBS"] = str(self.known_args.make_jobs)
