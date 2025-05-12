@@ -30,6 +30,10 @@ def _vendor_boot_image_impl(ctx):
         outs = list(outs)
         if vendor_bootconfig_file.basename in outs:
             outs.remove(vendor_bootconfig_file.basename)
+    if ctx.attr.vendor_ramdisk_dev_nodes:
+        # buildifier: disable=print
+        print("""\nWARNING: vendor_ramdisk_dev_nodes option will be deprecated from vendor_boot. Use the
+              option from initramfs""")
 
     return build_boot_or_vendor_boot(
         bin_dir = ctx.bin_dir,
@@ -53,6 +57,7 @@ def _vendor_boot_image_impl(ctx):
         dtb_image_file = ctx.file.dtb_image,
         vendor_bootconfig_file = vendor_bootconfig_file,
         kernel_vendor_cmdline = ctx.attr.kernel_vendor_cmdline,
+        header_version = ctx.attr.header_version,
     )
 
 vendor_boot_image = rule(
@@ -148,6 +153,16 @@ vendor_boot_image = rule(
         ),
         "kernel_vendor_cmdline": attr.string(
             doc = """string of kernel parameters for vendor boot image""",
+        ),
+        "header_version": attr.int(
+            doc = """Boot image header version.
+
+            If unspecified, falls back to the value of BOOT_IMAGE_HEADER_VERSION
+            in build configs. If BOOT_IMAGE_HEADER_VERSION is not set, defaults
+            to 3.""",
+            # It is intentional that 0 is not in the list. When specified explicitly,
+            # the user can only provide these values. If unset, the value is 0.
+            values = [3, 4],
         ),
     },
     subrules = [build_boot_or_vendor_boot],
