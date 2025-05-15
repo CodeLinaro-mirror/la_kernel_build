@@ -35,6 +35,8 @@ load(
     "CompileCommandsInfo",
     "CompileCommandsSingleInfo",
     "DdkHeadersInfo",
+    "DefconfigFragmentsInfo",
+    "DefconfigInfo",
     "GcovInfo",
     "KernelBuildAbiInfo",
     "KernelBuildExtModuleInfo",
@@ -504,6 +506,11 @@ def kernel_build(
             builds all modules except those exluded in `post_defconfig_fragments`. In this case,
             `pre_defconfig_fragments` must not be set.
 
+            If this attribute is not set (value is `None`), falls back to `DEFCONFIG` from
+            build_config for backwards compatibility. If `DEFCONFIG` is also not set, falls back
+            to `defconfig` of `base_kernel`. If `base_kernel` also do not have `defconfig` set,
+            error.
+
             See [`build/kernel/kleaf/docs/kernel_config.md`](../kernel_config.md) for details.
         pre_defconfig_fragments: A list of fragments that are applied to the defconfig
             **before** `make defconfig`.
@@ -763,6 +770,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         name = config_target_name,
         env = env_target_name,
         srcs = srcs,
+        base_kernel = base_kernel,
         trim_nonlisted_kmi = trim_post_defconfig_fragment,
         raw_kmi_symbol_list = raw_kmi_symbol_list_target_name,
         module_signing_key = module_signing_key,
@@ -2304,6 +2312,8 @@ def _create_infos(
         has_base_kernel = base_kernel_utils.get_base_kernel(ctx) != None,
         copy_module_symvers_outputs = main_action_ret.module_symvers_outputs,
         generated_headers_for_module_archive = main_action_ret.generated_headers_for_module_archive,
+        defconfig_info = ctx.attr.config[DefconfigInfo],
+        defconfig_fragments_info = ctx.attr.config[DefconfigFragmentsInfo],
     )
 
     default_info_files = all_output_files["outs"].values() + all_output_files["module_outs"].values()
@@ -2347,6 +2357,8 @@ def _create_infos(
         compile_commands_info,
         ctx.attr.config[KernelEnvAttrInfo],
         ctx.attr.config[KernelToolchainInfo],
+        ctx.attr.config[DefconfigInfo],
+        ctx.attr.config[DefconfigFragmentsInfo],
         output_group_info,
         default_info,
         module_symvers_file_info,
@@ -2423,6 +2435,8 @@ _kernel_build = rule(
         "config": attr.label(
             mandatory = True,
             providers = [
+                DefconfigInfo,
+                DefconfigFragmentsInfo,
                 KernelSerializedEnvInfo,
                 KernelEnvAttrInfo,
                 KernelEnvMakeGoalsInfo,

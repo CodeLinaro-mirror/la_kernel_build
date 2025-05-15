@@ -18,6 +18,8 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load(
     ":common_providers.bzl",
     "DdkHeadersInfo",
+    "DefconfigFragmentsInfo",
+    "DefconfigInfo",
     "GcovInfo",
     "KernelBuildAbiInfo",
     "KernelBuildExtModuleInfo",
@@ -450,6 +452,11 @@ def _kernel_filegroup_impl(ctx):
 
     kernel_release = _get_kernel_release(ctx)
 
+    defconfig_fragments_info = DefconfigFragmentsInfo(
+        pre_defconfig_fragments = depset(transitive = [target.files for target in ctx.attr.pre_defconfig_fragments]),
+        post_defconfig_fragments = depset(transitive = [target.files for target in ctx.attr.post_defconfig_fragments]),
+    )
+
     infos = [
         DefaultInfo(files = srcs_depset),
         KernelBuildMixedTreeInfo(files = mixed_tree_files),
@@ -465,6 +472,8 @@ def _kernel_filegroup_impl(ctx):
         kernel_env_attr_info,
         gcov_info,
         _get_toolchain_version_info(ctx),
+        DefconfigInfo(file = ctx.file.defconfig, make_target = None),
+        defconfig_fragments_info,
     ]
     if serialized_env:
         infos.append(serialized_env)
@@ -634,6 +643,19 @@ default, which in turn sets `collect_unstripped_modules` to `True` by default.
         ),
         "expected_toolchain_version": attr.string(
             doc = "Checks resolved toolchain version against this string.",
+        ),
+        "defconfig": attr.label(
+            doc = """See [kernel_build.defconfig](#kernel_build-defconfig).
+                Only a file is allowed; allmodconfig is currently not supported.""",
+            allow_single_file = True,
+        ),
+        "pre_defconfig_fragments": attr.label_list(
+            doc = """See [kernel_build.pre_defconfig_fragments](#kernel_build-pre_defconfig_fragments).""",
+            allow_files = True,
+        ),
+        "post_defconfig_fragments": attr.label_list(
+            doc = """See [kernel_build.post_defconfig_fragments](#kernel_build-post_defconfig_fragments).""",
+            allow_files = True,
         ),
     } | _kernel_filegroup_additional_attrs(),
     toolchains = [hermetic_toolchain.type],
