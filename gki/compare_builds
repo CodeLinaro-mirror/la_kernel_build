@@ -63,6 +63,16 @@ llvm-objcopy - convert vmlinux to an Image; strip ELF objects
 llvm-readelf - extract symbol information from vmlinux
 '''
 
+def _get_name_or_value(entry: dict):
+    '''Returns the first value available in a dict entry between name and value.
+
+    This is needed to do the correct lookup given that different versions of
+    llvm-readelf structure the information differently.
+
+    Args:
+       entry: An entry from a json dictionary.
+    '''
+    return entry.get('Name', entry.get('Value'))
 
 def get_vmlinux_info(vmlinux: pathlib.Path):
     _WANTED_SYMBOLS = {
@@ -91,7 +101,7 @@ def get_vmlinux_info(vmlinux: pathlib.Path):
     elf_sections = elf['Sections']
     for elf_section_dict in elf_sections:
         elf_section = elf_section_dict['Section']
-        name = elf_section['Name']['Value']
+        name = _get_name_or_value(elf_section['Name'])
         address = elf_section['Address']
         offset = elf_section['Offset']
         size = elf_section['Size']
@@ -101,11 +111,11 @@ def get_vmlinux_info(vmlinux: pathlib.Path):
     elf_symbols = elf['Symbols']
     for elf_symbol_dict in elf_symbols:
         elf_symbol = elf_symbol_dict['Symbol']
-        name = elf_symbol['Name']['Value']
+        name = _get_name_or_value(elf_symbol['Name'])
         if name in _WANTED_SYMBOLS:
             value = elf_symbol['Value']
             size = elf_symbol['Size']
-            section_name = elf_symbol['Section']['Value']
+            section_name = _get_name_or_value(elf_symbol['Section'])
             symbols[name] = SymbolInfo(section_name, value, size)
 
     def symbol_range(symbol: str):
