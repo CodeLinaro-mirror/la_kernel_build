@@ -49,6 +49,18 @@ DefconfigInfo = provider(
     },
 )
 
+DefconfigFragmentsInfo = provider(
+    doc = "Describes kernel_build.pre_defconfig_fragments and kernel_build.post_defconfig_fragments.",
+    fields = {
+        "pre_defconfig_fragments": """A [depset](https://bazel.build/extending/depsets) of [File](https://bazel.build/rules/lib/File]s
+            describing kernel_build.pre_defconfig_fragments""",
+        "post_defconfig_fragments": """A [depset](https://bazel.build/extending/depsets) of [File](https://bazel.build/rules/lib/File]s
+            describing kernel_build.post_defconfig_fragments""",
+        "check_pre_defconfig_fragments": """resolved value of kernel_build.check_defconfig. This may be None
+            that represents DefconfigFragmentsInfo of the base_kernel if there is no base_kernel.""",
+    },
+)
+
 KernelCmdsInfo = provider(
     doc = """Provides a directory of `.cmd` files.""",
     fields = {
@@ -339,6 +351,8 @@ KernelBuildFilegroupDeclInfo = provider(
         "copy_module_symvers_outputs": "The output `<name>_Module.symvers` file.",
         "generated_headers_for_module_archive": """An archive that contains list of generated headers to be extracted to
             $OUT_DIR prior to module builds. May be None.""",
+        "defconfig_info": "DefconfigInfo",
+        "defconfig_fragments_info": "DefconfigFragmentsInfo",
     },
 )
 

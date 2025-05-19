@@ -17,10 +17,12 @@
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load(":abi/base_kernel_utils.bzl", "base_kernel_utils")
 load(":abi/trim_nonlisted_kmi_utils.bzl", "trim_nonlisted_kmi_utils")
 load(":cache_dir.bzl", "cache_dir")
 load(
     ":common_providers.bzl",
+    "DefconfigFragmentsInfo",
     "DefconfigInfo",
     "KernelBuildOriginalEnvInfo",
     "KernelConfigInfo",
@@ -44,6 +46,16 @@ visibility("//build/kernel/kleaf/...")
 
 # Name of raw symbol list under $OUT_DIR
 _RAW_KMI_SYMBOL_LIST_BELOW_OUT_DIR = "abi_symbollist.raw"
+
+_DefconfigFragmentsListInfo = provider(
+    doc = "Same as DefconfigFragmentsInfo, but contains lists instead of depsets.",
+    fields = {
+        "pre_list": """A list of [File](https://bazel.build/rules/lib/File]s
+            describing kernel_build.pre_defconfig_fragments""",
+        "post_list": """A list of [File](https://bazel.build/rules/lib/File]s
+            describing kernel_build.post_defconfig_fragments""",
+    },
+)
 
 def _check_defconfig_minimized_impl(
         subrule_ctx,
@@ -285,51 +297,110 @@ _reconfig = subrule(
     ],
 )
 
-def _set_up_defconfig_impl(subrule_ctx, defconfig_info, is_run_env):
-    """Puts defconfig in $OUT_DIR."""
+def _defconfig_info_to_shell_variables(defconfig_info, is_run_env):
+    """Turns defconfig_info into variables that can be used in a shell script.
+
+    Returns:
+        A struct with these fields:
+        -   path: string representing the path to the defconfig_info.file if set,
+            otherwise empty string
+        -   make_target: defconfig_info.make_target if set,
+            otherwise empty string.
+        -   inputs: List of inputs
+    """
     if not defconfig_info:
-        return StepInfo(inputs = depset(), cmd = "", outputs = [], tools = [])
-    if not defconfig_info.file:
-        if not defconfig_info.make_target:
-            fail("{}: Unreconized defconfig!".format(subrule_ctx.label.name))
-        cmd = """
+        return struct(path = "", make_target = "", inputs = [])
+
+    path = ""
+    inputs = []
+    if defconfig_info.file:
+        path = defconfig_info.file.short_path if is_run_env else defconfig_info.file.path
+        inputs.append(defconfig_info.file)
+
+    return struct(
+        path = path,
+        make_target = defconfig_info.make_target or "",
+        inputs = inputs,
+    )
+
+def _set_up_defconfig_impl(subrule_ctx, defconfig_info, base_kernel_defconfig_info, is_run_env):
+    """Sets up the value of DEFCONFIG.
+
+    If kernel_build.defconfig is set:
+        - If it is set to a file, put it in $OUT_DIR and set DEFCONFIG to an internal name.
+        - Else if it is phony_defconfig(), use the provided make_target.
+
+    Else if DEFCONFIG (from build_config) is set, use its value (print a warning).
+
+    Else if base_kernel is provided, use DefconfigInfo from it.
+    """
+
+    my_vars = _defconfig_info_to_shell_variables(defconfig_info, is_run_env)
+    base_vars = _defconfig_info_to_shell_variables(base_kernel_defconfig_info, is_run_env)
+
+    cmd = """
+        # Handles a DefconfigInfo and set DEFCONFIG accordingly.
+        # $1: DefconfigInfo.file
+        # $2: DefconfigInfo.make_target
+        # pre-condition: $1 exclusive or $2 is non-empty.
+        # post-condition: variable DEFCONFIG is set.
+        function kleaf_handle_defconfig_info() {{
+            local defconfig_file=$1
+            local defconfig_make_target=$2
+
+            if [[ -n "${{defconfig_file}}" ]] && [[ -n "${{defconfig_make_target}}" ]]; then
+                echo "ERROR: Unrecognized defconfig; file=${{defconfig_file}} make_target=${{defconfig_make_target}}" >&2
+                exit 1
+            fi
+
             if [[ -n "${{DEFCONFIG}}" ]]; then
                 echo "ERROR: DEFCONFIG cannot be set in build configs if kernel_build.defconfig is set." >&2
                 echo "  DEFCONFIG=${{DEFCONFIG}}" >&2
-                echo "  kernel_build.defconfig={defconfig_make_target}" >&2
+                echo "  kernel_build.defconfig=${{defconfig_file}}${{defconfig_make_target}}" >&2
                 exit 1
             fi
-            DEFCONFIG={defconfig_make_target}
-        """.format(
-            defconfig_make_target = defconfig_info.make_target,
-        )
-        return StepInfo(inputs = depset(), cmd = cmd, outputs = [], tools = [])
 
-    cmd = """
-        if [[ -n "${{DEFCONFIG}}" ]]; then
-            echo "ERROR: DEFCONFIG cannot be set in build configs if kernel_build.defconfig is set." >&2
-            echo "  DEFCONFIG=${{DEFCONFIG}}" >&2
-            echo "  kernel_build.defconfig={defconfig_file}" >&2
+            if [[ -n "${{defconfig_make_target}}" ]]; then
+                DEFCONFIG="${{defconfig_make_target}}"
+            else
+                DEFCONFIG=kleaf_internal_{kernel_build_name}_defconfig
+                # subshell to prevent SRCARCH from polluting the environment.
+                (
+                    {set_src_arch_cmd}
+                    if [[ -f "${{KERNEL_DIR}}/arch/${{SRCARCH}}/configs/${{DEFCONFIG}}" ]]; then
+                        echo "ERROR: Please delete ${{KERNEL_DIR}}/arch/${{SRCARCH}}/configs/${{DEFCONFIG}} and try again." >&2
+                        exit 1
+                    fi
+                    mkdir -p "${{OUT_DIR}}/arch/${{SRCARCH}}/configs/"
+                    cp -L "${{defconfig_file}}" "${{OUT_DIR}}/arch/${{SRCARCH}}/configs/${{DEFCONFIG}}"
+                )
+            fi
+        }}
+
+        if [[ -n "{my_defconfig_file}" ]] || [[ -n "{my_defconfig_make_target}" ]]; then
+            kleaf_handle_defconfig_info "{my_defconfig_file}" "{my_defconfig_make_target}"
+        elif [[ -n "${{DEFCONFIG}}" ]]; then
+            echo "WARNING: DEFCONFIG is deprecated; use kernel_build(defconfig=) instead." >&2
+            # Preserve its value
+        elif [[ -n "{base_kernel_defconfig_file}" ]] || [[ -n "{base_kernel_defconfig_make_target}" ]]; then
+            kleaf_handle_defconfig_info "{base_kernel_defconfig_file}" "{base_kernel_defconfig_make_target}"
+        fi
+        if [[ -z "${{DEFCONFIG}}" ]]; then
+            echo "ERROR: kernel_build(defconfig=) is not set, and its value cannot be inferred from base_kernel." >&2
             exit 1
         fi
-
-        DEFCONFIG=kleaf_internal_{kernel_build_name}_defconfig
-        (
-            {set_src_arch_cmd}
-            if [[ -f "${{KERNEL_DIR}}/arch/${{SRCARCH}}/configs/${{DEFCONFIG}}" ]]; then
-                echo "ERROR: Please delete ${{KERNEL_DIR}}/arch/${{SRCARCH}}/configs/${{DEFCONFIG}} and try again." >&2
-                exit 1
-            fi
-            mkdir -p "${{OUT_DIR}}/arch/${{SRCARCH}}/configs/"
-            cp -L {defconfig_file} "${{OUT_DIR}}/arch/${{SRCARCH}}/configs/${{DEFCONFIG}}"
-        )
+        unset -f kleaf_handle_defconfig_info
     """.format(
+        my_defconfig_file = my_vars.path,
+        my_defconfig_make_target = my_vars.make_target,
+        base_kernel_defconfig_file = base_vars.path,
+        base_kernel_defconfig_make_target = base_vars.make_target,
         set_src_arch_cmd = kernel_utils.set_src_arch_cmd(),
         kernel_build_name = subrule_ctx.label.name.removesuffix("_config"),
-        defconfig_file = defconfig_info.file.short_path if is_run_env else defconfig_info.file.path,
     )
+
     return StepInfo(
-        inputs = depset([defconfig_info.file]),
+        inputs = depset(my_vars.inputs + base_vars.inputs),
         cmd = cmd,
         outputs = [],
         tools = [],
@@ -518,26 +589,53 @@ def _kernel_config_impl(ctx):
             defconfig_info = DefconfigInfo(file = ctx.files.defconfig[0], make_target = None)
         else:
             fail("{}: defconfig {} must provide exactly one file".format(ctx.label, ctx.attr.defconfig.label))
+    else:
+        defconfig_info = DefconfigInfo(file = None, make_target = None)
 
-    if ctx.attr.pre_defconfig_fragments and (not defconfig_info or not defconfig_info.file):
-        fail("{}: Must also set defconfig to a non phony_defconfig target if using pre_defconfig_fragments".format(ctx.label.name.removesuffix("_config")))
+    # Inherit pre_defconfig_fragments from base_kernel so that
+    # for mixed builds, the device kernel_build() won't have to reiterate pre_defconfig_fragments
+    inherit_pre = ctx.attr._inherit_pre_defconfig_fragments_from_base_kernel[BuildSettingInfo].value
+    base_fragments = base_kernel_utils.get_base_defconfig_fragments_info(ctx)
+    base_pre = base_fragments.pre_defconfig_fragments if inherit_pre and base_fragments else depset()
+    base_check_pre = base_fragments.check_pre_defconfig_fragments if inherit_pre and base_fragments else None
+
+    check_pre_defconfig_fragments = ctx.attr.check_defconfig
+    if not check_pre_defconfig_fragments:
+        # If base_kernel is set and its check_defconfig == "disabled", do not elevate the check level.
+        if inherit_pre and base_check_pre == "disabled":
+            check_pre_defconfig_fragments = "disabled"
+        else:
+            check_pre_defconfig_fragments = "match"
+
+    defconfig_fragments_info = DefconfigFragmentsInfo(
+        pre_defconfig_fragments = depset(transitive = (
+            [base_pre] + [target.files for target in ctx.attr.pre_defconfig_fragments]
+        )),
+        post_defconfig_fragments = depset(transitive = [target.files for target in ctx.attr.post_defconfig_fragments]),
+        check_pre_defconfig_fragments = check_pre_defconfig_fragments,
+    )
+    defconfig_fragments_list_info = _DefconfigFragmentsListInfo(
+        pre_list = defconfig_fragments_info.pre_defconfig_fragments.to_list(),
+        post_list = defconfig_fragments_info.post_defconfig_fragments.to_list(),
+    )
 
     step_returns = [
         _set_up_defconfig(
             is_run_env = False,
             defconfig_info = defconfig_info,
+            base_kernel_defconfig_info = base_kernel_utils.get_base_defconfig_info(ctx),
         ),
         _pre_defconfig(
             is_run_env = False,
-            pre_defconfig_fragment_files = ctx.files.pre_defconfig_fragments,
+            pre_defconfig_fragment_files = defconfig_fragments_list_info.pre_list,
         ),
         _make_defconfig(),
     ]
 
     check_defconfig_minimized_ret = _check_defconfig_minimized(
-        check_defconfig_attr_value = ctx.attr.check_defconfig,
+        check_defconfig_attr_value = check_pre_defconfig_fragments,
         defconfig_info = defconfig_info,
-        pre_defconfig_fragment_files = ctx.files.pre_defconfig_fragments,
+        pre_defconfig_fragment_files = defconfig_fragments_list_info.pre_list,
     )
     step_returns.append(check_defconfig_minimized_ret)
 
@@ -547,26 +645,27 @@ def _kernel_config_impl(ctx):
     if not check_defconfig_minimized_ret.cmd:
         step_returns.append(
             _check_dot_config_against_defconfig(
-                check_defconfig_attr_value = ctx.attr.check_defconfig,
+                check_defconfig_attr_value = check_pre_defconfig_fragments,
                 defconfig_info = defconfig_info,
-                pre_defconfig_fragment_files = ctx.files.pre_defconfig_fragments,
+                pre_defconfig_fragment_files = defconfig_fragments_list_info.pre_list,
                 post_defconfig_fragment_files = [],
             ),
         )
 
+    check_post_defconfig_fragments = ctx.attr.check_defconfig or "match"
     step_returns += [
         _post_defconfig(
             trim_attr_value = trim_nonlisted_kmi_utils.get_value(ctx),
             raw_kmi_symbol_list_file = utils.optional_file(ctx.files.raw_kmi_symbol_list),
             module_signing_key_file = ctx.file.module_signing_key,
             system_trusted_key_file = ctx.file.system_trusted_key,
-            post_defconfig_fragment_files = ctx.files.post_defconfig_fragments,
+            post_defconfig_fragment_files = defconfig_fragments_list_info.post_list,
         ),
         _check_dot_config_against_defconfig(
-            check_defconfig_attr_value = ctx.attr.check_defconfig,
+            check_defconfig_attr_value = check_post_defconfig_fragments,
             defconfig_info = DefconfigInfo(file = None, make_target = None),
             pre_defconfig_fragment_files = [],
-            post_defconfig_fragment_files = ctx.files.post_defconfig_fragments,
+            post_defconfig_fragment_files = defconfig_fragments_list_info.post_list,
         ),
     ]
     transitive_inputs += [step_return.inputs for step_return in step_returns]
@@ -683,7 +782,8 @@ def _kernel_config_impl(ctx):
     config_script_ret = _get_config_script(
         env_info = ctx.attr.env[KernelEnvInfo],
         defconfig_info = defconfig_info,
-        pre_defconfig_fragment_files = ctx.files.pre_defconfig_fragments,
+        base_kernel_defconfig_info = base_kernel_utils.get_base_defconfig_info(ctx),
+        pre_defconfig_fragment_files = defconfig_fragments_list_info.pre_list,
     )
     config_script_runfiles = ctx.runfiles(
         files = inputs,
@@ -695,6 +795,8 @@ def _kernel_config_impl(ctx):
     )
 
     return [
+        defconfig_info,
+        defconfig_fragments_info,
         serialized_env_info,
         ctx.attr.env[KernelEnvAttrInfo],
         ctx.attr.env[KernelEnvMakeGoalsInfo],
@@ -716,6 +818,7 @@ def _get_config_script_impl(
         subrule_ctx,
         env_info,
         defconfig_info,
+        base_kernel_defconfig_info,
         pre_defconfig_fragment_files):
     """Handles config.sh.
 
@@ -723,6 +826,7 @@ def _get_config_script_impl(
         subrule_ctx: subrule_ctx
         env_info: kernel_env[KernelEnvInfo]
         defconfig_info: the DefconfigInfo from attr defconfig
+        base_kernel_defconfig_info: the DefconfigInfo from base_kernel
         pre_defconfig_fragment_files: list of files of pre_defconfig_fragments
     """
     executable = subrule_ctx.actions.declare_file("{}/config.sh".format(subrule_ctx.label.name))
@@ -731,6 +835,7 @@ def _get_config_script_impl(
         _set_up_defconfig(
             is_run_env = True,
             defconfig_info = defconfig_info,
+            base_kernel_defconfig_info = base_kernel_defconfig_info,
         ),
         _pre_defconfig(
             is_run_env = True,
@@ -929,6 +1034,7 @@ def _kernel_config_additional_attrs():
         kernel_config_settings.of_kernel_config(),
         trim_nonlisted_kmi_utils.attrs(),
         cache_dir.attrs(),
+        base_kernel_utils.non_config_attrs(),
     )
 
 kernel_config = rule(
@@ -974,11 +1080,15 @@ kernel_config = rule(
         ),
         "check_defconfig": attr.string(
             doc = "minimized: Checks defconfig against savedefconfig. match: check values only.",
-            default = "match",
+            # Default value is intentionally empty so we can deduce it in the rule implementation.
+            # The default value depends on base_kernel.
+            # See documentation for kernel_build.check_defconfig.
+            default = "",
             values = ["disabled", "minimized", "match"],
         ),
         "_config_is_stamp": attr.label(default = "//build/kernel/kleaf:config_stamp"),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
+        "_inherit_pre_defconfig_fragments_from_base_kernel": attr.label(default = "//build/kernel/kleaf:inherit_pre_defconfig_fragments_from_base_kernel"),
     } | _kernel_config_additional_attrs(),
     executable = True,
     toolchains = [hermetic_toolchain.type],
