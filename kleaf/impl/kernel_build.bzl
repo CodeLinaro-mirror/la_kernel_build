@@ -706,7 +706,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         ))
         post_defconfig_fragments = defconfig_fragments
 
-    post_defconfig_fragments = _get_post_defconfig_fragments(
+    post_defconfig_fragments_inherited = _get_post_defconfig_fragments_inherited(
         kernel_build_name = name,
         kernel_build_post_defconfig_fragments = post_defconfig_fragments,
         kernel_build_arch = arch,
@@ -719,12 +719,10 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         kernel_build_trim_nonlisted_kmi = trim_nonlisted_kmi,
         **internal_kwargs
     )
-
-    # Do not use append because the returned value may not be a list.
-    # buildifier: disable=list-append
-    post_defconfig_fragments += [trim_post_defconfig_fragment]
+    post_defconfig_fragments_non_inherited = [trim_post_defconfig_fragment]
 
     # Prevent accidental usage
+    post_defconfig_fragments = struct(message = "DO NOT USE ME! Use post_defconfig_fragments_inherited and post_defconfig_fragments_non_inherited instead.")
     trim_nonlisted_kmi = struct(message = "DO NOT USE ME! Use trim_post_defconfig_fragment instead.")
 
     native.platform(
@@ -755,7 +753,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         target_platform = name + "_platform_target",
         exec_platform = name + "_platform_exec",
         pre_defconfig_fragments = pre_defconfig_fragments,
-        post_defconfig_fragments = post_defconfig_fragments,
+        post_defconfig_fragments = post_defconfig_fragments_inherited + post_defconfig_fragments_non_inherited,
         kcflags = kcflags,
         clang_autofdo_profile = clang_autofdo_profile,
         **internal_kwargs
@@ -798,7 +796,8 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         system_trusted_key = system_trusted_key,
         defconfig = defconfig,
         pre_defconfig_fragments = pre_defconfig_fragments,
-        post_defconfig_fragments = post_defconfig_fragments,
+        post_defconfig_fragments_inherited = post_defconfig_fragments_inherited,
+        post_defconfig_fragments_non_inherited = post_defconfig_fragments_non_inherited,
         check_defconfig = check_defconfig,
         **internal_kwargs
     )
@@ -956,7 +955,7 @@ IGNORED because kernel_build.sanitizers is set!".format(this_label = ctx.label, 
 
     return False
 
-def _get_post_defconfig_fragments(
+def _get_post_defconfig_fragments_inherited(
         kernel_build_name,
         kernel_build_post_defconfig_fragments,
         kernel_build_arch,
