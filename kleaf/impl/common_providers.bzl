@@ -279,6 +279,15 @@ files required to build `KBUILD_MIXED_TREE` for the device kernel.""",
     },
 )
 
+KernelBuildGeneratedHeadersForModuleInfo = provider(
+    doc = """A provider that specifies the expectations of a [`kernel_build`](kernel.md#kernel_build) on its
+[`base_kernel`](kernel.md#kernel_build-base_kernel) for providing generated headers for external modules.""",
+    fields = {
+        "archive": """An archive that contains list of generated headers to be extracted to
+            $OUT_DIR prior to module builds. May be None.""",
+    },
+)
+
 KernelBuildUnameInfo = provider(
     doc = """A provider providing `kernel.release` of a `kernel_build`.""",
     fields = {
@@ -328,6 +337,8 @@ KernelBuildFilegroupDeclInfo = provider(
         "module_env_archive": "Archive preparing an environment to build modules. May be `None`.",
         "has_base_kernel": "Whether the original `kernel_build()` has a not-None `base_kernel`.",
         "copy_module_symvers_outputs": "The output `<name>_Module.symvers` file.",
+        "generated_headers_for_module_archive": """An archive that contains list of generated headers to be extracted to
+            $OUT_DIR prior to module builds. May be None.""",
     },
 )
 
@@ -589,5 +600,13 @@ KernelConfigInfo = provider(
     doc = "For `kernel_config` to provide files to replay the environment",
     fields = {
         "env_setup_script": "script from `kernel_env`",
+    },
+)
+
+DtstreeInfo = provider(
+    doc = "DTS tree info",
+    fields = {
+        "srcs": "depset of DTS tree sources",
+        "makefile": "DTS tree makefile",
     },
 )

@@ -120,6 +120,11 @@ def _initramfs_impl(ctx):
     additional_inputs.extend(ctx.files.modules_charger_list)
     additional_inputs.extend(ctx.files.modules_blocklist)
     additional_inputs.extend(ctx.files.modules_options)
+    additional_inputs.extend(ctx.files.vendor_ramdisk_dev_nodes)
+
+    initramfs_args = ""
+    for file in ctx.files.vendor_ramdisk_dev_nodes:
+        initramfs_args += " -n " + file.path
 
     ramdisk_compress = image_utils.ramdisk_options(
         ramdisk_compression = ctx.attr.ramdisk_compression,
@@ -132,6 +137,12 @@ def _initramfs_impl(ctx):
                MODULES_CHARGER_LIST={modules_charger_list}
                MODULES_BLOCKLIST={modules_blocklist}
                MODULES_OPTIONS={modules_options}
+               if [ -n "${{TRIM_UNUSED_MODULES}}" ]; then
+                   echo "WARNING: TRIM_UNUSED_MODULES is deprecated; use initramfs(trim_unused_modules=) instead." >&2
+               fi
+               if [ "{trim_unused_modules}" == "1" ]; then
+                   TRIM_UNUSED_MODULES=1
+               fi
              # Use `strip_modules` intead of relying on this.
                unset DO_NOT_STRIP_MODULES
                mkdir -p {initramfs_staging_dir}
@@ -147,7 +158,7 @@ def _initramfs_impl(ctx):
                {cp_modules_load_charger_cmd}
                {cp_vendor_boot_modules_load_charger_cmd}
                {cp_modules_options_cmd}
-               mkbootfs "{initramfs_staging_dir}" >"{modules_staging_dir}/initramfs.cpio"
+               mkbootfs "{initramfs_staging_dir}" {initramfs_args} >"{modules_staging_dir}/initramfs.cpio"
                {ramdisk_compress} "{modules_staging_dir}/initramfs.cpio" >"{initramfs_img}"
              # Archive initramfs_staging_dir
                tar czf {initramfs_staging_archive} -C {initramfs_staging_dir} .
@@ -160,7 +171,9 @@ def _initramfs_impl(ctx):
         modules_blocklist = utils.optional_path(ctx.file.modules_blocklist),
         modules_options = utils.optional_path(ctx.file.modules_options),
         modules_staging_dir = modules_staging_dir,
+        trim_unused_modules = "1" if ctx.attr.trim_unused_modules else "",
         initramfs_staging_dir = initramfs_staging_dir,
+        initramfs_args = initramfs_args,
         ramdisk_compress = ramdisk_compress,
         modules_load = modules_load.path,
         initramfs_img = initramfs_img.path,
@@ -265,12 +278,23 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
         "ramdisk_compression_args": attr.string(
             doc = "Command line arguments passed only to lz4 command to control compression level.",
         ),
+        "trim_unused_modules": attr.bool(
+            default = False,
+            doc = """If `True` then modules not mentioned in modules.load are removed
+                from the initramfs. It defaults to `False`.""",
+        ),
         "vendor_boot_name": attr.string(doc = """Name of `vendor_boot` image.
 
                 * If `"vendor_boot"`, build `vendor_boot.img`
                 * If `"vendor_kernel_boot"`, build `vendor_kernel_boot.img`
                 * If `None`, skip building `vendor_boot`.
             """, values = ["vendor_boot", "vendor_kernel_boot"]),
+        "vendor_ramdisk_dev_nodes": attr.label_list(
+            allow_files = True,
+            doc = """List of dev nodes description files which describes special device files
+                to be added to the vendor ramdisk. File format is as accepted by mkbootfs.
+                See `mkbootfs -h` for more details.""",
+        ),
     },
     subrules = [image_utils.build_modules_image],
 )

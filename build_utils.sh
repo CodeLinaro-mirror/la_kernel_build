@@ -128,15 +128,25 @@ function create_modules_order_lists() {
       local modules_list_filter=$(mktemp)
 
       # Remove all lines starting with "#" (comments)
-      # Exclamation point makes interpreter ignore the exit code under set -e
-      ! grep -v "^#" ${mod_list_file} > ${modules_list_filter}
+      # "|| true" ignores the exit code under set -e
+      grep -v "^#" ${mod_list_file} > ${modules_list_filter} \
+        || true
 
       # Append a new line at the end of file
       # If file doesn't end in newline the last module is skipped from filter
       echo >> ${modules_list_filter}
 
+      # Empty lines does not work properly with grep so remove them
+      sed -n '/^.\+$/p' -i ${modules_list_filter} \
+        || true
+
+      # To eliminate ambiguity of flatten KO basenames change them to regexps for KO pathnames
+      sed 's@^\([0-9a-zA-Z_\-]\+\)\.ko$@^\\(.*/\\)\\?\1\\.ko$@' -i ${modules_list_filter} \
+        || true
+
       # grep the modules.order for any KOs in the modules list
-      ! grep -w -f ${modules_list_filter} ${tmp_modules_order_file} > ${dest_file}
+      grep -f ${modules_list_filter} ${tmp_modules_order_file} > ${dest_file} \
+        || true
 
       rm -f ${modules_list_filter}
     fi
@@ -502,12 +512,22 @@ function build_vendor_dlkm() {
 
   if [ -z "${VENDOR_DLKM_PROPS}" ]; then
     vendor_dlkm_props_file="$(mktemp)"
-    echo -e "vendor_dlkm_fs_type=${VENDOR_DLKM_FS_TYPE}\n" >> ${vendor_dlkm_props_file}
+    vendor_dlkm_file_contexts="$(mktemp)"
+    echo -e "fs_type=${VENDOR_DLKM_FS_TYPE}\n" >> ${vendor_dlkm_props_file}
     echo -e "use_dynamic_partition_size=true\n" >> ${vendor_dlkm_props_file}
     if [[ "${VENDOR_DLKM_FS_TYPE}" == "ext4" ]]; then
       echo -e "ext_mkuserimg=mkuserimg_mke2fs\n" >> ${vendor_dlkm_props_file}
       echo -e "ext4_share_dup_blocks=true\n" >> ${vendor_dlkm_props_file}
+      echo -e "extfs_rsv_pct=0\n" >> ${vendor_dlkm_props_file}
+      echo -e "journal_size=0\n" >> ${vendor_dlkm_props_file}
     fi
+    echo -e "mount_point=vendor_dlkm\n" >> ${vendor_dlkm_props_file}
+    echo -e "selinux_fc=${vendor_dlkm_file_contexts}\n" >> ${vendor_dlkm_props_file}
+
+    echo -e "/vendor_dlkm(/.*)?                    u:object_r:vendor_file:s0" >> ${vendor_dlkm_file_contexts}
+    echo -e "/vendor_dlkm/lib/modules(/.*)?/.*\.ko u:object_r:vendor_kernel_modules:s0" >> ${vendor_dlkm_file_contexts}
+
+
   else
     vendor_dlkm_props_file="${VENDOR_DLKM_PROPS}"
     if [[ -f "${ROOT_DIR}/${vendor_dlkm_props_file}" ]]; then
@@ -541,15 +561,15 @@ function build_vendor_dlkm() {
   if [[ ${VENDOR_DLKM_GEN_FLATTEN_IMAGE:-0} == "1" ]]; then
     local vendor_dlkm_flatten_image_name="vendor_dlkm.flatten.img"
 
-    if [ -z "${VENDOR_DLKM_PROPS}" ]; then
-      echo -e "fs_type=${VENDOR_DLKM_FS_TYPE}" >> ${vendor_dlkm_props_file}
-      echo -e "mount_point=vendor_dlkm\n" >> ${vendor_dlkm_props_file}
-    fi
-
   build_flattened_dlkm_image "${vendor_dlkm_flatten_image_name}" "${VENDOR_DLKM_STAGING_DIR}" \
     "${vendor_dlkm_props_file}" "${DIST_DIR}"
 
   generated_images+=(${vendor_dlkm_flatten_image_name})
+  fi
+
+  if [ -z "${VENDOR_DLKM_PROPS}" ]; then
+    rm ${vendor_dlkm_props_file}
+    rm ${vendor_dlkm_file_contexts}
   fi
 
   for image in "${generated_images[@]}"
@@ -744,7 +764,16 @@ function build_boot_images() {
   fi
 
   if [ "${BOOT_IMAGE_HEADER_VERSION}" -ge "4" ]; then
-    if [ -n "${VENDOR_BOOTCONFIG}" ]; then
+    if [ -n "${VENDOR_BOOTCONFIG_FILE}" ]; then
+      if [ -n "${VENDOR_BOOTCONFIG}" ]; then
+        echo "ERROR: vendor_boot_image.vendor_bootconfig is set. " >&2
+        echo "    Please delete the deprecated VENDOR_BOOTCONFIG variable." >&2
+        exit 1
+      fi
+      MKBOOTIMG_ARGS+=("--vendor_bootconfig" "${VENDOR_BOOTCONFIG_FILE}")
+      KERNEL_VENDOR_CMDLINE+=" bootconfig"
+    elif [ -n "${VENDOR_BOOTCONFIG}" ]; then
+      echo "WARNING: VENDOR_BOOTCONFIG is deprecated. Use vendor_boot_image.vendor_bootconfig instead." >&2
       for PARAM in ${VENDOR_BOOTCONFIG}; do
         echo "${PARAM}"
       done >"${DIST_DIR}/vendor-bootconfig.img"

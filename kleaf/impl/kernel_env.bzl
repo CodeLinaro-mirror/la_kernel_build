@@ -22,6 +22,7 @@ load("@kernel_toolchain_info//:dict.bzl", "VARS")
 load(":abi/force_add_vmlinux_utils.bzl", "force_add_vmlinux_utils")
 load(
     ":common_providers.bzl",
+    "DtstreeInfo",
     "KernelBuildConfigInfo",
     "KernelEnvAttrInfo",
     "KernelEnvInfo",
@@ -32,7 +33,6 @@ load(":compile_commands_utils.bzl", "compile_commands_utils")
 load(":debug.bzl", "debug")
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
 load(":kernel_config_settings.bzl", "kernel_config_settings")
-load(":kernel_dtstree.bzl", "DtstreeInfo")
 load(":kernel_toolchains_utils.bzl", "kernel_toolchains_utils")
 load(":kgdb.bzl", "kgdb")
 load(":set_kernel_dir.bzl", "set_kernel_dir")
@@ -164,7 +164,7 @@ _get_build_config_inputs = subrule(implementation = _get_build_config_inputs_imp
 def _kernel_env_impl(ctx):
     kconfig_ext = ctx.file.kconfig_ext
     dtstree_makefile = None
-    dtstree_srcs = []
+    dtstree_srcs = depset()
     if ctx.attr.dtstree != None:
         dtstree_makefile = ctx.attr.dtstree[DtstreeInfo].makefile
         dtstree_srcs = ctx.attr.dtstree[DtstreeInfo].srcs
@@ -404,14 +404,17 @@ def _kernel_env_impl(ctx):
         out_file,
         ctx.version_file,
     ]
+    setup_transitive_inputs = []
     if kconfig_ext:
         setup_inputs.append(kconfig_ext)
     if ctx.file.clang_autofdo_profile:
         setup_inputs.append(ctx.file.clang_autofdo_profile)
-    setup_inputs += dtstree_srcs
+    setup_transitive_inputs.append(dtstree_srcs)
+    if dtstree_makefile:
+        setup_inputs.append(dtstree_makefile)
 
     env_info = KernelEnvInfo(
-        inputs = depset(setup_inputs),
+        inputs = depset(setup_inputs, transitive = setup_transitive_inputs),
         tools = depset(setup_tools, transitive = setup_transitive_tools),
         setup = setup,
         toolchains = toolchains,

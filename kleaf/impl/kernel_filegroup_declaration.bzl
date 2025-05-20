@@ -97,8 +97,6 @@ platform(
     constraint_values = [
         "@platforms//os:android",
         "@platforms//cpu:{arch}",
-        # @kleaf//prebuilts/clang/host/linux-x86/kleaf:{toolchain_version}
-        package_relative_label(_CLANG_KLEAF_PKG).same_package_label({toolchain_version_repr}),
     ],
     visibility = ["//visibility:private"],
 )
@@ -106,10 +104,6 @@ platform(
 platform(
     name = {exec_platform_repr},
     parents = ["@platforms//host"],
-    constraint_values = [
-        # @kleaf//prebuilts/clang/host/linux-x86/kleaf:{toolchain_version}
-        package_relative_label(_CLANG_KLEAF_PKG).same_package_label({toolchain_version_repr}),
-    ],
     visibility = ["//visibility:private"],
 )
 
@@ -147,6 +141,7 @@ kernel_filegroup(
     env_setup_script = {env_setup_script_repr},
     modules_prepare_archive = {modules_prepare_archive_repr},
     module_env_archive = {module_env_archive_repr},
+    generated_headers_for_module_archive = {generated_headers_for_modules_archive_repr},
     outs = {outs_repr},
     internal_outs = {internal_outs_repr},
     target_platform = {target_platform_repr},
@@ -252,6 +247,11 @@ def _write_filegroup_decl_file(
         **(one | pkg)
     )
     sub.add_joined("{module_env_archive_repr}", depset([info.module_env_archive]), **(one | pkg))
+    sub.add_joined(
+        "{generated_headers_for_modules_archive_repr}",
+        depset([info.generated_headers_for_module_archive]),
+        **(one | pkg)
+    )
 
     # {"//vmlinux": "vmlinux", ...}
     sub.add_joined(
@@ -337,6 +337,8 @@ def _create_archive(ctx, info, deps_files, kernel_uapi_headers, filegroup_decl_f
         info.modules_prepare_archive,
         info.module_env_archive,
     ]
+    if info.generated_headers_for_module_archive:
+        direct_inputs.append(info.generated_headers_for_module_archive)
     if info.src_protected_modules_list:
         direct_inputs.append(info.src_protected_modules_list)
     direct_inputs.extend(info.copy_module_symvers_outputs)

@@ -64,6 +64,7 @@ def common_kernel(
         arch = None,
         visibility = None,
         defconfig = None,
+        check_defconfig = None,
         pre_defconfig_fragments = None,
         post_defconfig_fragments = None,
         kmi_symbol_list = None,
@@ -87,7 +88,8 @@ def common_kernel(
         extra_dist = None,
         kcflags = None,
         system_dlkm_extra_archive_files = None,
-        clang_autofdo_profile = None):
+        clang_autofdo_profile = None,
+        generated_headers_for_module = None):
     """Macro for an Android Common Kernel.
 
     The following targets are declared as public API:
@@ -129,6 +131,14 @@ def common_kernel(
         arch: See [kernel_build.arch](kernel.md#kernel_build-arch)
         makefile: See [kernel_build.makefile](kernel.md#kernel_build-makefile)
         defconfig: See [kernel_build.defconfig](kernel.md#kernel_build-defconfig)
+        check_defconfig: Non-configurable. See [kernel_build.check_defconfig](kernel.md#kernel_build-check_defconfig).
+
+            If value is `None`, default value is the following:
+            -   If `--gki_build_config_fragment` is set, default is "disabled".
+            -   Otherwise:
+                -   If `pre_defconfig_fragments` is set, default is "match".
+                -   Otherwise, default is "minimized".
+
         pre_defconfig_fragments: See [kernel_build.pre_defconfig_fragments](kernel.md#kernel_build-pre_defconfig_fragments)
         post_defconfig_fragments: See [kernel_build.post_defconfig_fragments](kernel.md#kernel_build-post_defconfig_fragments)
         kmi_symbol_list: See [kernel_build.kmi_symbol_list](kernel.md#kernel_build-kmi_symbol_list)
@@ -155,6 +165,7 @@ def common_kernel(
         kcflags: [kernel_build.kcflags](kernel.md#kernel_build-kcflags)
         system_dlkm_extra_archive_files: [system_dlkm_image.internal_extra_archive_files](#system_dlkm_image-internal_extra_archive_files)
         clang_autofdo_profile: See [kernel_build.clang_autofdo_profile](kernel.md#kernel_build-clang_autofdo_profile)
+        generated_headers_for_module: See [kernel_build.generated_headers_for_module](kernel.md#kernel_build-generated_headers_for_module)
     """
     json_target_config = dict(
         name = name,
@@ -162,6 +173,7 @@ def common_kernel(
         arch = arch,
         makefile = makefile,
         defconfig = defconfig,
+        check_defconfig = check_defconfig,
         pre_defconfig_fragments = pre_defconfig_fragments,
         post_defconfig_fragments = post_defconfig_fragments,
         visibility = visibility,
@@ -183,6 +195,7 @@ def common_kernel(
         ddk_headers_archive = ddk_headers_archive,
         ddk_module_headers = ddk_module_headers,
         extra_dist = extra_dist,
+        generated_headers_for_module = generated_headers_for_module,
     )
 
     print_debug(
@@ -215,6 +228,12 @@ def common_kernel(
         srcs = all_kmi_symbol_lists,
     )
 
+    if check_defconfig == None:
+        check_defconfig = select({
+            Label("//build/kernel/kleaf:gki_build_config_fragment_is_unset"): "match" if pre_defconfig_fragments else "minimized",
+            "//conditions:default": "disabled",
+        })
+
     kernel_build(
         name = name,
         srcs = [name + "_sources"],
@@ -230,10 +249,7 @@ def common_kernel(
         ],
         build_config = Label("//build/kernel/kleaf:gki_build_config_fragment"),
         makefile = makefile,
-        check_defconfig = select({
-            Label("//build/kernel/kleaf:gki_build_config_fragment_is_unset"): "match" if pre_defconfig_fragments else "minimized",
-            "//conditions:default": "disabled",
-        }),
+        check_defconfig = check_defconfig,
         defconfig = defconfig,
         pre_defconfig_fragments = pre_defconfig_fragments,
         post_defconfig_fragments = post_defconfig_fragments,
@@ -259,6 +275,7 @@ def common_kernel(
         ddk_module_headers = ddk_module_headers,
         kcflags = kcflags,
         clang_autofdo_profile = clang_autofdo_profile,
+        generated_headers_for_module = generated_headers_for_module,
     )
 
     kernel_abi(
@@ -383,19 +400,19 @@ def common_kernel(
     )
     target_mapping = CI_TARGET_MAPPING.get(name, {})
     write_file(
-        name = name + "_download_configs",
+        name = name + "_ci_target_mapping",
         content = [
-            json.encode_indent(target_mapping.get("download_configs", {})),
+            json.encode_indent(target_mapping),
         ],
         # / is needed to distinguish between variants as 16k (and avoid conflicts).
-        out = name + "/download_configs.json",
+        out = name + "/ci_target_mapping.json",
     )
 
     # Everything in name + "_dist" for the DDK.
     # These are necessary for driver development. Hence they are also added to
     # kernel_*_dist so they can be downloaded.
     ddk_artifacts = [
-        name + "_download_configs",
+        name + "_ci_target_mapping",
         name + "_filegroup_declaration",
         name + "_unstripped_modules_archive",
     ]
