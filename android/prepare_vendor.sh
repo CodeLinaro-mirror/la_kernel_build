@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
-# Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+# Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -138,6 +138,9 @@ fi
 case "${KERNEL_TARGET}" in
   taro)
     KERNEL_TARGET="waipio"
+    ;;
+  canoe)
+    KERNEL_TARGET="x1p42100"
     ;;
 esac
 
