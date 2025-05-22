@@ -92,7 +92,7 @@ new_kleaf_local_repository(
 new_kleaf_local_repository(
     name = "dtc",
     build_file = "soc-repo/BUILD.dtc",
-    path = "external/dtc",
+    path = "external/qcom-dtc",
 )
 
 kernel_toolchain_ext = use_extension("//build/kernel/kleaf:kernel_toolchain_ext.bzl", "kernel_toolchain_ext")
