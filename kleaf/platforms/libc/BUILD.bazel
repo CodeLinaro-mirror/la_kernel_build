@@ -16,7 +16,7 @@
 
 constraint_setting(
     name = "libc",
-    default_constraint_value = ":glibc",
+    default_constraint_value = ":musl",
     visibility = [
         "//visibility:private",
     ],
