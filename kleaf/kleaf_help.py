@@ -244,12 +244,7 @@ class FlagsSection(BazelrcSection):
         )
 
         for alias in self.flags:
-            try:
-                alias.add_to_group(group, kleaf_repo_dir=kleaf_repo_dir)
-            except argparse.ArgumentError:
-                # For flags like --use_prebuilt_gki, its help is already printed by the wrapper.
-                # Skip them.
-                pass
+            alias.add_to_group(group, kleaf_repo_dir=kleaf_repo_dir)
 
 
 class FlagsBazelrcParser(BazelrcParser):

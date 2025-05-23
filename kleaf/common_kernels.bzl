@@ -14,15 +14,13 @@
 
 """Functions that are useful in the common kernel package (usually `//common`)."""
 
-load("@bazel_skylib//lib:selects.bzl", "selects")
-load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("@rules_pkg//pkg:install.bzl", "pkg_install")
 load("@rules_pkg//pkg:mappings.bzl", "pkg_files", "strip_prefix")
 load("//build/kernel/kleaf/artifact_tests:device_modules_test.bzl", "device_modules_test")
 load("//build/kernel/kleaf/artifact_tests:kernel_test.bzl", "initramfs_modules_options_test")
 load("//build/kernel/kleaf/impl:abi/kernel_abi_dist.bzl", "kernel_abi_wrapped_dist_internal")
-load("//build/kernel/kleaf/impl:gki_artifacts.bzl", "gki_artifacts", "gki_artifacts_prebuilts")
+load("//build/kernel/kleaf/impl:gki_artifacts.bzl", "gki_artifacts")
 load("//build/kernel/kleaf/impl:image/initramfs.bzl", "initramfs")
 load("//build/kernel/kleaf/impl:image/kernel_images.bzl", "kernel_images_filegroup")
 load("//build/kernel/kleaf/impl:kernel_filegroup_declaration.bzl", "kernel_filegroup_declaration")
@@ -483,173 +481,6 @@ def common_kernel(
             name + "_modules_test",
         ],
     )
-
-# TODO(b/291918087): Delete once users have migrated to @gki_prebuilts
-# buildifier: disable=unnamed-macro
-def define_prebuilts(**kwargs):
-    """Define --use_prebuilt_gki and relevant targets.
-
-    You may set the argument `--use_prebuilt_gki` to a GKI prebuilt build number
-    on [ci.android.com](http://ci.android.com) or your custom CI host. The format is:
-
-    ```
-    bazel <command> --use_prebuilt_gki=<build_number> <targets>
-    ```
-
-    For example, the following downloads GKI artifacts of build number 8077484 (assuming
-    the current package is `//common`):
-
-    ```
-    bazel build --use_prebuilt_gki=8077484 //common:kernel_aarch64_download_or_build
-    ```
-
-    If you leave out the `--use_prebuilt_gki` argument, the command is equivalent to
-    `bazel build //common:kernel_aarch64`, which builds kernel from source.
-
-    `<name>_download_or_build` targets builds `<name>` from source if the `use_prebuilt_gki`
-    is not set, and downloads artifacts of the build number from
-    [ci.android.com](http://ci.android.com) (or your custom CI host) if it is set.
-
-    - `kernel_aarch64_download_or_build`
-      - `kernel_aarch64_additional_artifacts_download_or_build`
-      - `kernel_aarch64_uapi_headers_download_or_build`
-
-    Note: If a device should build against downloaded prebuilts unconditionally, set
-    `--use_prebuilt_gki` and a fixed build number in `device.bazelrc`. For example:
-    ```
-    # device.bazelrc
-    build --use_prebuilt_gki
-    build --action_env=KLEAF_DOWNLOAD_BUILD_NUMBER_MAP="gki_prebuilts=8077484"
-    ```
-
-    This is equivalent to specifying `--use_prebuilt_gki=8077484` for all Bazel commands.
-
-    You may set `--use_signed_prebuilts` to download the signed boot images instead
-    of the unsigned one. This requires `--use_prebuilt_gki` to be set to a signed build.
-
-    Args:
-        **kwargs: common kwargs to internal targets.
-
-    Deprecated:
-        See build/kernel/kleaf/docs/ddk/workspace.md for new ways to define prebuilts.
-    """
-
-    # Legacy flag for backwards compatibility
-    # TODO(https://github.com/bazelbuild/bazel/issues/13463): alias to bool_flag does not
-    # work. Hence we use a composite flag here.
-    bool_flag(
-        name = "use_prebuilt_gki",
-        build_setting_default = False,
-        # emit a warning if the legacy flag is used.
-        deprecation = "Use {} or {} instead, respectively.".format(
-            Label("//build/kernel/kleaf:use_prebuilt_gki"),
-            Label("//build/kernel/kleaf:use_prebuilt_gki_is_true"),
-        ),
-    )
-    native.config_setting(
-        name = "local_use_prebuilt_gki_set",
-        flag_values = {
-            ":use_prebuilt_gki": "true",
-        },
-        visibility = ["//visibility:private"],
-    )
-
-    # Matches when --use_prebuilt_gki or --//<common_package>:use_prebuilt_gki is set
-    selects.config_setting_group(
-        name = "use_prebuilt_gki_set",
-        match_any = [
-            Label("//build/kernel/kleaf:use_prebuilt_gki_is_true"),
-            ":local_use_prebuilt_gki_set",
-        ],
-    )
-
-    for name, value in CI_TARGET_MAPPING.items():
-        repo_name = value["repo_name"]
-        deprecate_msg = "Use @{}//{} directly".format(repo_name, name)
-        not_available_msg = "This will no longer be available. File a bug if you rely on this target."
-
-        native.alias(
-            name = name + "_downloaded",
-            actual = name + "_files_downloaded",
-            deprecation = deprecate_msg,
-        )
-
-        # A kernel_filegroup that:
-        # - If --use_prebuilt_gki_num is set, use downloaded prebuilt of kernel_aarch64
-        # - Otherwise build kernel_aarch64 from sources.
-        native.alias(
-            name = name + "_download_or_build",
-            actual = select({
-                ":use_prebuilt_gki_set": "@{}//{}".format(repo_name, name),
-                "//conditions:default": name,
-            }),
-            deprecation = deprecate_msg,
-            **kwargs
-        )
-
-        gki_artifacts_prebuilts(
-            name = name + "_gki_artifacts_downloaded",
-            srcs = select({
-                Label("//build/kernel/kleaf:use_signed_prebuilts_is_true"): [name + "_boot_img_archive_signed_downloaded"],
-                "//conditions:default": [name + "_boot_img_archive_downloaded"],
-            }),
-            outs = [name + "_gki_prebuilts_outs_downloaded"],
-            deprecation = deprecate_msg,
-        )
-
-        native.filegroup(
-            name = name + "_gki_artifacts_download_or_build",
-            srcs = select({
-                ":use_prebuilt_gki_set": [name + "_gki_artifacts_downloaded"],
-                "//conditions:default": [name + "_gki_artifacts"],
-            }),
-            deprecation = deprecate_msg,
-            **kwargs
-        )
-
-        files_by_target_suffix = {}
-        for local_filename, config in value["download_configs"].items():
-            files_by_target_suffix.setdefault(config["target_suffix"], []).append(local_filename)
-
-        for target_suffix, files in files_by_target_suffix.items():
-            native.filegroup(
-                name = name + "_" + target_suffix + "_downloaded",
-                srcs = ["@{}//{}".format(repo_name, filename) for filename in files],
-                tags = ["manual"],
-                deprecation = deprecate_msg,
-            )
-
-            # A filegroup that:
-            # - If --use_prebuilt_gki_num is set, use downloaded prebuilt of kernel_{arch}_{target_suffix}
-            # - Otherwise build kernel_{arch}_{target_suffix}
-            native.filegroup(
-                name = name + "_" + target_suffix + "_download_or_build",
-                srcs = select({
-                    ":use_prebuilt_gki_set": [":" + name + "_" + target_suffix + "_downloaded"],
-                    "//conditions:default": [name + "_" + target_suffix],
-                }),
-                deprecation = deprecate_msg,
-                **kwargs
-            )
-
-        additional_artifacts_items = [
-            name + "_headers",
-            name + "_system_dlkm_image",
-            name + "_kmi_symbol_list",
-            name + "_gki_artifacts",
-        ]
-
-        native.filegroup(
-            name = name + "_additional_artifacts_downloaded",
-            srcs = [item + "_downloaded" for item in additional_artifacts_items],
-            deprecation = not_available_msg,
-        )
-
-        native.filegroup(
-            name = name + "_additional_artifacts_download_or_build",
-            srcs = [item + "_download_or_build" for item in additional_artifacts_items],
-            deprecation = not_available_msg,
-        )
 
 def _define_common_kernels_additional_tests(
         name,

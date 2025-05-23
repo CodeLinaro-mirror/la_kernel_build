@@ -537,11 +537,12 @@ kernel_filegroup(<a href="#kernel_filegroup-name">name</a>, <a href="#kernel_fil
                  <a href="#kernel_filegroup-post_defconfig_fragments">post_defconfig_fragments</a>, <a href="#kernel_filegroup-pre_defconfig_fragments">pre_defconfig_fragments</a>, <a href="#kernel_filegroup-strip_modules">strip_modules</a>, <a href="#kernel_filegroup-target_platform">target_platform</a>)
 </pre>
 
-**EXPERIMENTAL.** The API of `kernel_filegroup` rapidly changes and
+The API of `kernel_filegroup` is not stable and
 is not backwards compatible with older builds. The usage of `kernel_filegroup`
-is limited to the implementation detail of Kleaf (in particular,
-[`define_common_kernels`](#define_common_kernels)). Do not use
-`kernel_filegroup` directly. See `download_prebuilt.md` for details.
+is limited to the implementation detail of Kleaf.
+
+For a public API to use prebuilt kernel artifacts, see
+[Setting up DDK workspace](../ddk/workspace.md#declare-prebuilts-repository)
 
 Specify a list of kernel prebuilts.
 

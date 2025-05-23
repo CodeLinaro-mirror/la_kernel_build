@@ -157,16 +157,14 @@ Inspecting the information exposed by bazel targets via
 [Defining the output format using Starlark](https://bazel.build/query/cquery#output-format-definition)
 docs.
 
-Here is an example used in
-[CL:2615849](https://android-review.googlesource.com/c/kernel/build/+/2615849)
-to inspect the information exposed by `KernelBuildAbiInfo` from
-`//common:kernel_aarch64_download_or_build` target.
+Example: To examine the information exposed by `KernelBuildAbiInfo` from he
+`//common:kernel_aarch64` target:
 
 ```sh
-$ tools/bazel cquery //common:kernel_aarch64_download_or_build --use_prebuilt_gki=10283028  --output=starlark --starlark:expr='providers(target)["//build/kernel/kleaf/impl:common_providers.bzl%KernelBuildAbiInfo"]'
+$ tools/bazel cquery //common:kernel_aarch64 --output=starlark --starlark:expr='providers(target)["//build/kernel/kleaf/impl:common_providers.bzl%KernelBuildAbiInfo"]'
 
 ...
-struct(module_outs_file = <source file file/kernel_aarch64_modules>, modules_staging_archive = <source file file/modules_staging_dir.tar.gz>, src_protected_modules_list = <source file file/gki_aarch64_protected_modules>)
+struct(base_modules_staging_archive = None, combined_abi_symbollist = <generated file common/kernel_aarch64_kmi_symbol_list/abi_symbollist>, kmi_strict_mode_out = <generated file common/kernel_aarch64_kmi_strict_out/kmi_symbol_list_strict_mode_checked>, modules_staging_archive = <generated file common/kernel_aarch64/modules_staging_dir.tar.gz>, src_kmi_symbol_list = <source file common/gki/aarch64/symbols/base>, src_protected_exports_list = <source file common/gki/aarch64/protected_exports>, src_protected_modules_list = <generated file common/gki/aarch64/protected_modules>, trim_nonlisted_kmi = True)
 ...
 
 ```

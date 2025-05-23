@@ -297,10 +297,6 @@ class BazelWrapper(KleafHelpPrinter):
 
         # Arguments known by this bazel wrapper.
         group.add_argument(
-            "--use_prebuilt_gki",
-            metavar="BUILD_NUMBER",
-            help="Use prebuilt GKI downloaded from ci.android.com or a custom download location.")
-        group.add_argument(
             "--experimental_strip_sandbox_path",
             action="store_true",
             help=textwrap.dedent("""\
@@ -485,12 +481,6 @@ class BazelWrapper(KleafHelpPrinter):
             # can't forcifully enable color in only one stream.
             if sys.stdout.isatty() or sys.stderr.isatty():
                 self.transformed_command_args.append("--color=yes")
-
-        if self.known_args.use_prebuilt_gki:
-            self.transformed_command_args.append("--use_prebuilt_gki")
-            self.transformed_command_args.append("--config=internet")
-            self.env[
-                "KLEAF_DOWNLOAD_BUILD_NUMBER_MAP"] = f"gki_prebuilts={self.known_args.use_prebuilt_gki}"
 
         if self.known_args.make_jobs is not None:
             self.env["KLEAF_MAKE_JOBS"] = str(self.known_args.make_jobs)

@@ -63,8 +63,7 @@ def _common_ci_target_config(
             SIGNED_GKI_ARTIFACTS_ARCHIVE: {
                 "target_suffix": "boot_img_archive_signed",
                 # Do not fail immediately if this file cannot be downloaded, because it does not
-                # exist for unsigned builds. A build error will be emitted by gki_artifacts_prebuilts
-                # if --use_signed_prebuilts and --use_gki_prebuilts=<an unsigned build number>.
+                # exist for unsigned builds.
                 "mandatory": False,
                 # The basename is kept boot-img.tar.gz so it works with
                 # gki_artifacts_prebuilts. It is placed under the signed/

@@ -7,9 +7,8 @@ repository where to download them from is set.
 To avoid surprising behaviours, Kleaf has introduced two build configs to
 control this access (`--config=internet` and `--config=no_internet`).
 
-In a near future, `--config=no_internet` will be set by default, disabling
-external downloads, except when using
-[`--use_prebuilt_gki`](download_prebuilt.md#step-2_build-with).
+As of 2025-05-27, `--config=no_internet` is set by default, disabling
+external downloads.
 
 Developers will be able to re-enable internet access via `--config=internet`,
 for example:
