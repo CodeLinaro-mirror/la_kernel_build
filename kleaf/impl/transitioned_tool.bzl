@@ -15,7 +15,6 @@
 """Helper macro to wrap prebuilt tools before adding to hermetic_tools."""
 
 load(":debug.bzl", "debug")
-load(":platform_transition.bzl", "platform_transition")
 
 visibility("//build/kernel/...")
 
@@ -27,7 +26,7 @@ def _transitioned_tool_impl(ctx):
         is_executable = True,
     )
     runfiles = ctx.runfiles().merge(
-        ctx.attr.src[0][DefaultInfo].default_runfiles,
+        ctx.attr.src[DefaultInfo].default_runfiles,
     )
     return DefaultInfo(
         executable = out,
@@ -42,51 +41,15 @@ _transitioned_tool = rule(
             executable = True,
             allow_files = True,
             mandatory = True,
-            # We can't put platform_transition on the incoming edge
-            # because https://github.com/bazelbuild/bazel/issues/23278.
-            cfg = platform_transition,
+            cfg = "target",
             aspects = [debug.print_platforms_aspect],
         ),
-        "target_platform": attr.label(),
     },
     executable = True,
 )
 
-def prebuilt_transitioned_tool(name, src, **kwargs):
-    """Helper macro to wrap prebuilt tools before adding to hermetic_tools.
-
-    Args:
-        name: name of target
-        src: Label to prebuilt tool that selects between different platforms.
-        **kwargs: common kwargs
-    """
-    _transitioned_tool(
-        name = name,
-        src = src,
-        target_platform = select({
-            Label("//build/kernel/kleaf:musl_prebuilts_is_true"): Label("//build/kernel/kleaf/impl/platforms:host_musl"),
-            "//conditions:default": None,
-        }),
-        **kwargs
-    )
-
-def transitioned_tool_from_sources(name, src, **kwargs):
-    """Helper macro to wrap tools built from sources before adding to hermetic_tools.
-
-    Args:
-        name: name of target
-        src: Label to prebuilt tool that selects between different platforms.
-        **kwargs: common kwargs
-    """
-    _transitioned_tool(
-        name = name,
-        src = src,
-        target_platform = select({
-            Label("//build/kernel/kleaf:musl_tools_from_sources_is_true"): Label("//build/kernel/kleaf/impl/platforms:host_musl"),
-            "//conditions:default": None,
-        }),
-        **kwargs
-    )
+prebuilt_transitioned_tool = _transitioned_tool
+transitioned_tool_from_sources = _transitioned_tool
 
 def _transitioned_files_impl(ctx):
     runfiles = ctx.runfiles().merge_all([
@@ -103,29 +66,9 @@ _transitioned_files = rule(
     attrs = {
         "srcs": attr.label_list(
             allow_files = True,
-            # We can't put platform_transition on the incoming edge
-            # because https://github.com/bazelbuild/bazel/issues/23278.
-            cfg = platform_transition,
             aspects = [debug.print_platforms_aspect],
         ),
-        "target_platform": attr.label(),
     },
 )
 
-def prebuilt_transitioned_files(name, srcs, **kwargs):
-    """Transition to the platform selected for prebuilts.
-
-    Args:
-        name: name of target
-        srcs: list of filegroup of prebuilts
-        **kwargs: common kwargs
-    """
-    _transitioned_files(
-        name = name,
-        srcs = srcs,
-        target_platform = select({
-            Label("//build/kernel/kleaf:musl_prebuilts_is_true"): Label("//build/kernel/kleaf/impl/platforms:host_musl"),
-            "//conditions:default": None,
-        }),
-        **kwargs
-    )
+prebuilt_transitioned_files = _transitioned_files

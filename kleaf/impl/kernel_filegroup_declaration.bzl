@@ -107,16 +107,6 @@ platform(
     visibility = ["//visibility:private"],
 )
 
-platform(
-    name = {exec_musl_platform_repr},
-    parents = [{exec_platform_repr}],
-    constraint_values = [
-        # @kleaf//build/kernel/kleaf/platforms/libc:musl
-        _MUSL,
-    ],
-    visibility = ["//visibility:private"],
-)
-
 extracted_gki_artifacts_archive(
     name = {signed_gki_artifacts_repr},
     src = {signed_gki_artifacts_src_repr},
@@ -145,10 +135,7 @@ kernel_filegroup(
     outs = {outs_repr},
     internal_outs = {internal_outs_repr},
     target_platform = {target_platform_repr},
-    exec_platform = select({
-        _MUSL_KBUILD_IS_TRUE: {exec_musl_platform_repr},
-        "//conditions:default": {exec_platform_repr},
-    }),
+    exec_platform = {exec_platform_repr},
     expected_toolchain_version = {toolchain_version_repr},
     defconfig = {defconfig_repr},
     pre_defconfig_fragments = {pre_defconfig_fragments_repr},

@@ -280,8 +280,6 @@ load({extracted_gki_artifacts_archive_bzl_repr}, "extracted_gki_artifacts_archiv
 load({extracted_system_dlkm_staging_archive_bzl_repr}, "extracted_system_dlkm_staging_archive")
 
 _CLANG_KLEAF_PKG = {clang_kleaf_pkg}
-_MUSL = {musl_repr}
-_MUSL_KBUILD_IS_TRUE = {musl_kbuild_is_true_repr}
 
 {template_content}
 """.format(
@@ -289,8 +287,6 @@ _MUSL_KBUILD_IS_TRUE = {musl_kbuild_is_true_repr}
         extracted_gki_artifacts_archive_bzl_repr = repr(str(Label(":extracted_gki_artifacts_archive.bzl"))),
         extracted_system_dlkm_staging_archive_bzl_repr = repr(str(Label(":extracted_system_dlkm_staging_archive.bzl"))),
         clang_kleaf_pkg = repr(str(Label("//prebuilts/clang/host/linux-x86/kleaf"))),
-        musl_repr = repr(str(Label("//build/kernel/kleaf/impl:musl"))),
-        musl_kbuild_is_true_repr = repr(str(Label("//build/kernel/kleaf:musl_kbuild_is_true"))),
         template_content = template_content,
     ))
 

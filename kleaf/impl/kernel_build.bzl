@@ -743,15 +743,6 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         **internal_kwargs
     )
 
-    native.platform(
-        name = name + "_platform_exec_musl",
-        parents = [name + "_platform_exec"],
-        constraint_values = [
-            Label("//build/kernel/kleaf/impl:musl"),
-        ],
-        **internal_kwargs
-    )
-
     kernel_env(
         name = env_target_name,
         build_config = build_config,
@@ -762,10 +753,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         kbuild_symtypes = kbuild_symtypes,
         make_goals = make_goals,
         target_platform = name + "_platform_target",
-        exec_platform = select({
-            Label("//build/kernel/kleaf:musl_kbuild_is_true"): name + "_platform_exec_musl",
-            "//conditions:default": name + "_platform_exec",
-        }),
+        exec_platform = name + "_platform_exec",
         pre_defconfig_fragments = pre_defconfig_fragments,
         post_defconfig_fragments = post_defconfig_fragments,
         kcflags = kcflags,

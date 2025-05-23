@@ -30,12 +30,6 @@ build --flag_alias=gzip_is_pigz=//build/kernel/kleaf:gzip_is_pigz
 build --flag_alias=nogzip_is_pigz=no//build/kernel/kleaf:gzip_is_pigz
 build --flag_alias=toolchain_from_sources=//build/kernel/kleaf:toolchain_from_sources
 build --flag_alias=notoolchain_from_sources=no//build/kernel/kleaf:toolchain_from_sources
-build --flag_alias=musl_prebuilts=//build/kernel/kleaf:musl_prebuilts
-build --flag_alias=nomusl_prebuilts=no//build/kernel/kleaf:musl_prebuilts
-build --flag_alias=musl_kbuild=//build/kernel/kleaf:musl_kbuild
-build --flag_alias=nomusl_kbuild=no//build/kernel/kleaf:musl_kbuild
-build --flag_alias=musl_tools_from_sources=//build/kernel/kleaf:musl_tools_from_sources
-build --flag_alias=nomusl_tools_from_sources=no//build/kernel/kleaf:musl_tools_from_sources
 build --flag_alias=depmod_from_sources=//build/kernel/kleaf:depmod_from_sources
 build --flag_alias=nodepmod_from_sources=no//build/kernel/kleaf:depmod_from_sources
 
