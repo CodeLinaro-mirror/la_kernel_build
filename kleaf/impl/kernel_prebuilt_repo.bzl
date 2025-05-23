@@ -26,31 +26,23 @@ def _get_local_path(repository_ctx, local_filename):
     """Returns a path object where we store the file named local_filename"""
     return repository_ctx.path(_join(local_filename, _basename(local_filename)))
 
-_true_future = struct(wait = lambda: struct(success = True))
-_false_future = struct(wait = lambda: struct(success = False))
-
 def _symlink_local_file(repository_ctx, local_filename, file_mandatory):
     """Creates symlink in local_filename that points to remote_filename.
 
     Returns:
-        a future object, with `wait()` function that returns a struct containing:
-
-        - Either a boolean, `success`, indicating whether the file exists or not.
-          If the file does not exist and `file_mandatory == True`,
-          either this function or `wait()` throws build error.
-        - Or a string, `fail_later`, an error message for an error that should
-          be postponed to the analysis phase when the target is requested.
-        """
+        True if the file exist, false if the file does not exist and is not
+        mandatory, otherwise fail().
+    """
 
     local_path = _get_local_path(repository_ctx, local_filename)
 
     artifact_path = repository_ctx.workspace_root.get_child(repository_ctx.attr.local_artifact_path).get_child(local_filename)
     if artifact_path.exists:
         repository_ctx.symlink(artifact_path, local_path)
-        return _true_future
+        return True
     if file_mandatory:
         fail("{}: {} does not exist".format(repository_ctx.attr.name, artifact_path))
-    return _false_future
+    return False
 
 def _get_ci_target_mapping(repository_ctx):
     path = repository_ctx.workspace_root.get_child(repository_ctx.attr.local_artifact_path).get_child("ci_target_mapping.json")
@@ -60,20 +52,16 @@ def _get_ci_target_mapping(repository_ctx):
 def _kernel_prebuilt_repo_impl(repository_ctx):
     ci_target_mapping = _get_ci_target_mapping(repository_ctx)
 
-    futures = {}
+    results = {}
     for local_filename, config in ci_target_mapping.get("download_configs", {}).items():
-        futures[local_filename] = _symlink_local_file(
+        results[local_filename] = _symlink_local_file(
             repository_ctx = repository_ctx,
             local_filename = local_filename,
             file_mandatory = config["mandatory"],
         )
 
-    download_statuses = {}
-    for local_filename, future in futures.items():
-        download_statuses[local_filename] = future.wait()
-
-    for local_filename, download_status in download_statuses.items():
-        if download_status.success:
+    for local_filename, result in results.items():
+        if result:
             fmt = """\
 exports_files(
     [{local_filename_repr}],
