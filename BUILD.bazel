@@ -20,12 +20,6 @@ load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_tools")
 load("//build/kernel/kleaf/impl:bison_wrapper.bzl", "bison_wrapper")
 load("//build/kernel/kleaf/impl:native_binary_with_arg.bzl", "native_binary_with_arg")
 load("//build/kernel/kleaf/impl:swig_wrapper.bzl", "swig_wrapper")
-load(
-    "//build/kernel/kleaf/impl:transitioned_tool.bzl",
-    "prebuilt_transitioned_files",
-    "prebuilt_transitioned_tool",
-    "transitioned_tool_from_sources",
-)
 
 filegroup(
     name = "sysroot",
@@ -54,15 +48,15 @@ native_binary_with_arg(
     visibility = ["//visibility:private"],
 )
 
-prebuilt_transitioned_tool(
+alias(
     name = "prebuilt_toybox",
-    src = "//prebuilts/build-tools:toybox",
+    actual = "//prebuilts/build-tools:toybox",
     visibility = ["//visibility:private"],
 )
 
-transitioned_tool_from_sources(
+alias(
     name = "toybox_from_sources",
-    src = "@toybox",
+    actual = "@toybox",
     visibility = ["//visibility:private"],
 )
 
@@ -83,9 +77,9 @@ alias(
     visibility = ["//visibility:private"],
 ) for tool in ("find", "flock")]
 
-transitioned_tool_from_sources(
+alias(
     name = "pigz",
-    src = "@pigz",
+    actual = "@pigz",
     visibility = ["//visibility:private"],
 )
 
@@ -111,15 +105,15 @@ native_binary_with_arg(
     visibility = ["//visibility:private"],
 )
 
-prebuilt_transitioned_tool(
+alias(
     name = "m4",
-    src = "//prebuilts/build-tools:m4",
+    actual = "//prebuilts/build-tools:m4",
     visibility = ["//visibility:private"],
 )
 
-prebuilt_transitioned_tool(
+alias(
     name = "prebuilt_bison",
-    src = "//prebuilts/build-tools:bison",
+    actual = "//prebuilts/build-tools:bison",
     visibility = ["//visibility:private"],
 )
 
@@ -139,21 +133,21 @@ swig_wrapper(
     visibility = ["//visibility:private"],
 )
 
-prebuilt_transitioned_tool(
+alias(
     name = "swig",
-    src = ":wrapped_swig",
+    actual = ":wrapped_swig",
     visibility = ["//visibility:private"],
 )
 
-prebuilt_transitioned_tool(
+alias(
     name = "prebuilt_lz4",
-    src = "//prebuilts/kernel-build-tools:lz4",
+    actual = "//prebuilts/kernel-build-tools:lz4",
     visibility = ["//visibility:private"],
 )
 
-transitioned_tool_from_sources(
+alias(
     name = "lz4_from_sources",
-    src = "@lz4",
+    actual = "@lz4",
     visibility = ["//visibility:private"],
 )
 
@@ -166,15 +160,15 @@ alias(
     visibility = ["//visibility:private"],
 )
 
-prebuilt_transitioned_tool(
+alias(
     name = "prebuilt_depmod",
-    src = "//prebuilts/kernel-build-tools:depmod",
+    actual = "//prebuilts/kernel-build-tools:depmod",
     visibility = ["//visibility:private"],
 )
 
-transitioned_tool_from_sources(
+alias(
     name = "depmod_from_sources",
-    src = "@kmod//:depmod",
+    actual = "@kmod//:depmod",
     visibility = ["//visibility:private"],
 )
 
@@ -220,9 +214,9 @@ _PREBUILT_TOOLS = [
 ]
 
 [
-    prebuilt_transitioned_tool(
+    alias(
         name = "prebuilt_" + paths.basename(package_relative_label(tool).name),
-        src = tool,
+        actual = tool,
         visibility = ["//visibility:private"],
     )
     for tool in _PREBUILT_TOOLS + [
@@ -561,7 +555,7 @@ pkg_tar(
     visibility = ["//visibility:private"],
 )
 
-prebuilt_transitioned_files(
+filegroup(
     name = "gki_certification_tools",
     srcs = [":gki_certification_tools_tar"],
     visibility = ["//visibility:public"],

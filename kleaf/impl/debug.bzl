@@ -137,36 +137,10 @@ _print_platforms = subrule(
     fragments = ["platform"],
 )
 
-def _print_platforms_aspect_impl(_target, ctx):
-    _print_platforms_impl(
-        ctx,
-        ctx,
-        _should_print = ctx.attr._should_print,
-        _glibc = ctx.attr._glibc,
-        _musl = ctx.attr._musl,
-    )
-    return []
-
-_print_platforms_aspect = aspect(
-    doc = """
-        If --debug_print_platforms, print debug info on platforms for the dependency the asepct
-        is applied on.
-    """,
-    implementation = _print_platforms_aspect_impl,
-    attrs = {
-        "_should_print": attr.label(default = "//build/kernel/kleaf:debug_print_platforms"),
-        "_glibc": attr.label(default = "//build/kernel/kleaf/platforms/libc:glibc"),
-        "_musl": attr.label(default = "//build/kernel/kleaf/platforms/libc:musl"),
-    },
-    # We can't use `subrules = _print_platforms` due to
-    # https://github.com/bazelbuild/bazel/issues/23282
-)
-
 debug = struct(
     print_scripts = _print_scripts,
     print_scripts_subrule = _print_scripts_subrule,
     trap = _trap,
     modpost_warn = _modpost_warn,
     print_platforms = _print_platforms,
-    print_platforms_aspect = _print_platforms_aspect,
 )

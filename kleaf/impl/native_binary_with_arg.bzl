@@ -18,7 +18,6 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("@rules_cc//cc:defs.bzl", "cc_binary")
-load(":transitioned_tool.bzl", "transitioned_tool_from_sources")
 
 visibility("//build/kernel/...")
 
@@ -79,8 +78,8 @@ def native_binary_with_arg(
         **private_kwargs
     )
 
-    transitioned_tool_from_sources(
+    native.alias(
         name = name,
-        src = "{}/{}".format(wrapped_dir, basename),
+        actual = "{}/{}".format(wrapped_dir, basename),
         **kwargs
     )

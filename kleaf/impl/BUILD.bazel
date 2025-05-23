@@ -25,10 +25,6 @@ load(
     ":python.bzl",
     "python_runtime_files",
 )
-load(
-    ":transitioned_tool.bzl",
-    "prebuilt_transitioned_tool",
-)
 
 bzl_library(
     name = "impl",
@@ -141,7 +137,6 @@ bzl_library(
         "stamp.bzl",
         "status.bzl",
         "swig_wrapper.bzl",
-        "transitioned_tool.bzl",
         "utils.bzl",
     ],
     visibility = ["//build/kernel/kleaf:__subpackages__"],
@@ -585,16 +580,16 @@ python_runtime_files(
     visibility = ["//build/kernel:__pkg__"],
 )
 
-prebuilt_transitioned_tool(
+alias(
     name = "stg",
-    src = "//prebuilts/kernel-build-tools:stg",
+    actual = "//prebuilts/kernel-build-tools:stg",
     # All kernel_abi() can see this
     visibility = ["//visibility:public"],
 )
 
-prebuilt_transitioned_tool(
+alias(
     name = "stgdiff",
-    src = "//prebuilts/kernel-build-tools:stgdiff",
+    actual = "//prebuilts/kernel-build-tools:stgdiff",
     # All kernel_abi() can see this
     visibility = ["//visibility:public"],
 )
