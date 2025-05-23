@@ -746,7 +746,7 @@ def _define_common_kernels_additional_tests(
         ]
 
         # Building pKVM module with DDK is only supported if the following file exists.
-        if native.glob(["arch/arm64/kvm/hyp/nvhe/Makefile.module"]):
+        if native.glob(["arch/arm64/kvm/hyp/nvhe/Makefile.module"], allow_empty = True):
             extra_tests.append(
                 Label("//build/kernel/kleaf/tests/ddk_examples:pkvm_module_test"),
             )

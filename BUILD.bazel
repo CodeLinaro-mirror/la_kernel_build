@@ -237,11 +237,14 @@ _HERMETIC_TOOLS = [
     ":tar",
     # TODO: This is only used by abi_stgdiff. It should be fine to be removed from hermetic_tools.
     "//build/kernel/kleaf/impl:stgdiff",
-] + glob([
-    # Intentionally glob here to test for existance of alias destination
-    # buildifier: disable=constant-glob
-    "build-tools/kleaf_internal_do_not_use_path/linux-x86/cxx_extractor",
-])
+] + glob(
+    [
+        # Intentionally glob here to test for existance of alias destination
+        # buildifier: disable=constant-glob
+        "build-tools/kleaf_internal_do_not_use_path/linux-x86/cxx_extractor",
+    ],
+    allow_empty = True,
+)
 
 # Hermetic tools symlinks (other than _HERMETIC_TOOLS)
 _TOYS = [
