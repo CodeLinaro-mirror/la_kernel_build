@@ -14,6 +14,7 @@
 
 """Repository for kernel prebuilts."""
 
+load("@bazel_skylib//lib:paths.bzl", "paths")
 load(
     ":constants.bzl",
     "FILEGROUP_DEF_ARCHIVE_SUFFIX",
@@ -24,7 +25,7 @@ visibility("//build/kernel/kleaf/...")
 
 def _get_local_path(repository_ctx, local_filename):
     """Returns a path object where we store the file named local_filename"""
-    return repository_ctx.path(_join(local_filename, _basename(local_filename)))
+    return repository_ctx.path(paths.join(local_filename, paths.basename(local_filename)))
 
 def _symlink_local_file(repository_ctx, local_filename, file_mandatory):
     """Creates symlink in local_filename that points to remote_filename.
@@ -77,10 +78,10 @@ filegroup(
 )
 """
         content = fmt.format(
-            local_filename_repr = repr(_basename(local_filename)),
+            local_filename_repr = repr(paths.basename(local_filename)),
             fail_bzl = Label("//build/kernel/kleaf:fail.bzl"),
         )
-        repository_ctx.file(_join(local_filename, "BUILD.bazel"), content)
+        repository_ctx.file(paths.join(local_filename, "BUILD.bazel"), content)
 
     _create_top_level_files(repository_ctx, ci_target_mapping)
 
@@ -92,8 +93,8 @@ workspace({})
 
     filegroup_decl_archives = []
     for local_filename in ci_target_mapping.get("download_configs", {}):
-        if _basename(local_filename).endswith(FILEGROUP_DEF_ARCHIVE_SUFFIX):
-            local_path = repository_ctx.path(_join(local_filename, _basename(local_filename)))
+        if paths.basename(local_filename).endswith(FILEGROUP_DEF_ARCHIVE_SUFFIX):
+            local_path = repository_ctx.path(paths.join(local_filename, paths.basename(local_filename)))
             filegroup_decl_archives.append(local_path)
 
     if not filegroup_decl_archives:
@@ -115,10 +116,10 @@ workspace({})
         output = repository_ctx.path(bazel_target_name),
     )
 
-    template_path = repository_ctx.path(_join(bazel_target_name, FILEGROUP_DEF_BUILD_FRAGMENT_NAME))
+    template_path = repository_ctx.path(paths.join(bazel_target_name, FILEGROUP_DEF_BUILD_FRAGMENT_NAME))
     template_content = repository_ctx.read(template_path)
 
-    repository_ctx.file(repository_ctx.path(_join(bazel_target_name, "BUILD.bazel")), """\
+    repository_ctx.file(repository_ctx.path(paths.join(bazel_target_name, "BUILD.bazel")), """\
 load({kernel_bzl_repr}, "kernel_filegroup")
 load({extracted_gki_artifacts_archive_bzl_repr}, "extracted_gki_artifacts_archive")
 load({extracted_system_dlkm_staging_archive_bzl_repr}, "extracted_system_dlkm_staging_archive")
@@ -157,18 +158,3 @@ kernel_prebuilt_repo = repository_rule(
         "target": attr.string(doc = "Name of target on the download location, e.g. `kernel_aarch64`"),
     },
 )
-
-# Avoid dependency to paths, since we do not necessary have skylib loaded yet.
-# TODO(b/276493276): Use paths once we migrate to bzlmod completely.
-def _basename(s):
-    return s.split("/")[-1]
-
-def _join(path, *others):
-    ret = path
-
-    for other in others:
-        if not ret.endswith("/"):
-            ret += "/"
-        ret += other
-
-    return ret
