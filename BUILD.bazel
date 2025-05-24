@@ -49,22 +49,10 @@ native_binary_with_arg(
 )
 
 alias(
-    name = "prebuilt_toybox",
-    actual = "//prebuilts/build-tools:toybox",
-    visibility = ["//visibility:private"],
-)
-
-alias(
-    name = "toybox_from_sources",
-    actual = "@toybox",
-    visibility = ["//visibility:private"],
-)
-
-alias(
     name = "toybox",
     actual = select({
-        "//build/kernel/kleaf:toolchain_from_sources_is_true": ":toybox_from_sources",
-        "//conditions:default": ":prebuilt_toybox",
+        "//build/kernel/kleaf:toolchain_from_sources_is_true": "@toybox",
+        "//conditions:default": "//prebuilts/build-tools:toybox",
     }),
     visibility = ["//visibility:private"],
 )
@@ -78,15 +66,9 @@ alias(
 ) for tool in ("find", "flock")]
 
 alias(
-    name = "pigz",
-    actual = "@pigz",
-    visibility = ["//visibility:private"],
-)
-
-alias(
     name = "gzip",
     actual = select({
-        "//build/kernel/kleaf:gzip_is_pigz_is_true": ":pigz",
+        "//build/kernel/kleaf:gzip_is_pigz_is_true": "@pigz",
         "//conditions:default": ":toybox",
     }),
     visibility = ["//visibility:private"],
@@ -105,78 +87,36 @@ native_binary_with_arg(
     visibility = ["//visibility:private"],
 )
 
-alias(
-    name = "m4",
-    actual = "//prebuilts/build-tools:m4",
-    visibility = ["//visibility:private"],
-)
-
-alias(
-    name = "prebuilt_bison",
-    actual = "//prebuilts/build-tools:bison",
-    visibility = ["//visibility:private"],
-)
-
 bison_wrapper(
     name = "bison",
-    actual = ":prebuilt_bison",
-    m4 = ":m4",
+    actual = "//prebuilts/build-tools:bison",
+    m4 = "//prebuilts/build-tools:m4",
     pkgdata_dir = "//prebuilts/build-tools:bison.runfiles_dir",
     pkgdata_files = "//prebuilts/build-tools:bison.runfiles",
     visibility = ["//visibility:private"],
 )
 
 swig_wrapper(
-    name = "wrapped_swig",
+    name = "swig",
     src = "//prebuilts/kernel-build-tools:swig",
     swig_lib = "//prebuilts/kernel-build-tools:swig_lib_dir",
     visibility = ["//visibility:private"],
 )
 
 alias(
-    name = "swig",
-    actual = ":wrapped_swig",
-    visibility = ["//visibility:private"],
-)
-
-alias(
-    name = "prebuilt_lz4",
-    actual = "//prebuilts/kernel-build-tools:lz4",
-    visibility = ["//visibility:private"],
-)
-
-alias(
-    name = "lz4_from_sources",
-    actual = "@lz4",
-    visibility = ["//visibility:private"],
-)
-
-alias(
     name = "lz4",
     actual = select({
-        "//build/kernel/kleaf:toolchain_from_sources_is_true": ":lz4_from_sources",
-        "//conditions:default": ":prebuilt_lz4",
+        "//build/kernel/kleaf:toolchain_from_sources_is_true": "@lz4",
+        "//conditions:default": "//prebuilts/kernel-build-tools:lz4",
     }),
-    visibility = ["//visibility:private"],
-)
-
-alias(
-    name = "prebuilt_depmod",
-    actual = "//prebuilts/kernel-build-tools:depmod",
-    visibility = ["//visibility:private"],
-)
-
-alias(
-    name = "depmod_from_sources",
-    actual = "@kmod//:depmod",
     visibility = ["//visibility:private"],
 )
 
 alias(
     name = "depmod",
     actual = select({
-        "//build/kernel/kleaf:depmod_from_sources_is_true": ":depmod_from_sources",
-        "//conditions:default": ":prebuilt_depmod",
+        "//build/kernel/kleaf:depmod_from_sources_is_true": "@kmod//:depmod",
+        "//conditions:default": "//prebuilts/kernel-build-tools:depmod",
     }),
     visibility = ["//visibility:private"],
 )
@@ -232,9 +172,9 @@ _HERMETIC_TOOLS = [
     ":bison",
     ":gzip",
     ":lz4",
-    ":m4",
     ":swig",
     ":tar",
+    "//prebuilts/build-tools:m4",
     # TODO: This is only used by abi_stgdiff. It should be fine to be removed from hermetic_tools.
     "//build/kernel/kleaf/impl:stgdiff",
 ] + glob(
