@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_library.bzl", "sh_library")
@@ -65,12 +66,11 @@ alias(
     visibility = ["//visibility:private"],
 ) for tool in ("find", "flock")]
 
-alias(
+native_binary(
     name = "gzip",
-    actual = select({
-        "//build/kernel/kleaf:gzip_is_pigz_is_true": "@pigz",
-        "//conditions:default": ":toybox",
-    }),
+    src = "@pigz",
+    # Prevents --nogzip_is_pigz from being set, and print a nice error message if so.
+    data = ["//build/kernel/kleaf:gzip_is_pigz"],
     visibility = ["//visibility:private"],
 )
 

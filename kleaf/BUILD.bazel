@@ -476,18 +476,11 @@ config_setting(
     visibility = ["//build/kernel:__pkg__"],
 )
 
-# Default is true.
-# If true, use pigz as drop-in replacement for gzip.
+# No-op. Do not set it explicitly.
 bool_flag(
     name = "gzip_is_pigz",
     build_setting_default = True,
-    visibility = ["//visibility:private"],
-    warn_message = "--nogzip_is_pigz will no longer be supported.",
-)
-
-config_setting(
-    name = "gzip_is_pigz_is_true",
-    flag_values = {":gzip_is_pigz": "1"},
+    error_message = "--nogzip_is_pigz is no longer supported.",
     visibility = ["//build/kernel:__pkg__"],
 )
 
@@ -865,7 +858,6 @@ py_library(
     name = "buildozer_command_builder",
     srcs = ["buildozer_command_builder.py"],
     imports = ["."],
-    srcs_version = "PY3",
     visibility = ["//build/kernel/kleaf:__subpackages__"],
 )
 
@@ -966,7 +958,6 @@ py_test(
     name = "check_declared_output_list_test",
     srcs = ["check_declared_output_list_test.py"],
     imports = ["."],
-    python_version = "PY3",
     deps = [
         ":check_declared_output_list",
         "@io_abseil_py//absl/testing:absltest",
