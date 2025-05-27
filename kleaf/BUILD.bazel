@@ -402,15 +402,12 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
-# Default is true.
-# Use the resolved toolchains for building kernel_* rules.
-# See https://bazel.build/extending/toolchains for how toolchains are resolved.
-# Setting this to false will break the kernel build.
+# No-op. Do not set it explicitly.
 bool_flag(
     name = "incompatible_kernel_use_resolved_toolchains",
     build_setting_default = True,
+    error_message = "--noincompatible_kernel_use_resolved_toolchains is no longer supported.",
     visibility = ["//visibility:public"],
-    warn_message = "--noincompatible_kernel_use_resolved_toolchains will no longer be supported.",
 )
 
 # Default is true.

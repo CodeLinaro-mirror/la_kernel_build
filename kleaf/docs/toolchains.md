@@ -38,10 +38,9 @@ Kleaf always uses the toolchain files (clang, ld, ar, etc.) from the
 resolved toolchain. These files are usually consistent across all platforms
 and architectures.
 
-When `--incompatible_kernel_use_resolved_toolchains` is set, Kleaf uses
-flags from the resolved toolchain to determine `USERCFLAGS`, `USERLDFLAGS`,
-`HOSTCFLAGS`, `HOSTLDFLAGS` etc. for building the kernel. This requires
-`kernel_build.arch` to be set properly, because the flags are different
+Kleaf uses flags from the resolved toolchain to determine `USERCFLAGS`,
+`USERLDFLAGS`, `HOSTCFLAGS`, `HOSTLDFLAGS` etc. for building the kernel. This
+requires `kernel_build.arch` to be set properly, because the flags are different
 for different architecture.
 
 For implementation details, see [kernel_toolchains](../impl/kernel_toolchains.bzl).

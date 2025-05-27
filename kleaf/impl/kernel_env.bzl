@@ -72,22 +72,14 @@ def _get_check_arch_cmd(ctx):
     toolchains = kernel_toolchains_utils.get(ctx)
     declared_arch = toolchains.target_arch
 
-    level = "WARNING"
-    exit_cmd = ""
-    if ctx.attr._kernel_use_resolved_toolchains[BuildSettingInfo].value:
-        level = "ERROR"
-        exit_cmd = "exit 1"
-
     return """
         if [[ "${{ARCH/riscv/riscv64}}" != "{declared_arch}" ]]; then
-            echo '{level}: {label} must specify arch = '"${{ARCH/riscv/riscv64}}"', but is {declared_arch}.' >&2
-            {exit_cmd}
+            echo 'ERROR: {label} must specify arch = '"${{ARCH/riscv/riscv64}}"', but is {declared_arch}.' >&2
+            exit 1
         fi
     """.format(
-        level = level,
         label = ctx.label,
         declared_arch = declared_arch,
-        exit_cmd = exit_cmd,
     )
 
 def _get_make_goals(ctx):
@@ -709,9 +701,6 @@ kernel_env = rule(
         "_config_is_local": attr.label(default = "//build/kernel/kleaf:config_local"),
         "_config_is_stamp": attr.label(default = "//build/kernel/kleaf:config_stamp"),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
-        "_kernel_use_resolved_toolchains": attr.label(
-            default = "//build/kernel/kleaf:incompatible_kernel_use_resolved_toolchains",
-        ),
         "_cache_dir_config_tags": attr.label(
             default = "//build/kernel/kleaf/impl:cache_dir_config_tags",
             executable = True,

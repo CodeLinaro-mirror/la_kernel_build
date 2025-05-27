@@ -15,7 +15,6 @@
 """Helper for `kernel_env` to get toolchains for different platforms."""
 
 load("@bazel_skylib//lib:shell.bzl", "shell")
-load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@kernel_toolchain_info//:dict.bzl", "VARS")
 load(
     ":common_providers.bzl",
@@ -125,55 +124,54 @@ def _kernel_toolchains_impl(ctx):
 
     kernel_setup_env_var_cmd = setup_env_var_cmd
 
-    if ctx.attr._kernel_use_resolved_toolchains[BuildSettingInfo].value:
-        # RUNPATH_EXECROOT: A heuristic path to execroot expressed relative to $ORIGIN.
-        # RUNPATH_EXECROOT assumes that all binaries built by Kbuild are 1~3 levels
-        #   below OUT_DIR,
-        #   e.g. $OUT_DIR/scripts/sign-file, $OUT_DIR/tools/bpf/resolve_btfids/resolve_btfids
-        # If this ever changes, edit kleaf_internal_eval_ldflags and add more levels.
-        kernel_setup_env_var_cmd += """
-            export HOSTCFLAGS={quoted_hostcflags}
-            export USERCFLAGS={quoted_usercflags}
-            export HOSTLDFLAGS={quoted_hostldflags}
-            export USERLDFLAGS={quoted_userldflags}
+    # RUNPATH_EXECROOT: A heuristic path to execroot expressed relative to $ORIGIN.
+    # RUNPATH_EXECROOT assumes that all binaries built by Kbuild are 1~3 levels
+    #   below OUT_DIR,
+    #   e.g. $OUT_DIR/scripts/sign-file, $OUT_DIR/tools/bpf/resolve_btfids/resolve_btfids
+    # If this ever changes, edit kleaf_internal_eval_ldflags and add more levels.
+    kernel_setup_env_var_cmd += """
+        export HOSTCFLAGS={quoted_hostcflags}
+        export USERCFLAGS={quoted_usercflags}
+        export HOSTLDFLAGS={quoted_hostldflags}
+        export USERLDFLAGS={quoted_userldflags}
 
-            mkdir -p ${{OUT_DIR}}
-            # Append to *LDFLAGS based on the current settings of $OUT_DIR.
-            function kleaf_internal_append_one_ldflags() {{
-                local backtrack_relative=$1
-                local RUNPATH_EXECROOT='$$$$\\{{ORIGIN\\}}/'"${{backtrack_relative}}$(realpath ${{ROOT_DIR}} --relative-to ${{OUT_DIR}})"
-                export HOSTLDFLAGS="${{HOSTLDFLAGS}} "{hostldexpr}
-                export USERLDFLAGS="${{USERLDFLAGS}} "{userldexpr}
-            }}
-            export -f kleaf_internal_append_one_ldflags
+        mkdir -p ${{OUT_DIR}}
+        # Append to *LDFLAGS based on the current settings of $OUT_DIR.
+        function kleaf_internal_append_one_ldflags() {{
+            local backtrack_relative=$1
+            local RUNPATH_EXECROOT='$$$$\\{{ORIGIN\\}}/'"${{backtrack_relative}}$(realpath ${{ROOT_DIR}} --relative-to ${{OUT_DIR}})"
+            export HOSTLDFLAGS="${{HOSTLDFLAGS}} "{hostldexpr}
+            export USERLDFLAGS="${{USERLDFLAGS}} "{userldexpr}
+        }}
+        export -f kleaf_internal_append_one_ldflags
 
-            function kleaf_internal_eval_ldflags() {{
-                kleaf_internal_append_one_ldflags ../
-                kleaf_internal_append_one_ldflags ../../
-                kleaf_internal_append_one_ldflags ../../../
-                kleaf_internal_append_one_ldflags ../../../../
-                kleaf_internal_append_one_ldflags ../../../../../
-                kleaf_internal_append_one_ldflags ../../../../../../
-            }}
-            export -f kleaf_internal_eval_ldflags
+        function kleaf_internal_eval_ldflags() {{
+            kleaf_internal_append_one_ldflags ../
+            kleaf_internal_append_one_ldflags ../../
+            kleaf_internal_append_one_ldflags ../../../
+            kleaf_internal_append_one_ldflags ../../../../
+            kleaf_internal_append_one_ldflags ../../../../../
+            kleaf_internal_append_one_ldflags ../../../../../../
+        }}
+        export -f kleaf_internal_eval_ldflags
 
-            kleaf_internal_eval_ldflags
-        """.format(
-            quoted_hostcflags = _quote_sanitize_flags(exec.cflags),
-            quoted_usercflags = _quote_sanitize_flags(target.cflags),
-            quoted_hostldflags = _quote_sanitize_flags(exec.ldflags),
-            hostldexpr = exec.ldexpr,
-            quoted_userldflags = _quote_sanitize_flags(target.ldflags),
-            userldexpr = target.ldexpr,
-        )
+        kleaf_internal_eval_ldflags
+    """.format(
+        quoted_hostcflags = _quote_sanitize_flags(exec.cflags),
+        quoted_usercflags = _quote_sanitize_flags(target.cflags),
+        quoted_hostldflags = _quote_sanitize_flags(exec.ldflags),
+        hostldexpr = exec.ldexpr,
+        quoted_userldflags = _quote_sanitize_flags(target.ldflags),
+        userldexpr = target.ldexpr,
+    )
 
-        rust_env = _get_rust_env(
-            rust_tools = ctx.attr._rust_tools,
-            host_libc = exec.libc,
-            exec_glibc_info = ctx.attr.exec_glibc_toolchain[KernelPlatformToolchainInfo],
-        )
-        kernel_setup_env_var_cmd += rust_env.cmd
-        all_files_transitive.append(rust_env.inputs)
+    rust_env = _get_rust_env(
+        rust_tools = ctx.attr._rust_tools,
+        host_libc = exec.libc,
+        exec_glibc_info = ctx.attr.exec_glibc_toolchain[KernelPlatformToolchainInfo],
+    )
+    kernel_setup_env_var_cmd += rust_env.cmd
+    all_files_transitive.append(rust_env.inputs)
 
     # Kleaf clang bins are under kleaf/parent, so CLANG_PREBUILT_BIN in
     # build.config.common is incorrect. Manually set additional PATH's.
@@ -284,6 +282,8 @@ kernel_toolchains = rule(
             default = VARS.get("RUSTC_VERSION", ""),
         ),
         "_rust_tools": attr.label_list(default = _get_rust_tools, allow_files = True),
+        # This is not used, but the dependency ensures that if
+        # --noincompatible_kernel_use_resolved_toolchains is specified, an error message is printed.
         "_kernel_use_resolved_toolchains": attr.label(
             default = "//build/kernel/kleaf:incompatible_kernel_use_resolved_toolchains",
         ),
