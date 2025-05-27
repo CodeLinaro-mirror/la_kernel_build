@@ -29,12 +29,13 @@ native_binary_with_arg(
     visibility = ["//visibility:private"],
 )
 
-alias(
+native_binary(
     name = "toybox",
-    actual = select({
-        "//build/kernel/kleaf:toolchain_from_sources_is_true": "@toybox",
-        "//conditions:default": "//prebuilts/build-tools:toybox",
-    }),
+    src = "@toybox",
+    data = [
+        # Prevents --notoolchain_from_sources from being set, and print a nice error message if so.
+        "//build/kernel/kleaf:toolchain_from_sources",
+    ],
     visibility = ["//visibility:private"],
 )
 
@@ -100,12 +101,11 @@ swig_wrapper(
     visibility = ["//visibility:private"],
 )
 
-alias(
+native_binary(
     name = "lz4",
-    actual = select({
-        "//build/kernel/kleaf:toolchain_from_sources_is_true": "@lz4",
-        "//conditions:default": "//prebuilts/kernel-build-tools:lz4",
-    }),
+    src = "@lz4",
+    # Prevents --notoolchain_from_sources from being set, and print a nice error message if so.
+    data = ["//build/kernel/kleaf:toolchain_from_sources"],
     visibility = ["//visibility:private"],
 )
 
