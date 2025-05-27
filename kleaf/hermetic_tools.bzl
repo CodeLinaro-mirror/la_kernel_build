@@ -16,7 +16,6 @@ Provide tools for a hermetic build.
 """
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//build/kernel/kleaf/impl:debug.bzl", "debug")
 load(
     "//build/kernel/kleaf/impl:hermetic_exec.bzl",
@@ -96,12 +95,7 @@ def _hermetic_tools_internal_impl(ctx):
 
     all_outputs = _handle_hermetic_symlinks(ctx, ctx.attr.symlinks)
 
-    if ctx.attr._disable_symlink_source[BuildSettingInfo].value:
-        transitive_deps = []
-    else:
-        transitive_deps = [target.files for target in ctx.attr.symlinks]
-
-    transitive_deps += [target.files for target in ctx.attr.deps]
+    transitive_deps = [target.files for target in ctx.attr.deps]
 
     for actual_target in ctx.attr.symlinks:
         if actual_target.default_runfiles:
@@ -179,6 +173,8 @@ _hermetic_tools_internal = rule(
         "outer_target_name": attr.string(),
         "deps": attr.label_list(allow_files = True),
         "symlinks": attr.label_keyed_string_dict(allow_files = True),
+        # This is not used. The dependency ensures that
+        # --noincompatible_disable_hermetic_tools_symlink_source is not set.
         "_disable_symlink_source": attr.label(
             default = "//build/kernel/kleaf:incompatible_disable_hermetic_tools_symlink_source",
         ),

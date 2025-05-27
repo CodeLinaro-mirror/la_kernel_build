@@ -410,14 +410,12 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
-# Default is true.
-# If true, keys of hermetic_tools.symlinks are excluded from sandboxes.
-# If false, keys of hermetic_tools.symlinks are added to the sandboxes.
+# No-op. Do not set it explicitly.
 bool_flag(
     name = "incompatible_disable_hermetic_tools_symlink_source",
     build_setting_default = True,
+    error_message = "--noincompatible_disable_hermetic_tools_symlink_source is no longer supported.",
     visibility = ["//build/kernel:__pkg__"],
-    warn_message = "--noincompatible_disable_hermetic_tools_symlink_source will no longer be supported.",
 )
 
 # If true, kernel_module() cannot be used. Use ddk_module() instead.
