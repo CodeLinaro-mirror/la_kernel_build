@@ -426,20 +426,11 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
-# Default is false.
-# If true, workaround known issues when building on btrfs, sacrificing
-# hermeticity.
-# For details: b/292212788, or
-#   https://bugzilla.kernel.org/show_bug.cgi?id=217681
+# No longer supported.
 bool_flag(
     name = "workaround_btrfs_b292212788",
     build_setting_default = False,
-    visibility = ["//visibility:private"],
-)
-
-config_setting(
-    name = "workaround_btrfs_b292212788_is_true",
-    flag_values = {":workaround_btrfs_b292212788": "1"},
+    error_message = "--workaround_btrfs_b292212788 is no longer supported.",
     visibility = ["//build/kernel:__pkg__"],
 )
 

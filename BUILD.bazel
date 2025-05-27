@@ -35,17 +35,19 @@ native_binary(
     data = [
         # Prevents --notoolchain_from_sources from being set, and print a nice error message if so.
         "//build/kernel/kleaf:toolchain_from_sources",
+        # Prevents --workaround_btrfs_b292212788 from being set, and print a nice error message if so.
+        "//build/kernel/kleaf:workaround_btrfs_b292212788",
     ],
     visibility = ["//visibility:private"],
 )
 
 # Some aliases for :toybox to workaround dict keys needing to be unique
 # hermetic_tools.symlinks.
-[alias(
-    name = "toybox_%s" % tool,
+alias(
+    name = "toybox_flock",
     actual = ":toybox",
     visibility = ["//visibility:private"],
-) for tool in ("find", "flock")]
+)
 
 native_binary(
     name = "gzip",
@@ -199,6 +201,7 @@ _TOYS = [
     "egrep",
     "env",
     "expr",
+    "find",
     "getconf",
     "grep",
     "head",
@@ -258,13 +261,6 @@ hermetic_tools(
             ":toybox_flock": "flock",
         },
         "//conditions:default": {},
-    }) | select({
-        "//build/kernel/kleaf:workaround_btrfs_b292212788_is_true": {
-            "@kleaf_host_tools//:find": "find",
-        },
-        "//conditions:default": {
-            ":toybox_find": "find",
-        },
     }) | {
         ":toybox": ":".join(_TOYS),
         ":depmod": ":".join([

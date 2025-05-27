@@ -22,6 +22,4 @@ DEFAULT_HOST_TOOLS = [
     "perl",
     "rsync",
     "sh",
-    # For BTRFS (b/292212788)
-    "find",
 ]
