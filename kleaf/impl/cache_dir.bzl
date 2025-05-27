@@ -19,54 +19,6 @@ load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 
 visibility("//build/kernel/kleaf/impl/...")
 
-_FLOCK_FD = 0x41F  # KLF
-
-def _get_flock_cmd(ctx):
-    if ctx.attr._debug_cache_dir_conflict[BuildSettingInfo].value == "none":
-        pre_cmd = ""
-        post_cmd = ""
-        return struct(
-            pre_cmd = pre_cmd,
-            post_cmd = post_cmd,
-        )
-
-    if ctx.attr._debug_cache_dir_conflict[BuildSettingInfo].value not in ("detect", "resolve"):
-        fail("{}: {} has unexpected value {}. Must be one of none, detect, resolve.".format(
-            ctx.label,
-            ctx.attr._debug_cache_dir_conflict.label,
-            ctx.attr._debug_cache_dir_conflict[BuildSettingInfo].value,
-        ))
-
-    lock_args = ""
-    if ctx.attr._debug_cache_dir_conflict[BuildSettingInfo].value == "detect":
-        lock_args = "-n"
-
-    pre_cmd = """
-        (
-            echo "DEBUG: [$(date -In)] {label}: Locking ${{COMMON_OUT_DIR}}/kleaf_config_tags.json before using" >&2
-            if ! flock -x {lock_args} {flock_fd}; then
-                echo "ERROR: [$(date -In)] {label}: Unable to lock ${{COMMON_OUT_DIR}}/kleaf_config_tags.json." >&2
-                echo "    Please file a bug! See build/kernel/kleaf/docs/errors.md" >&2
-                exit 1
-            fi
-    """.format(
-        label = ctx.label,
-        lock_args = lock_args,
-        flock_fd = _FLOCK_FD,
-    )
-    post_cmd = """
-        ) {flock_fd}<"${{COMMON_OUT_DIR}}/kleaf_config_tags.json"
-        echo "DEBUG: [$(date -In)] {label}: Unlocked ${{COMMON_OUT_DIR}}/kleaf_config_tags.json after using" >&2
-    """.format(
-        label = ctx.label,
-        flock_fd = _FLOCK_FD,
-    )
-
-    return struct(
-        pre_cmd = pre_cmd,
-        post_cmd = post_cmd,
-    )
-
 def _get_step(ctx, common_config_tags, symlink_name):
     """Returns a step for caching the output directory.
 
@@ -99,8 +51,6 @@ def _get_step(ctx, common_config_tags, symlink_name):
         tools.append(ctx.executable._cache_dir_config_tags)
         inputs.append(common_config_tags)
 
-        flock_ret = _get_flock_cmd(ctx)
-
         cache_dir_cmd = """
             KLEAF_CONFIG_TAGS_TMP=$(mktemp kleaf_config_tags.json.XXXXXX)
             # cache_dir_config_tags.py requires --dest to not exist, otherwise it compares
@@ -132,23 +82,18 @@ def _get_step(ctx, common_config_tags, symlink_name):
             # can be executed with or without the sandbox.
             kleaf_internal_eval_ldflags
             kleaf_internal_eval_rust_flags
-
-            {flock_pre_cmd}
         """.format(
             label = shell.quote(str(ctx.label)),
             cache_dir_config_tags = ctx.executable._cache_dir_config_tags.path,
             cache_dir = ctx.attr._cache_dir[BuildSettingInfo].value,
             common_config_tags = common_config_tags.path,
-            flock_pre_cmd = flock_ret.pre_cmd,
         )
 
         post_cmd = """
             ln -sfT ${{OUT_DIR_SUFFIX}} {cache_dir}/last_{symlink_name}
-            {flock_post_cmd}
         """.format(
             cache_dir = ctx.attr._cache_dir[BuildSettingInfo].value,
             symlink_name = symlink_name,
-            flock_post_cmd = flock_ret.post_cmd,
         )
     return struct(
         inputs = inputs,

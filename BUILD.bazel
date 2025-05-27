@@ -37,15 +37,9 @@ native_binary(
         "//build/kernel/kleaf:toolchain_from_sources",
         # Prevents --workaround_btrfs_b292212788 from being set, and print a nice error message if so.
         "//build/kernel/kleaf:workaround_btrfs_b292212788",
+        # Prevents --debug_cache_dir_conflict from being set, and print a nice error message if so.
+        "//build/kernel/kleaf:debug_cache_dir_conflict",
     ],
-    visibility = ["//visibility:private"],
-)
-
-# Some aliases for :toybox to workaround dict keys needing to be unique
-# hermetic_tools.symlinks.
-alias(
-    name = "toybox_flock",
-    actual = ":toybox",
     visibility = ["//visibility:private"],
 )
 
@@ -256,12 +250,7 @@ _TOYS = [
 
 hermetic_tools(
     name = "hermetic-tools",
-    symlinks = select({
-        "//build/kernel/kleaf:debug_cache_dir_conflict_needs_flock": {
-            ":toybox_flock": "flock",
-        },
-        "//conditions:default": {},
-    }) | {
+    symlinks = {
         ":toybox": ":".join(_TOYS),
         ":depmod": ":".join([
             # keep sorted
