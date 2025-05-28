@@ -22,26 +22,6 @@ load("//build/kernel/kleaf/impl:bison_wrapper.bzl", "bison_wrapper")
 load("//build/kernel/kleaf/impl:native_binary_with_arg.bzl", "native_binary_with_arg")
 load("//build/kernel/kleaf/impl:swig_wrapper.bzl", "swig_wrapper")
 
-filegroup(
-    name = "sysroot",
-    srcs = glob(
-        ["build-tools/sysroot/**"],
-        allow_empty = False,
-    ),
-    visibility = [
-        ":__subpackages__",
-        "@kleaf_clang_toolchain//:__subpackages__",
-    ],
-)
-
-filegroup(
-    name = "sysroot_dir",
-    srcs = ["build-tools/sysroot"],
-    visibility = [
-        "@kleaf_clang_toolchain//:__subpackages__",
-    ],
-)
-
 native_binary_with_arg(
     name = "rsync",
     src = "@kleaf_host_tools//:rsync",
