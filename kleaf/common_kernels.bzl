@@ -32,7 +32,6 @@ load(
 )
 load("//build/kernel/kleaf/impl:kernel_sbom.bzl", "kernel_sbom")
 load("//build/kernel/kleaf/impl:out_headers_allowlist_archive.bzl", "out_headers_allowlist_archive")
-load("//build/kernel/kleaf/tests:runtime_protection_presence_test/symbol_presence_test.bzl", "symbol_presence_test")
 load("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragments_menuconfig_test.bzl", "pre_defconfig_fragments_menuconfig_test")
 load(
     ":kernel.bzl",
@@ -75,6 +74,7 @@ def common_kernel(
         module_implicit_outs = None,
         protected_exports_list = None,
         protected_modules_list = None,
+        protected_module_names_list = None,
         gki_system_dlkm_modules = None,
         make_goals = None,
         abi_definition_stg = None,
@@ -149,6 +149,7 @@ def common_kernel(
         kmi_symbol_list_add_only: See [kernel_abi.kmi_symbol_list_add_only](kernel.md#kernel_abi-kmi_symbol_list_add_only)
         protected_exports_list: See [kernel_build.protected_exports_list](kernel.md#kernel_build-protected_exports_list)
         protected_modules_list: See [kernel_build.protected_modules_list](kernel.md#kernel_build-protected_modules_list)
+        protected_module_names_list: See [kernel_config.protected_module_names_list](kernel.md#kernel_config-protected_module_names_list)
         make_goals: See [kernel_build.make_goals](kernel.md#kernel_build-make_goals)
         abi_definition_stg: See [kernel_abi.abi_definition_stg](kernel.md#kernel_abi-abi_definition_stg)
         kmi_enforced: See [kernel_abi.kmi_enforced](kernel.md#kernel_abi-kmi_enforced)
@@ -184,6 +185,7 @@ def common_kernel(
         module_implicit_outs = module_implicit_outs,
         protected_exports_list = protected_exports_list,
         protected_modules_list = protected_modules_list,
+        protected_module_names_list = protected_module_names_list,
         gki_system_dlkm_modules = gki_system_dlkm_modules,
         make_goals = make_goals,
         abi_definition_stg = abi_definition_stg,
@@ -265,6 +267,7 @@ def common_kernel(
         module_implicit_outs = module_implicit_outs,
         protected_exports_list = protected_exports_list,
         protected_modules_list = protected_modules_list,
+        protected_module_names_list = protected_module_names_list,
         make_goals = make_goals,
         page_size = page_size,
         deprecation = deprecation,
@@ -480,7 +483,6 @@ def common_kernel(
         page_size = page_size,
         makefile = makefile,
         defconfig = defconfig,
-        protected_exports_list = protected_exports_list,
     )
 
     native.test_suite(
@@ -667,8 +669,7 @@ def _define_common_kernels_additional_tests(
         kernel_modules_install,
         modules,
         arch,
-        page_size,
-        protected_exports_list):
+        page_size):
     fake_modules_options = Label("//build/kernel/kleaf/artifact_tests:fake_modules_options.txt")
 
     initramfs(
@@ -750,17 +751,6 @@ def _define_common_kernels_additional_tests(
             extra_tests.append(
                 Label("//build/kernel/kleaf/tests/ddk_examples:pkvm_module_test"),
             )
-
-        # This test internally adds the needed checks.
-        symbol_presence_test(
-            name = name + "_runtime_protection_symbol_presence_test",
-            kernel_build = kernel_build_name,
-            protected_exports_list = protected_exports_list,
-            visibility = ["//visibility:private"],
-        )
-        extra_tests.append(
-            name + "_runtime_protection_symbol_presence_test",
-        )
 
     native.test_suite(
         name = name,
