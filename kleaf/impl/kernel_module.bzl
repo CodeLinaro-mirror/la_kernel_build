@@ -919,6 +919,6 @@ def _kernel_module_set_defaults(kwargs):
             "**/*.h",
             "**/Kbuild",
             "**/Makefile",
-        ])
+        ], allow_empty = True)
 
     return kwargs
