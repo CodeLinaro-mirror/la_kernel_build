@@ -451,6 +451,11 @@ def kernel_build(
           ```
           trim_nonlisted_kmi = len(glob(["gki/aarch64/symbols/*"])) > 0
           ```
+
+          For mixed builds (`base_kernel` is set), the value of `trim_nonlisted_kmi` of the
+          `base_kernel` does not affect the value of `trim_nonlisted_kmi` of this `kernel_build()`.
+          This may change in the future.
+
         kmi_symbol_list_strict_mode: If `True`, add a build-time check between
           `[kmi_symbol_list] + additional_kmi_symbol_lists`
           and the KMI resulting from the build, to ensure
@@ -558,9 +563,10 @@ def kernel_build(
             These configs are also applied to external modules, including
             `kernel_module`s and `ddk_module`s.
 
-            Unlike `pre_defconfig_fragments`,
-            for mixed builds (`base_kernel` is set), the `post_defconfig_fragments` of the
-            `base_kernel` is not implicit included. This may change in the future.
+            For mixed builds (`base_kernel` is set), the `post_defconfig_fragments` of the
+            `base_kernel` is implicitly included when
+            `--incompatible_inherit_post_defconfig_fragments_from_base_kernel` is set
+            (the default).
 
             Files usually contain debug options. If you want to build in-tree modules, adding them
             to `pre_defconfig_fragments` may be a better choice.
@@ -624,6 +630,12 @@ def kernel_build(
           `"default"`, the defconfig is left as-is.
 
           16k / 64k page size is only supported on `arch = "arm64"`.
+
+          For mixed builds (`base_kernel` is set), the value of `page_size` of the
+          `base_kernel` is used if
+          `--incompatible_inherit_post_defconfig_fragments_from_base_kernel` is set
+          (the default).
+
         pack_module_env: If `True`, create `{name}_module_env.tar.gz`
           and other archives as part of the default output of this target.
 
@@ -635,6 +647,12 @@ def kernel_build(
             - `["kasan_sw_tags"]`
             - `["kasan_generic"]`
             - `["kcsan"]`
+
+          For mixed builds (`base_kernel` is set), the value of `sanitizers` of the
+          `base_kernel` is used if
+          `--incompatible_inherit_post_defconfig_fragments_from_base_kernel` is set
+          (the default).
+
         ddk_module_defconfig_fragments: A list of additional defconfigs, to be used
           in `ddk_module`s building against this kernel.
           Unlike `post_defconfig_fragments`, `ddk_module_defconfig_fragments` is not applied
@@ -711,7 +729,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         ))
         post_defconfig_fragments = defconfig_fragments
 
-    post_defconfig_fragments = _get_post_defconfig_fragments(
+    post_defconfig_fragments_inherited = _get_post_defconfig_fragments_inherited(
         kernel_build_name = name,
         kernel_build_post_defconfig_fragments = post_defconfig_fragments,
         kernel_build_arch = arch,
@@ -724,12 +742,10 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         kernel_build_trim_nonlisted_kmi = trim_nonlisted_kmi,
         **internal_kwargs
     )
-
-    # Do not use append because the returned value may not be a list.
-    # buildifier: disable=list-append
-    post_defconfig_fragments += [trim_post_defconfig_fragment]
+    post_defconfig_fragments_non_inherited = [trim_post_defconfig_fragment]
 
     # Prevent accidental usage
+    post_defconfig_fragments = struct(message = "DO NOT USE ME! Use post_defconfig_fragments_inherited and post_defconfig_fragments_non_inherited instead.")
     trim_nonlisted_kmi = struct(message = "DO NOT USE ME! Use trim_post_defconfig_fragment instead.")
 
     native.platform(
@@ -772,7 +788,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
             "//conditions:default": name + "_platform_exec",
         }),
         pre_defconfig_fragments = pre_defconfig_fragments,
-        post_defconfig_fragments = post_defconfig_fragments,
+        post_defconfig_fragments = post_defconfig_fragments_inherited + post_defconfig_fragments_non_inherited,
         kcflags = kcflags,
         clang_autofdo_profile = clang_autofdo_profile,
         **internal_kwargs
@@ -815,7 +831,8 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         system_trusted_key = system_trusted_key,
         defconfig = defconfig,
         pre_defconfig_fragments = pre_defconfig_fragments,
-        post_defconfig_fragments = post_defconfig_fragments,
+        post_defconfig_fragments_inherited = post_defconfig_fragments_inherited,
+        post_defconfig_fragments_non_inherited = post_defconfig_fragments_non_inherited,
         check_defconfig = check_defconfig,
         protected_module_names_list = protected_module_names_list,
         **internal_kwargs
@@ -974,7 +991,7 @@ IGNORED because kernel_build.sanitizers is set!".format(this_label = ctx.label, 
 
     return False
 
-def _get_post_defconfig_fragments(
+def _get_post_defconfig_fragments_inherited(
         kernel_build_name,
         kernel_build_post_defconfig_fragments,
         kernel_build_arch,
