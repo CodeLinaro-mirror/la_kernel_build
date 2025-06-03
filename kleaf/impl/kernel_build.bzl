@@ -117,8 +117,7 @@ def kernel_build(
         kconfig_ext = None,
         dtstree = None,
         kmi_symbol_list = None,
-        protected_exports_list = None,
-        protected_modules_list = None,
+        protected_module_names_list = None,
         additional_kmi_symbol_lists = None,
         trim_nonlisted_kmi = None,
         kmi_symbol_list_strict_mode = None,
@@ -423,18 +422,11 @@ def kernel_build(
           additional_kmi_symbol_lists = glob(["gki/aarch64/symbols/*"], exclude = ["gki/aarch64/symbols/base"]),
           ```
 
-        protected_exports_list: A file containing list of protected exports.
+        protected_module_names_list: A file containing list of protected module names,
           For example:
           ```
-          protected_exports_list = "//common:gki/aarch64/protected_exports"
+          protected_module_names_list = "//common:gki/aarch64/protected_module_names"
           ```
-
-        protected_modules_list: A file containing list of protected modules,
-          For example:
-          ```
-          protected_modules_list = "//common:gki/aarch64/protected_modules"
-          ```
-
         trim_nonlisted_kmi: If `True`, trim symbols not listed in
           `kmi_symbol_list` and `additional_kmi_symbol_lists`.
           This is the Bazel equivalent of `TRIM_NONLISTED_KMI`.
@@ -446,6 +438,11 @@ def kernel_build(
           ```
           trim_nonlisted_kmi = len(glob(["gki/aarch64/symbols/*"])) > 0
           ```
+
+          For mixed builds (`base_kernel` is set), the value of `trim_nonlisted_kmi` of the
+          `base_kernel` does not affect the value of `trim_nonlisted_kmi` of this `kernel_build()`.
+          This may change in the future.
+
         kmi_symbol_list_strict_mode: If `True`, add a build-time check between
           `[kmi_symbol_list] + additional_kmi_symbol_lists`
           and the KMI resulting from the build, to ensure
@@ -553,9 +550,10 @@ def kernel_build(
             These configs are also applied to external modules, including
             `kernel_module`s and `ddk_module`s.
 
-            Unlike `pre_defconfig_fragments`,
-            for mixed builds (`base_kernel` is set), the `post_defconfig_fragments` of the
-            `base_kernel` is not implicit included. This may change in the future.
+            For mixed builds (`base_kernel` is set), the `post_defconfig_fragments` of the
+            `base_kernel` is implicitly included when
+            `--incompatible_inherit_post_defconfig_fragments_from_base_kernel` is set
+            (the default).
 
             Files usually contain debug options. If you want to build in-tree modules, adding them
             to `pre_defconfig_fragments` may be a better choice.
@@ -619,6 +617,12 @@ def kernel_build(
           `"default"`, the defconfig is left as-is.
 
           16k / 64k page size is only supported on `arch = "arm64"`.
+
+          For mixed builds (`base_kernel` is set), the value of `page_size` of the
+          `base_kernel` is used if
+          `--incompatible_inherit_post_defconfig_fragments_from_base_kernel` is set
+          (the default).
+
         pack_module_env: If `True`, create `{name}_module_env.tar.gz`
           and other archives as part of the default output of this target.
 
@@ -630,6 +634,12 @@ def kernel_build(
             - `["kasan_sw_tags"]`
             - `["kasan_generic"]`
             - `["kcsan"]`
+
+          For mixed builds (`base_kernel` is set), the value of `sanitizers` of the
+          `base_kernel` is used if
+          `--incompatible_inherit_post_defconfig_fragments_from_base_kernel` is set
+          (the default).
+
         ddk_module_defconfig_fragments: A list of additional defconfigs, to be used
           in `ddk_module`s building against this kernel.
           Unlike `post_defconfig_fragments`, `ddk_module_defconfig_fragments` is not applied
@@ -706,7 +716,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         ))
         post_defconfig_fragments = defconfig_fragments
 
-    post_defconfig_fragments = _get_post_defconfig_fragments(
+    post_defconfig_fragments_inherited = _get_post_defconfig_fragments_inherited(
         kernel_build_name = name,
         kernel_build_post_defconfig_fragments = post_defconfig_fragments,
         kernel_build_arch = arch,
@@ -719,12 +729,10 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         kernel_build_trim_nonlisted_kmi = trim_nonlisted_kmi,
         **internal_kwargs
     )
-
-    # Do not use append because the returned value may not be a list.
-    # buildifier: disable=list-append
-    post_defconfig_fragments += [trim_post_defconfig_fragment]
+    post_defconfig_fragments_non_inherited = [trim_post_defconfig_fragment]
 
     # Prevent accidental usage
+    post_defconfig_fragments = struct(message = "DO NOT USE ME! Use post_defconfig_fragments_inherited and post_defconfig_fragments_non_inherited instead.")
     trim_nonlisted_kmi = struct(message = "DO NOT USE ME! Use trim_post_defconfig_fragment instead.")
 
     native.platform(
@@ -767,7 +775,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
             "//conditions:default": name + "_platform_exec",
         }),
         pre_defconfig_fragments = pre_defconfig_fragments,
-        post_defconfig_fragments = post_defconfig_fragments,
+        post_defconfig_fragments = post_defconfig_fragments_inherited + post_defconfig_fragments_non_inherited,
         kcflags = kcflags,
         clang_autofdo_profile = clang_autofdo_profile,
         **internal_kwargs
@@ -810,8 +818,10 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         system_trusted_key = system_trusted_key,
         defconfig = defconfig,
         pre_defconfig_fragments = pre_defconfig_fragments,
-        post_defconfig_fragments = post_defconfig_fragments,
+        post_defconfig_fragments_inherited = post_defconfig_fragments_inherited,
+        post_defconfig_fragments_non_inherited = post_defconfig_fragments_non_inherited,
         check_defconfig = check_defconfig,
+        protected_module_names_list = protected_module_names_list,
         **internal_kwargs
     )
 
@@ -844,8 +854,6 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         collect_unstripped_modules = collect_unstripped_modules,
         combined_abi_symbollist = kmi_symbol_list_target_name,
         strip_modules = strip_modules,
-        src_protected_exports_list = protected_exports_list,
-        src_protected_modules_list = protected_modules_list,
         src_kmi_symbol_list = kmi_symbol_list,
         trim_nonlisted_kmi = trim_post_defconfig_fragment,
         pack_module_env = pack_module_env,
@@ -968,7 +976,7 @@ IGNORED because kernel_build.sanitizers is set!".format(this_label = ctx.label, 
 
     return False
 
-def _get_post_defconfig_fragments(
+def _get_post_defconfig_fragments_inherited(
         kernel_build_name,
         kernel_build_post_defconfig_fragments,
         kernel_build_arch,
@@ -1941,12 +1949,6 @@ def _build_main_action(
     for step in steps:
         command_outputs += step.outputs
 
-    if ctx.file.src_protected_exports_list:
-        inputs.append(ctx.file.src_protected_exports_list)
-
-    if ctx.file.src_protected_modules_list:
-        inputs.append(ctx.file.src_protected_modules_list)
-
     debug.print_scripts(ctx, command)
     ctx.actions.run_shell(
         mnemonic = "KernelBuild",
@@ -2246,8 +2248,6 @@ def _create_infos(
         combined_abi_symbollist = combined_abi_symbollist,
         modules_staging_archive = modules_staging_archive,
         base_modules_staging_archive = base_kernel_utils.get_base_modules_staging_archive(ctx),
-        src_protected_exports_list = ctx.file.src_protected_exports_list,
-        src_protected_modules_list = ctx.file.src_protected_modules_list,
         src_kmi_symbol_list = ctx.file.src_kmi_symbol_list,
         kmi_strict_mode_out = kmi_strict_mode_out,
     )
@@ -2332,7 +2332,6 @@ def _create_infos(
         modules_prepare_archive = modules_prepare_archive,
         collect_unstripped_modules = ctx.attr.collect_unstripped_modules,
         strip_modules = ctx.attr.strip_modules,
-        src_protected_modules_list = ctx.file.src_protected_modules_list,
         ddk_module_defconfig_fragments = ddk_module_defconfig_fragments,
         kernel_uapi_headers = kernel_uapi_headers_depset,
         arch = ctx.attr.arch,
@@ -2542,8 +2541,6 @@ _kernel_build = rule(
             allow_files = True,
         ),
         "strip_modules": attr.bool(default = False, doc = "if set, debug information won't be kept for distributed modules.  Note, modules will still be stripped when copied into the ramdisk."),
-        "src_protected_exports_list": attr.label(allow_single_file = True),
-        "src_protected_modules_list": attr.label(allow_single_file = True),
         "src_kmi_symbol_list": attr.label(allow_single_file = True),
         "pack_module_env": attr.bool(default = False, doc = "Create `<name>_module_scripts.tar.gz`."),
         "sanitizers": attr.string_list(

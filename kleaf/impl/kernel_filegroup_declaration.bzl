@@ -133,7 +133,6 @@ kernel_filegroup(
     strip_modules = {strip_modules_repr},
     all_module_names = _ALL_MODULE_NAMES,
     kernel_release = {kernel_release_repr},
-    protected_modules_list = {protected_modules_repr},
     ddk_module_defconfig_fragments = {ddk_module_defconfig_fragments_repr},
     ddk_module_headers = {ddk_module_headers_repr},
     config_out_dir_files = glob([{config_out_dir_repr} + "/**"]),
@@ -154,6 +153,7 @@ kernel_filegroup(
     pre_defconfig_fragments = {pre_defconfig_fragments_repr},
     post_defconfig_fragments = {post_defconfig_fragments_repr},
     check_pre_defconfig_fragments = {check_pre_defconfig_fragments_repr},
+    check_post_defconfig_fragments = {check_post_defconfig_fragments_repr},
     visibility = ["//visibility:public"],
 )
 """
@@ -233,11 +233,6 @@ def _write_filegroup_decl_file(
         **join
     )
     sub.add_joined("{kernel_release_repr}", depset([info.kernel_release]), **(one | pkg))
-    sub.add_joined(
-        "{protected_modules_repr}",
-        depset([info.src_protected_modules_list]),
-        **(one | pkg)
-    )
     sub.add_joined(
         "{ddk_module_defconfig_fragments_repr}",
         info.ddk_module_defconfig_fragments,
@@ -326,6 +321,7 @@ def _write_filegroup_decl_file(
     sub.add_joined("{pre_defconfig_fragments_repr}", info.defconfig_fragments_info.pre_defconfig_fragments, **(join | pkg))
     sub.add_joined("{post_defconfig_fragments_repr}", info.defconfig_fragments_info.post_defconfig_fragments, **(join | pkg))
     sub.add("{check_pre_defconfig_fragments_repr}", repr(info.defconfig_fragments_info.check_pre_defconfig_fragments))
+    sub.add("{check_post_defconfig_fragments_repr}", repr(info.defconfig_fragments_info.check_post_defconfig_fragments))
 
     filegroup_decl_file = ctx.actions.declare_file("{}/{}".format(
         ctx.attr.kernel_build.label.name,
@@ -356,8 +352,6 @@ def _create_archive(ctx, info, deps_files, kernel_uapi_headers, filegroup_decl_f
     ]
     if info.generated_headers_for_module_archive:
         direct_inputs.append(info.generated_headers_for_module_archive)
-    if info.src_protected_modules_list:
-        direct_inputs.append(info.src_protected_modules_list)
     direct_inputs.extend(info.copy_module_symvers_outputs)
     if info.defconfig_info.file:
         direct_inputs.append(info.defconfig_info.file)

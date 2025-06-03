@@ -56,8 +56,10 @@ DefconfigFragmentsInfo = provider(
             describing kernel_build.pre_defconfig_fragments""",
         "post_defconfig_fragments": """A [depset](https://bazel.build/extending/depsets) of [File](https://bazel.build/rules/lib/File]s
             describing kernel_build.post_defconfig_fragments""",
-        "check_pre_defconfig_fragments": """resolved value of kernel_build.check_defconfig. This may be None
-            that represents DefconfigFragmentsInfo of the base_kernel if there is no base_kernel.""",
+        "check_pre_defconfig_fragments": """resolved value of kernel_build.check_defconfig for defconfig and pre_defconfig_fragments.
+            This may be None that represents DefconfigFragmentsInfo of the base_kernel if there is no base_kernel.""",
+        "check_post_defconfig_fragments": """resolved value of kernel_build.check_defconfig for post_defconfig_fragments.
+            This may be None that represents DefconfigFragmentsInfo of the base_kernel if there is no base_kernel.""",
     },
 )
 
@@ -266,8 +268,6 @@ KernelBuildAbiInfo = provider(
         "base_modules_staging_archive": "Archive containing staging kernel modules of the base kernel",
         "src_kmi_symbol_list": """Source file for `kmi_symbol_list` that points to the symbol list
                                   to be updated by `--update_symbol_list`""",
-        "src_protected_exports_list": """Source file for protected symbols which are restricted from being exported by unsigned modules to be updated by `--update_protected_exports`""",
-        "src_protected_modules_list": """Source file with list of protected modules whose exports are being protected and needs to be updated by `--update_protected_exports`""",
         "kmi_strict_mode_out": "A [`File`](https://bazel.build/rules/lib/File) to force kmi_strict_mode check.",
     },
 )
@@ -324,10 +324,6 @@ KernelBuildFilegroupDeclInfo = provider(
             [`modules_prepare`](#modules_prepare)""",
         "collect_unstripped_modules": "[`kernel_build.collect_unstripped_modules`](#kernel_build-collect_unstripped_modules)",
         "strip_modules": "[`kernel_build.strip_modules`](#kernel_build-strip_modules)",
-        "src_protected_modules_list": """Source file with list of protected modules whose exports
-            are being protected and needs to be updated by `--update_protected_exports`.
-
-            May be `None`.""",
         "ddk_module_defconfig_fragments": """[depset](https://bazel.build/extending/depsets) of
             [`File`](https://bazel.build/rules/lib/File)s containing
             [`kernel_build.ddk_module_defconfig_fragments`](#kernel_build-ddk_module_defconfig_fragments).""",
