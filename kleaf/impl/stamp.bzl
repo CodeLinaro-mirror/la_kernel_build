@@ -16,7 +16,6 @@
 
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
-load("@kernel_toolchain_info//:dict.bzl", "VARS")
 load(
     ":common_providers.bzl",
     "KernelEnvInfo",
@@ -202,16 +201,10 @@ def _ext_mod_write_localversion(ctx, ext_mod):
         """
         return struct(deps = [], cmd = cmd)
 
-    if VARS.get("KLEAF_INTERNAL_EXT_MODULE_SEPARATE_BUILD_DIR") == "1":
-        dest_dir = "${OUT_DIR}/${ext_mod_rel}"
-    else:
-        dest_dir = "${OUT_DIR}"
-
     ret_cmd = """
-        mkdir -p {dest_dir}
-        rsync -aL --chmod=F+w {localversion_file} {dest_dir}/localversion
+        mkdir -p ${{OUT_DIR}}/${{ext_mod_rel}}
+        rsync -aL --chmod=F+w {localversion_file} ${{OUT_DIR}}/${{ext_mod_rel}}/localversion
     """.format(
-        dest_dir = dest_dir,
         localversion_file = localversion_file.path,
     )
 
