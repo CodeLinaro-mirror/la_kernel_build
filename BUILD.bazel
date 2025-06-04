@@ -118,6 +118,15 @@ alias(
     visibility = ["//visibility:private"],
 )
 
+alias(
+    name = "dtc",
+    actual = select({
+        "//build/kernel/kleaf:dtc_from_sources_is_true": "@dtc",
+        "//conditions:default": "//prebuilts/kernel-build-tools:dtc",
+    }),
+    visibility = ["//visibility:private"],
+)
+
 # List of prebuilt tools where label names are used as the tool names
 _PREBUILT_TOOLS = [
     # keep sorted
@@ -132,7 +141,6 @@ _PREBUILT_TOOLS = [
     "//prebuilts/kernel-build-tools:build_image",
     "//prebuilts/kernel-build-tools:build_super_image",
     "//prebuilts/kernel-build-tools:certify_bootimg",
-    "//prebuilts/kernel-build-tools:dtc",
     "//prebuilts/kernel-build-tools:e2fsck",
     "//prebuilts/kernel-build-tools:e2fsdroid",
     "//prebuilts/kernel-build-tools:fec",
@@ -166,6 +174,7 @@ _PREBUILT_TOOLS = [
 _HERMETIC_TOOLS = [
     # keep sorted
     ":bison",
+    ":dtc",
     ":flex",
     ":gzip",
     ":lz4",

@@ -79,6 +79,14 @@ kleaf_local_repository(
     path = "external/kmod",
 )
 
+kleaf_local_repository(
+    name = "dtc",
+    fallback_build_file = "build/kernel/kleaf/fallback_dtc.BUILD",
+    # TODO: b/409193875 - Drop the below when external/dtc is in all manifests.
+    mandatory = False,
+    path = "external/dtc",
+)
+
 new_kleaf_local_repository(
     name = "prebuilt_ndk",
     build_file = "build/kernel/kleaf/ndk.BUILD",
