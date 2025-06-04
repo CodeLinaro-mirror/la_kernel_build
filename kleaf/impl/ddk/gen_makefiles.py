@@ -300,7 +300,6 @@ def _generate_kbuild_and_extra(
         kbuild_has_linux_include: bool,
         is_library: bool,
         is_pkvm_el2: bool,
-        copy_rule_hack: bool,
         **unused_kwargs
 ):
     """Generates all relevant Kbuild files and extra flag files.
@@ -321,7 +320,6 @@ def _generate_kbuild_and_extra(
         kbuild_has_linux_include: Whether to write LINUXINCLUDE to Kbuild files
         is_library: If set, outer target is a ddk_library
         is_pkvm_el2: If set, building pKVM EL2
-        copy_rule_hack: Employ hack for COPY rule
         **unused_kwargs: unused
     """
     kernel_module_srcs_json_content = json.load(kernel_module_srcs_json)
@@ -408,7 +406,6 @@ def _generate_kbuild_and_extra(
                     is_pkvm_el2=is_pkvm_el2,
                     obj_suffix=obj_suffix,
                     dep_type = src_item.get("type", "srcs"),
-                    copy_rule_hack=copy_rule_hack
                 )
 
             if config is not None and value != True: # pylint: disable=singleton-comparison
@@ -559,7 +556,6 @@ def _handle_src(
         is_pkvm_el2: bool,
         obj_suffix: str,
         dep_type: str,
-        copy_rule_hack: bool,
 ):
     """Writes rules to build a single source file.
 
@@ -573,7 +569,6 @@ def _handle_src(
             * srcs
             * crate_root
             * library, for deps with DdkLibraryInfo
-        copy_rule_hack: Employ hack for COPY rule
     """
     if src.suffix not in _SOURCE_SUFFIXES:
         die("Invalid source %s", src)
@@ -611,7 +606,7 @@ def _handle_src(
         # HACK: http://b/402888498 - COPY rule doesn't work, so hack it up.
         # TODO: http://b/402888498 - Figure out why it doesn't work, and remove
         #   this hack to use the pattern rule provided by Kbuild.
-        if copy_rule_hack and src.suffix in (".o_shipped", ".cmd_shipped"):
+        if src.suffix in (".o_shipped", ".cmd_shipped"):
             out_file.write(textwrap.dedent(f"""\
                 $(obj)/{out}: $(src)/{src.relative_to(kernel_module_out.parent)}
                 \t$(call cmd,copy)
@@ -803,7 +798,6 @@ if __name__ == "__main__":
                         action=SubmoduleLinuxIncludeDirAction)
     parser.add_argument("--is-library", action="store_true")
     parser.add_argument("--pkvm-el2-out", type=pathlib.Path)
-    parser.add_argument("--copy-rule-hack", action="store_true")
     args = parser.parse_args()
 
     die_exception = None
