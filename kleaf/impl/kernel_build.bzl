@@ -35,6 +35,8 @@ load(
     "CompileCommandsInfo",
     "CompileCommandsSingleInfo",
     "DdkHeadersInfo",
+    "DefconfigFragmentsInfo",
+    "DefconfigInfo",
     "GcovInfo",
     "KernelBuildAbiInfo",
     "KernelBuildExtModuleInfo",
@@ -504,6 +506,11 @@ def kernel_build(
             builds all modules except those exluded in `post_defconfig_fragments`. In this case,
             `pre_defconfig_fragments` must not be set.
 
+            If this attribute is not set (value is `None`), falls back to `DEFCONFIG` from
+            build_config for backwards compatibility. If `DEFCONFIG` is also not set, falls back
+            to `defconfig` of `base_kernel`. If `base_kernel` also do not have `defconfig` set,
+            error.
+
             See [`build/kernel/kleaf/docs/kernel_config.md`](../kernel_config.md) for details.
         pre_defconfig_fragments: A list of fragments that are applied to the defconfig
             **before** `make defconfig`.
@@ -521,6 +528,10 @@ def kernel_build(
 
             For mixed builds (`base_kernel` is set), the file usually contains additional
             in-tree modules to build on top of `gki_defconfig`, e.g. `CONFIG_FOO=m`.
+
+            For mixed builds (`base_kernel` is set), the `pre_defconfig_fragments` of the
+            `base_kernel` is implicitly included when
+            --incompatible_inherit_pre_defconfig_fragments_from_base_kernel is set.
 
             **NOTE**: `pre_defconfig_fragments` are applied **before** `make defconfig`, similar
             to `PRE_DEFCONFIG_CMDS`. If you had `POST_DEFCONFIG_CMDS` applying fragments in your
@@ -542,6 +553,10 @@ def kernel_build(
             These configs are also applied to external modules, including
             `kernel_module`s and `ddk_module`s.
 
+            Unlike `pre_defconfig_fragments`,
+            for mixed builds (`base_kernel` is set), the `post_defconfig_fragments` of the
+            `base_kernel` is not implicit included. This may change in the future.
+
             Files usually contain debug options. If you want to build in-tree modules, adding them
             to `pre_defconfig_fragments` may be a better choice.
 
@@ -553,18 +568,51 @@ def kernel_build(
             Items must be present in the final `.config`. See
             `build/kernel/kleaf/docs/kernel_config.md` for details.
         defconfig_fragments: **Deprecated**. Same as `post_defconfig_fragments`.
-        check_defconfig: Default is `match`.
+        check_defconfig: Whether to check `.config` against `defconfig`, `pre_defconfig_fragments`
+            and `post_defconfig_fragments`.
 
-            If `disabled`, no check is performed.
+            Value is one of `disabled`, `match` or `minimized`.
 
-            If `match`, checks `.config` against the `defconfig`, `pre_defconfig_fragments`
-            and ` post_defconfig_fragments`.
+            For `defconfig` and `pre_defconfig_fragments`, if `check_defconfig` is unspecified, and
+            `--incompatible_inherit_pre_defconfig_fragments_from_base_kernel`:
 
-            If `minimized`, checks `.config` against the result of
-            `make savedefconfig` right after `make defconfig`, but before
-            `post_defconfig_fragments` are applied.
-            This can be set to `minimized` **only if** `defconfig` is set and `pre_defconfig_fragments`
-            is not set.
+            -   If `base_kernel` is set, and `base_kernel` checks `defconfig` and
+                `pre_defconfig_fragments` using the `match` or `minimized` strategy,
+                this `kernel_build()` checks `defconfig` and `pre_defconfig_fragments` using the
+                `match` strategy.
+            -   If `base_kernel` is set, and `base_kernel` does not check against `defconfig` and
+                `pre_defconfig_fragments` (`disabled`),
+                this `kernel_build()` does not check against `defconfig` and
+                `pre_defconfig_fragments` (`disabled`).
+            -   If `base_kernel` is not set, this `kernel_build()` checks `defconfig` and
+                `pre_defconfig_fragments` using the `match` strategy.
+
+            For `defconfig` and `pre_defconfig_fragments`, if `check_defconfig` is unspecified,
+            and `--noincompatible_inherit_defconfig_fragments_from_base_kernel`,
+            this `kernel_build()` checks `defconfig` and `pre_defconfig_fragments` using the
+            `match` strategy.
+
+            For `post_defconfig_fragments`, if `check_defconfig` is unspecified, this
+            `kernel_build()` checks `post_defconfig_fragments` using the `match` strategy.
+
+            `disabled` startegy: no check is performed.
+
+            `match` strategy:
+            -   For each requirement item in `defconfig` + `pre_defconfig_fragments`, before
+                `post_defconfig_fragments` is applied, `.config` is checked against the item.
+            -   For each requirement item in `post_defconfig_fragments`, after
+                `post_defconfig_fragments` is applied, `.config` is checked against the item.
+
+            `minimized` strategy:
+            -   checks `.config` against the result of
+                `make savedefconfig` right after `make defconfig`, but before
+                `post_defconfig_fragments` are applied.
+            -   For each requirement item in `post_defconfig_fragments`, after
+                `post_defconfig_fragments` is applied, `.config` is checked against the item.
+
+            `check_defconfig` can be set to `minimized` **only if** `defconfig` is set and
+            `pre_defconfig_fragments` is not set (including those inherited from `base_kernel`).
+
         page_size: Default is `"default"`. Page size of the kernel build.
 
           Value may be one of `"default"`, `"4k"`, `"16k"` or `"64k"`. If
@@ -614,7 +662,6 @@ def kernel_build(
     headers_target_name = name + "_headers"
     src_kmi_symbol_list_target_name = name + "_src_kmi_symbol_list"
     kmi_symbol_list_target_name = name + "_kmi_symbol_list"
-    abi_symbollist_target_name = name + "_kmi_symbol_list_abi_symbollist"
     raw_kmi_symbol_list_target_name = name + "_raw_kmi_symbol_list"
 
     # Currently only support one sanitizer
@@ -745,17 +792,10 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         **internal_kwargs
     )
 
-    native.filegroup(
-        name = abi_symbollist_target_name,
-        srcs = [kmi_symbol_list_target_name],
-        output_group = "abi_symbollist",
-        **internal_kwargs
-    )
-
     raw_kmi_symbol_list(
         name = raw_kmi_symbol_list_target_name,
         env = env_target_name,
-        src = abi_symbollist_target_name,
+        src = kmi_symbol_list_target_name,
         **internal_kwargs
     )
 
@@ -763,6 +803,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         name = config_target_name,
         env = env_target_name,
         srcs = srcs,
+        base_kernel = base_kernel,
         trim_nonlisted_kmi = trim_post_defconfig_fragment,
         raw_kmi_symbol_list = raw_kmi_symbol_list_target_name,
         module_signing_key = module_signing_key,
@@ -801,7 +842,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         raw_kmi_symbol_list = raw_kmi_symbol_list_target_name,
         kernel_uapi_headers = uapi_headers_target_name,
         collect_unstripped_modules = collect_unstripped_modules,
-        combined_abi_symbollist = abi_symbollist_target_name,
+        combined_abi_symbollist = kmi_symbol_list_target_name,
         strip_modules = strip_modules,
         src_protected_exports_list = protected_exports_list,
         src_protected_modules_list = protected_modules_list,
@@ -2304,6 +2345,8 @@ def _create_infos(
         has_base_kernel = base_kernel_utils.get_base_kernel(ctx) != None,
         copy_module_symvers_outputs = main_action_ret.module_symvers_outputs,
         generated_headers_for_module_archive = main_action_ret.generated_headers_for_module_archive,
+        defconfig_info = ctx.attr.config[DefconfigInfo],
+        defconfig_fragments_info = ctx.attr.config[DefconfigFragmentsInfo],
     )
 
     default_info_files = all_output_files["outs"].values() + all_output_files["module_outs"].values()
@@ -2347,6 +2390,8 @@ def _create_infos(
         compile_commands_info,
         ctx.attr.config[KernelEnvAttrInfo],
         ctx.attr.config[KernelToolchainInfo],
+        ctx.attr.config[DefconfigInfo],
+        ctx.attr.config[DefconfigFragmentsInfo],
         output_group_info,
         default_info,
         module_symvers_file_info,
@@ -2423,6 +2468,8 @@ _kernel_build = rule(
         "config": attr.label(
             mandatory = True,
             providers = [
+                DefconfigInfo,
+                DefconfigFragmentsInfo,
                 KernelSerializedEnvInfo,
                 KernelEnvAttrInfo,
                 KernelEnvMakeGoalsInfo,
