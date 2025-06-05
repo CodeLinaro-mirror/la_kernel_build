@@ -127,14 +127,15 @@ alias(
     visibility = ["//visibility:private"],
 )
 
-# List of hermetic tools where label names are used as the tool names
-_HERMETIC_TOOLS = [
+# List of tools where label names are used as the tool names
+_TOOLS = [
     # keep sorted
     ":bison",
     ":dtc",
     ":flex",
     ":gzip",
     ":lz4",
+    ":rsync",
     ":sed",
     ":swig",
     ":tar",
@@ -164,6 +165,9 @@ _HERMETIC_TOOLS = [
     "//prebuilts/kernel-build-tools:simg2img",
     "//prebuilts/kernel-build-tools:tune2fs",
     "//prebuilts/kernel-build-tools:ufdt_apply_overlay",
+    "@kleaf_host_tools//:bash",
+    "@kleaf_host_tools//:perl",
+    "@kleaf_host_tools//:sh",
     # TODO: This is only used by abi_stgdiff. It should be fine to be removed from hermetic_tools.
     "//build/kernel/kleaf/impl:stgdiff",
 ] + glob(
@@ -175,7 +179,7 @@ _HERMETIC_TOOLS = [
     allow_empty = True,
 )
 
-# Hermetic tools symlinks (other than _HERMETIC_TOOLS)
+# List of toybox aliases
 _TOYS = [
     # keep sorted
     "basename",
@@ -263,12 +267,6 @@ hermetic_tools(
         },
     }) | {
         ":toybox": ":".join(_TOYS),
-
-        # Host tools
-        "@kleaf_host_tools//:bash": "bash",
-        "@kleaf_host_tools//:sh": "sh",
-        "@kleaf_host_tools//:perl": "perl",
-        ":rsync": "rsync",
         ":depmod": ":".join([
             # keep sorted
             "depmod",
@@ -298,7 +296,7 @@ hermetic_tools(
         ]),
     } | {
         tool: paths.basename(package_relative_label(tool).name)
-        for tool in _HERMETIC_TOOLS
+        for tool in _TOOLS
     },
     visibility = ["//visibility:public"],
 )
