@@ -127,11 +127,20 @@ alias(
     visibility = ["//visibility:private"],
 )
 
-# List of prebuilt tools where label names are used as the tool names
-_PREBUILT_TOOLS = [
+# List of hermetic tools where label names are used as the tool names
+_HERMETIC_TOOLS = [
     # keep sorted
+    ":bison",
+    ":dtc",
+    ":flex",
+    ":gzip",
+    ":lz4",
+    ":sed",
+    ":swig",
+    ":tar",
     "//prebuilts/build-tools:awk",
     "//prebuilts/build-tools:bc",
+    "//prebuilts/build-tools:m4",
     "//prebuilts/build-tools:make",
     "//prebuilts/build-tools:openssl",
     "//prebuilts/build-tools:runextractor",
@@ -155,33 +164,6 @@ _PREBUILT_TOOLS = [
     "//prebuilts/kernel-build-tools:simg2img",
     "//prebuilts/kernel-build-tools:tune2fs",
     "//prebuilts/kernel-build-tools:ufdt_apply_overlay",
-]
-
-[
-    alias(
-        name = "prebuilt_" + paths.basename(package_relative_label(tool).name),
-        actual = tool,
-        visibility = ["//visibility:private"],
-    )
-    for tool in _PREBUILT_TOOLS + [
-        "//prebuilts/build-tools:bzip2",
-        "//prebuilts/build-tools:xz",
-        "//prebuilts/build-tools:ziptool",
-    ]
-]
-
-# List of hermetic tools where label names are used as the tool names
-_HERMETIC_TOOLS = [
-    # keep sorted
-    ":bison",
-    ":dtc",
-    ":flex",
-    ":gzip",
-    ":lz4",
-    ":sed",
-    ":swig",
-    ":tar",
-    "//prebuilts/build-tools:m4",
     # TODO: This is only used by abi_stgdiff. It should be fine to be removed from hermetic_tools.
     "//build/kernel/kleaf/impl:stgdiff",
 ] + glob(
@@ -292,17 +274,17 @@ hermetic_tools(
             "depmod",
             "modinfo",
         ]),
-        ":prebuilt_bzip2": ":".join([
+        "//prebuilts/build-tools:bzip2": ":".join([
             # keep sorted
             "bzcat",
             "bzip2",
         ]),
-        ":prebuilt_xz": ":".join([
+        "//prebuilts/build-tools:xz": ":".join([
             # keep sorted
             "xz",
             "xzcat",
         ]),
-        ":prebuilt_ziptool": ":".join([
+        "//prebuilts/build-tools:ziptool": ":".join([
             # keep sorted
             "unzip",
             "zipinfo",
@@ -317,9 +299,6 @@ hermetic_tools(
     } | {
         tool: paths.basename(package_relative_label(tool).name)
         for tool in _HERMETIC_TOOLS
-    } | {
-        ":prebuilt_" + paths.basename(package_relative_label(tool).name): paths.basename(package_relative_label(tool).name)
-        for tool in _PREBUILT_TOOLS
     },
     visibility = ["//visibility:public"],
 )
