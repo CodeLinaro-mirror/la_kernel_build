@@ -67,13 +67,30 @@ native_binary_with_arg(
     visibility = ["//visibility:private"],
 )
 
+# Also used in bootstrap_hermetic_tools, so use a native_binary to ensure
+# the name of the binary is correct.
+native_binary(
+    name = "sed",
+    src = ":toybox",
+    out = "sed",
+    visibility = ["//build/kernel/kleaf/bootstrap_hermetic_tools:__pkg__"],
+)
+
 bison_wrapper(
     name = "bison",
     actual = "//prebuilts/build-tools:bison",
     m4 = "//prebuilts/build-tools:m4",
     pkgdata_dir = "//prebuilts/build-tools:bison.runfiles_dir",
     pkgdata_files = "//prebuilts/build-tools:bison.runfiles",
-    visibility = ["//visibility:private"],
+    visibility = ["//build/kernel/kleaf/bootstrap_hermetic_tools:__pkg__"],
+)
+
+# Also used in bootstrap_hermetic_tools, so create a handy alias in case we
+# build flex from source in the future.
+alias(
+    name = "flex",
+    actual = "//prebuilts/build-tools:flex",
+    visibility = ["//build/kernel/kleaf/bootstrap_hermetic_tools:__pkg__"],
 )
 
 swig_wrapper(
@@ -106,7 +123,6 @@ _PREBUILT_TOOLS = [
     # keep sorted
     "//prebuilts/build-tools:awk",
     "//prebuilts/build-tools:bc",
-    "//prebuilts/build-tools:flex",
     "//prebuilts/build-tools:make",
     "//prebuilts/build-tools:openssl",
     "//prebuilts/build-tools:runextractor",
@@ -150,8 +166,10 @@ _PREBUILT_TOOLS = [
 _HERMETIC_TOOLS = [
     # keep sorted
     ":bison",
+    ":flex",
     ":gzip",
     ":lz4",
+    ":sed",
     ":swig",
     ":tar",
     "//prebuilts/build-tools:m4",
@@ -210,7 +228,6 @@ _TOYS = [
     "realpath",
     "rm",
     "rmdir",
-    "sed",
     "seq",
     "setsid",
     "sha1sum",
