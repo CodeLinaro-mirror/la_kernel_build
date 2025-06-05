@@ -60,9 +60,10 @@ def _hermetic_genrule_toolchain_deps_impl(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
     if ctx.attr.use_cc_toolchain:
         toolchains = _get_toolchains(ctx)
-        return DefaultInfo(files = depset(
-            hermetic_tools.deps.to_list() + toolchains.all_files.to_list(),
-        ))
+        return DefaultInfo(files = depset(transitive = [
+            hermetic_tools.deps,
+            toolchains.all_files,
+        ]))
     else:
         return DefaultInfo(files = hermetic_tools.deps)
 
