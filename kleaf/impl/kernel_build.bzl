@@ -610,7 +610,7 @@ def kernel_build(
         name = name,
         config = config_target_name,
         keep_module_symvers = keep_module_symvers,
-        srcs = srcs,
+        srcs = srcs + all_kmi_symbol_lists,
         outs = kernel_utils.transform_kernel_build_outs(name, "outs", outs),
         module_outs = kernel_utils.transform_kernel_build_outs(name, "module_outs", module_outs),
         implicit_outs = kernel_utils.transform_kernel_build_outs(name, "implicit_outs", implicit_outs),
@@ -1596,6 +1596,12 @@ def _build_main_action(
         command_outputs += d.values()
     for step in steps:
         command_outputs += step.outputs
+
+    if ctx.file.src_protected_exports_list:
+        inputs.append(ctx.file.src_protected_exports_list)
+
+    if ctx.file.src_protected_modules_list:
+        inputs.append(ctx.file.src_protected_modules_list)
 
     debug.print_scripts(ctx, command)
     ctx.actions.run_shell(
