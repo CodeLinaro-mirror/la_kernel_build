@@ -39,7 +39,6 @@ load(
     "kernel_unstripped_modules_archive",
     "system_dlkm_image",
 )
-load(":print_debug.bzl", "print_debug")
 
 # Always collect_unstripped_modules for common kernels.
 _COLLECT_UNSTRIPPED_MODULES = True
@@ -160,44 +159,6 @@ def common_kernel(
         clang_autofdo_profile: See [kernel_build.clang_autofdo_profile](kernel.md#kernel_build-clang_autofdo_profile)
         generated_headers_for_module: See [kernel_build.generated_headers_for_module](kernel.md#kernel_build-generated_headers_for_module)
     """
-    json_target_config = dict(
-        name = name,
-        outs = outs,
-        arch = arch,
-        makefile = makefile,
-        defconfig = defconfig,
-        check_defconfig = check_defconfig,
-        pre_defconfig_fragments = pre_defconfig_fragments,
-        post_defconfig_fragments = post_defconfig_fragments,
-        visibility = visibility,
-        kmi_symbol_list = kmi_symbol_list,
-        additional_kmi_symbol_lists = additional_kmi_symbol_lists,
-        trim_nonlisted_kmi = trim_nonlisted_kmi,
-        kmi_symbol_list_strict_mode = kmi_symbol_list_strict_mode,
-        module_implicit_outs = module_implicit_outs,
-        protected_module_names_list = protected_module_names_list,
-        gki_system_dlkm_modules = gki_system_dlkm_modules,
-        make_goals = make_goals,
-        abi_definition_stg = abi_definition_stg,
-        kmi_enforced = kmi_enforced,
-        build_gki_artifacts = build_gki_artifacts,
-        gki_boot_img_sizes = gki_boot_img_sizes,
-        page_size = page_size,
-        deprecation = deprecation,
-        ddk_headers_archive = ddk_headers_archive,
-        ddk_module_headers = ddk_module_headers,
-        extra_dist = extra_dist,
-        generated_headers_for_module = generated_headers_for_module,
-    )
-
-    print_debug(
-        name = name + "_print_configs",
-        content = "common_kernel({})".format("".join([
-            "    {} = {},\n".format(k, repr(v))
-            for k, v in json_target_config.items()
-        ])),
-        tags = ["manual"],
-    )
 
     native.alias(
         name = name + "_sources",
