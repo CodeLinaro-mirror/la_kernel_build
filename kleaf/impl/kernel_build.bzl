@@ -138,6 +138,7 @@ def kernel_build(
         ddk_module_headers = None,
         kcflags = None,
         clang_autofdo_profile = None,
+        generate_out_targets = None,
         **kwargs):
     """Defines a kernel build target with all dependent targets.
 
@@ -321,7 +322,8 @@ def kernel_build(
             ```
             The bulid system copies `${OUT_DIR}/[<optional subdirectory>/]vmlinux`
             to `kernel_aarch64/vmlinux`.
-            `kernel_aarch64/vmlinux` is the label to the file.
+            If `generate_out_targets` is True, the label `kernel_aarch64/vmlinux` resolves to the
+            file.
 
           - If `out` contains a slash, the build rule locates the file in the
             kernel build output directory `${OUT_DIR}` with path `out`
@@ -340,7 +342,8 @@ def kernel_build(
             to:
               - `kernel_aarch64/arch/arm64/boot/vmlinux`
               - `kernel_aarch64/vmlinux`
-            They are also the labels to the output files, respectively.
+            If `generate_out_targets` is True, they are also the labels to the output files,
+            respectively.
 
             See `search_and_cp_output.py` for details.
 
@@ -354,43 +357,24 @@ def kernel_build(
           ```
           `vmlinux` will be included in the distribution.
 
-          If it is a `dict`, it is wrapped in
-          [`select()`](https://docs.bazel.build/versions/main/configurable-attributes.html).
-
-          Example:
-          ```
-          kernel_build(
-            name = "kernel_aarch64",
-            outs = {"config_foo": ["vmlinux"]})
-          ```
-          If conditions in `config_foo` is met, the rule is equivalent to
-          ```
-          kernel_build(
-            name = "kernel_aarch64",
-            outs = ["vmlinux"])
-          ```
-          As explained above, the bulid system copies `${OUT_DIR}/[<optional subdirectory>/]vmlinux`
-          to `kernel_aarch64/vmlinux`.
-          `kernel_aarch64/vmlinux` is the label to the file.
-
-          Note that a `select()` may not be passed into `kernel_build()` because
-          [`select()` cannot be evaluated in macros](https://docs.bazel.build/versions/main/configurable-attributes.html#why-doesnt-select-work-in-macros).
-          Hence:
-          - [combining `select()`s](https://docs.bazel.build/versions/main/configurable-attributes.html#combining-selects)
-            is not allowed. Instead, expand the cartesian product.
-          - To use
-            [`AND` chaining](https://docs.bazel.build/versions/main/configurable-attributes.html#or-chaining)
-            or
-            [`OR` chaining](https://docs.bazel.build/versions/main/configurable-attributes.html#selectsconfig_setting_group),
-            use `selects.config_setting_group()`.
-
         implicit_outs: Like `outs`, but not copied to the distribution directory.
 
-          Labels are created for each item in `implicit_outs` as in `outs`.
+            If `generate_out_targets`, labels are created for each item in `implicit_outs` as in
+            `outs`.
 
         module_implicit_outs: like `module_outs`, but not copied to the distribution directory.
 
-          Labels are created for each item in `module_implicit_outs` as in `outs`.
+            If `generate_out_targets`, labels are created for each item in `module_implicit_outs`
+            as in `outs`.
+
+        generate_out_targets: [Nonconfigurable](https://bazel.build/docs/configurable-attributes).
+            Default is True. If True, generate labels for `outs`, `module_outs`, `implicit_outs` and
+            `module_implicit_outs`.
+
+            This cannot be set to `True` if any of `outs`, `module_outs`, `implicit_outs`
+            or `module_implicit_outs` is a `select()` expression.
+
+            The default value may be changed to False in the future.
 
         kmi_symbol_list: A label referring to the main KMI symbol list file. See `additional_kmi_symbol_lists`.
 
@@ -856,6 +840,9 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
     # key = attribute name, value = a list of labels for that attribute
     real_outs = {}
 
+    if generate_out_targets == None:
+        generate_out_targets = True
+
     for out_name, out_attr_val in (
         ("outs", outs),
         ("module_outs", module_outs),
@@ -863,6 +850,8 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         ("module_implicit_outs", module_implicit_outs),
         # internal_outs are opaque to the user, hence we don't create a alias (filegroup) for them.
     ):
+        if not generate_out_targets:
+            continue
         if out_attr_val == None:
             continue
         if type(out_attr_val) == type([]):

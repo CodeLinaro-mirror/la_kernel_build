@@ -39,6 +39,10 @@ load(
 
 visibility("//build/kernel/kleaf/...")
 
+_EMPTY_SELECT = select({
+    "//conditions:default": None,
+})
+
 def _reverse_dict(d):
     """Reverse a dictionary of {key: [value, ...]}
 
@@ -398,6 +402,8 @@ def _transform_kernel_build_outs(name, what, outs):
         return outs
     elif type(outs) == type({}):
         return select(outs)
+    elif type(outs) == type(_EMPTY_SELECT):
+        return outs
     else:
         fail("{}: Invalid type for {}: {}".format(name, what, type(outs)))
 
