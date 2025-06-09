@@ -542,6 +542,9 @@ def define_common_kernels(
                 # cscope files
                 "cscope.*",
                 "ncscope.*",
+
+                # ABI and symbol list files
+                "android/*",
             ],
         ),
     )
