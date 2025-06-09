@@ -156,4 +156,12 @@ CI_TARGET_MAPPING = {
         "repo_name": "gki_prebuilts_aarch64_16k",
         "arch": "arm64",
     },
+    "kernel_aarch64_tv": _common_ci_target_config(
+        bazel_target_name = "kernel_aarch64_tv",
+        # TODO: This should come from common/BUILD.bazel via common_kernel()
+        ddk_headers_archive_name = "kernel_aarch64_ddk_headers_archive.tar.gz",
+    ) | {
+        "repo_name": "gki_prebuilts_aarch64_tv",
+        "arch": "arm64",
+    },
 }
