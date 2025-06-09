@@ -80,15 +80,12 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
-# If true, kernel_images sets EXT_MODULES before creating the staging directory.
-# Note: This is a temporary flag to mitigate issues on migrating away from
-# setting EXT_MODULES in build.config. If you need to disable this flag, please
-# file a bug.
+# No-op. Do not set it explicitly.
 bool_flag(
     name = "set_ext_modules",
     build_setting_default = True,
+    error_message = "--noset_ext_modules is no longer be supported.",
     visibility = ["//visibility:public"],
-    warn_message = "--noset_ext_modules will no longer be supported.",
 )
 
 string_flag(

@@ -16,7 +16,6 @@ Common utilities for working with kernel images.
 """
 
 load("@bazel_skylib//lib:shell.bzl", "shell")
-load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//build/kernel/kleaf:directory_with_structure.bzl", dws = "directory_with_structure")
 load(
     ":common_providers.bzl",
@@ -68,7 +67,7 @@ def _build_modules_image_impl(
          returned in `DefaultInfo`).
         additional_inputs: Additional files to be included.
         mnemonic: string to reference the build operation.
-        _set_ext_modules: bool_flag that specifies whether to set EXT_MODULES.
+        _set_ext_modules: **DEPRECATED** bool_flag that specifies whether to set EXT_MODULES.
     """
 
     if restore_modules_install == None:
@@ -152,17 +151,11 @@ def _build_modules_image_impl(
             modules_order = " ".join([modules_order.path for modules_order in modules_order_depset_list]),
         )
 
-    if set_ext_modules and _set_ext_modules[BuildSettingInfo].value:
+    if set_ext_modules:
         ext_modules = kernel_modules_install[KernelModuleInfo].packages.to_list()
         command += """EXT_MODULES={quoted_ext_modules}""".format(
             quoted_ext_modules = shell.quote(" ".join(ext_modules)),
         )
-
-    if not _set_ext_modules[BuildSettingInfo].value:
-        # buildifier: disable=print
-        print("""\nWARNING: This is a temporary flag to mitigate issues on migrating away from
-setting EXT_MODULES in build.config. If you need --noset_ext_modules, please
-file a bug.""")
 
     command += """
              # Restore System.map to DIST_DIR for run_depmod in create_modules_staging
@@ -192,6 +185,8 @@ _build_modules_image = subrule(
     implementation = _build_modules_image_impl,
     attrs = {
         "_set_ext_modules": attr.label(
+            # The dependency here ensures that using
+            #   --noset_ext_modules will break the build.
             default = "//build/kernel/kleaf:set_ext_modules",
         ),
     },
