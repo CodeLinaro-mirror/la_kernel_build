@@ -47,6 +47,16 @@ alias(
     visibility = ["//out_of_tree:__pkg__"],
 )
 
+alias(
+    name = "base_system_dlkm",
+    actual = select({
+        ":kernel_flag_is_source": "@kleaf//common:kernel_aarch64_system_dlkm_image",
+        ":kernel_flag_is_prebuilt_4k": "@gki_prebuilts//kernel_aarch64:kernel_aarch64_system_dlkm_staging_archive",
+        ":kernel_flag_is_prebuilt_16k": "@gki_prebuilts_aarch64_16k//kernel_aarch64_16k:kernel_aarch64_16k_system_dlkm_staging_archive",
+    }),
+    visibility = ["//out_of_tree:__pkg__"],
+)
+
 filegroup(
     name = "build_test_targets",
     srcs = [

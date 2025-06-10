@@ -148,6 +148,12 @@ kernel_filegroup(
     if has_system_dlkm_staging_archive:
         template_content += """\
 
+filegroup(
+    name = {system_dlkm_staging_archive_name_repr},
+    srcs = [{system_dlkm_staging_archive_repr}],
+    visibility = ["//visibility:public"],
+)
+
 extracted_system_dlkm_staging_archive(
     name = {modules_repr},
     src = {system_dlkm_staging_archive_repr},
@@ -273,6 +279,7 @@ def _write_filegroup_decl_file(
     sub.add("{arch}", info.arch)
 
     if system_dlkm_staging_archive:
+        sub.add("{system_dlkm_staging_archive_name_repr}", repr(ctx.attr.kernel_build.label.name + "_system_dlkm_staging_archive"))
         sub.add("{modules_repr}", repr(ctx.attr.kernel_build.label.name + "_modules"))
         sub.add_joined(
             "{system_dlkm_staging_archive_repr}",
