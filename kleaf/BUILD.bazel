@@ -31,6 +31,7 @@ string_flag(
     build_setting_default = "default",
     values = LTO_VALUES,
     visibility = ["//visibility:public"],
+    warn_message = "DO NOT SET --lto. It is deprecated.",
 )
 
 # The final LTO setting is "default" (use defconfig value).
