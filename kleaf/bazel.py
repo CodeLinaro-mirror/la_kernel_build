@@ -640,9 +640,19 @@ class BazelWrapper(KleafHelpPrinter):
     def _get_output_base(self) -> str:
         """Returns $(bazel info output_base)"""
 
+        modified_startup_options = []
+        if self.known_startup_options.output_root:
+            modified_startup_options.append(
+                f"--output_root={self.known_startup_options.output_root}")
+        if self.known_startup_options.output_user_root:
+            modified_startup_options.append(
+                f"--output_user_root={self.known_startup_options.output_user_root}")
+
+        modified_startup_options.extend(self.user_startup_options)
+
         return subprocess.check_output(
             [sys.executable, __file__] +
-            self.startup_options +
+            modified_startup_options +
             ["info", "output_base"], text=True).strip()
 
     def _transform_bazelrc_files(self, bazelrc_files: list[pathlib.Path]) -> list[str]:
