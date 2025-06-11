@@ -490,7 +490,7 @@ class BazelWrapper(KleafHelpPrinter):
         repo_root, repo_manifest = self.known_args.repo_manifest
         self.env["KLEAF_REPO_MANIFEST"] = f"{repo_root or ''}:{repo_manifest or ''}"
 
-        if self.known_args.source_date_epoch_fix:
+        if self.known_args.source_date_epoch_fix and self.command != "info":
             self.env["KLEAF_OUTPUT_BASE"] = self._get_output_base()
 
         if self.known_args.extra_git_projects:
@@ -641,7 +641,7 @@ class BazelWrapper(KleafHelpPrinter):
         """Returns $(bazel info output_base)"""
 
         return subprocess.check_output(
-            [sys.executable, __file__, self.kleaf_repo_dir] +
+            [sys.executable, __file__] +
             self.startup_options +
             ["info", "output_base"], text=True).strip()
 
