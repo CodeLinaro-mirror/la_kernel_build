@@ -57,6 +57,7 @@ def _system_dlkm_image_impl(ctx):
                 base_kernel_label = kernel_build_infos.images_info.base_kernel_label,
             ))
 
+    if ctx.attr.base != None:
         # When building device-specific system_dlkm against GKI's
         # system_dlkm_staging_archive.tar.gz, do not restore the modules_install archive from
         # the device build.
