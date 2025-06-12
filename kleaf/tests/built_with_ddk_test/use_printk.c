@@ -25,7 +25,7 @@ MODULE_DESCRIPTION("A test module for DDK testing purposes");
 MODULE_AUTHOR("Ulises Mendez Martinez <umendez@google.com>");
 MODULE_LICENSE("GPL v2");
 
-void use_printk(void) {
+static __maybe_unused void use_printk(void) {
     printk(KERN_INFO "Hello world!\n");
     pr_info("Bye World!\n");
 }

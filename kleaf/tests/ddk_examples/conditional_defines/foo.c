@@ -18,7 +18,7 @@
 // Instead of adding -include debug.h to copts, you may #include it here
 // directly.
 
-void foo(void) {
+static __maybe_unused void foo(void) {
 #ifdef DEBUG
     pr_debug("foo debug info\n");
 #else

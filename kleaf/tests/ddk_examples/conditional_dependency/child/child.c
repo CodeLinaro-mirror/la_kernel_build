@@ -16,7 +16,7 @@
 #include <linux/module.h>
 #include "parent/parent_do_thing.h"
 
-void child_do_thing(void) {
+static __maybe_unused void child_do_thing(void) {
     parent_do_thing();
 }
 

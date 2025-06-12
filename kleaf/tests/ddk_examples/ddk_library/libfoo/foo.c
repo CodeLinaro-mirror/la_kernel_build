@@ -21,4 +21,6 @@
 #error foo.c must not be compiled with -DMAIN_MODULE!
 #endif
 
+#include "foo.h"
+
 void foo(void) {}

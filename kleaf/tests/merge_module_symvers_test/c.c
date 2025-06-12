@@ -15,6 +15,8 @@
 
 #include <linux/module.h>
 
+void c_func(void);
+
 MODULE_DESCRIPTION("A test module for DDK testing purposes");
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Ulises Mendez Martinez <umendez@google.com>");

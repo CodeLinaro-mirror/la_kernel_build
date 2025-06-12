@@ -18,7 +18,7 @@
 extern void foo(void);
 extern void bar(void);
 
-void module_func(void) {
+static __maybe_unused void module_func(void) {
     foo();
     bar();
 }
