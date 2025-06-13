@@ -29,6 +29,7 @@ IGNORELIST_FILE=""
 RESULTS_PATH=""
 DIR=""
 GIT="git"
+FAIL_ON_VIOLATIONS=1
 while [[ $# -gt 0 ]]; do
   next="$1"
   case ${next} in
@@ -56,6 +57,12 @@ while [[ $# -gt 0 ]]; do
     GIT="$2"
     shift
     ;;
+  --fail_on_violations)
+    FAIL_ON_VIOLATIONS=1
+    ;;
+  --nofail_on_violations)
+    FAIL_ON_VIOLATIONS=0
+    ;;
   --help)
     echo "Checks whether given build is for presubmit. If so, extract git_sha1"
     echo "from repo.prop and invoke checkpatch.sh."
@@ -73,6 +80,11 @@ while [[ $# -gt 0 ]]; do
     echo "  [--ignored_checks <checkpatch_ignorelist>]"
     echo "      List of ignored checks. See checkpatch() rule for defaults."
     echo "      If relative, it is interpreted against Bazel workspace root."
+    echo "  [--[no]fail_on_violations]"
+    echo "      Default is true. If true, violations => exit non-zero."
+    echo "      If false, exit 0 even with checkpatch violations"
+    echo "      as long as checkpatch completes the analysis without internal"
+    echo "      errors."
     echo "  <args for checkpatch.pl>"
     echo "      Other arguments are forwarded to checkpatch.pl."
     echo
@@ -226,6 +238,14 @@ fi
 if "${GIT}" -C "${ABS_DIR}" log --format="%B" -1 ${GIT_SHA1} | \
    grep -q "^Ignore-Checkpatch:\s*\S\+"; then
   echo "Suppressing checkpatch errors due to \"Ignore-Checkpatch:\"".
+  CHECKPATCH_RC=0
+fi
+
+# Suppress checkpatch errors if --nofail_on_violations, and checkpatch
+# properly completes.
+# Sync keywords with checkpatch.pl.
+if [[ $FAIL_ON_VIOLATIONS -eq 0 ]] && \
+   grep -q "has style problems, please review" "${MY_RESULTS_PATH}"; then
   CHECKPATCH_RC=0
 fi
 
