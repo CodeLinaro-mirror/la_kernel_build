@@ -18,10 +18,12 @@
 extern void foo(void);
 extern void bar(void);
 
-static __maybe_unused void module_func(void) {
+static int __init module_func(void) {
     foo();
     bar();
+    return 0;
 }
+module_init(module_func);
 
 MODULE_DESCRIPTION("A test module for Kleaf testing purposes");
 MODULE_AUTHOR("Hong, Yifan <elsk@google.com>");

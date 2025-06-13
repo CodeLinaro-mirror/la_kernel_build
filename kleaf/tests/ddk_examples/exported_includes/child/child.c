@@ -18,11 +18,13 @@
 #include "parent_2/parent_2_do_thing.h"
 #include "parent_3/parent_3_do_thing.h"
 
-static __maybe_unused void child_do_thing(void) {
+static int __init child_do_thing(void) {
     parent_1_do_thing();
     parent_2_do_thing();
     parent_3_do_thing();
+    return 0;
 }
+module_init(child_do_thing);
 
 MODULE_DESCRIPTION("An example module for Kleaf demonstration purposes");
 MODULE_AUTHOR("Hong, Yifan <elsk@google.com>");

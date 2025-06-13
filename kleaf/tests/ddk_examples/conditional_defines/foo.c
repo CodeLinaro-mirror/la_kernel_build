@@ -18,13 +18,15 @@
 // Instead of adding -include debug.h to copts, you may #include it here
 // directly.
 
-static __maybe_unused void foo(void) {
+static int __init foo(void) {
 #ifdef DEBUG
     pr_debug("foo debug info\n");
 #else
 #error DEBUG should be set!
 #endif
+    return 0;
 }
+module_init(foo);
 
 MODULE_DESCRIPTION("An example module for Kleaf demonstration purposes");
 MODULE_AUTHOR("Hong, Yifan <elsk@google.com>");

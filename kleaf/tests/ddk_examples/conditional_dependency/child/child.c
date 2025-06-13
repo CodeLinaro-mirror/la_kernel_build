@@ -16,9 +16,11 @@
 #include <linux/module.h>
 #include "parent/parent_do_thing.h"
 
-static __maybe_unused void child_do_thing(void) {
+static int __init child_do_thing(void) {
     parent_do_thing();
+    return 0;
 }
+module_init(child_do_thing);
 
 MODULE_DESCRIPTION("An example module for Kleaf demonstration purposes");
 MODULE_AUTHOR("Hong, Yifan <elsk@google.com>");
