@@ -327,13 +327,21 @@ function build_system_dlkm() {
   local system_dlkm_root_dir=$(echo ${SYSTEM_DLKM_STAGING_DIR}/lib/modules/*)
   cp ${system_dlkm_root_dir}/modules.load ${DIST_DIR}/system_dlkm.modules.load
   local system_dlkm_props_file
+  local system_dlkm_file_contexts
 
   if [ -z "${SYSTEM_DLKM_PROPS}" ]; then
     system_dlkm_props_file="$(mktemp)"
-    echo -e "system_dlkm_fs_type=ext4\n" >> ${system_dlkm_props_file}
+    system_dlkm_file_contexts="$(mktemp)"
+    echo -e "fs_type=ext4\n" >> ${system_dlkm_props_file}
     echo -e "use_dynamic_partition_size=true\n" >> ${system_dlkm_props_file}
     echo -e "ext_mkuserimg=mkuserimg_mke2fs\n" >> ${system_dlkm_props_file}
     echo -e "ext4_share_dup_blocks=true\n" >> ${system_dlkm_props_file}
+    echo -e "extfs_rsv_pct=0\n" >> ${system_dlkm_props_file}
+    echo -e "journal_size=0\n" >> ${system_dlkm_props_file}
+    echo -e "mount_point=system_dlkm\n" >> ${system_dlkm_props_file}
+    echo -e "selinux_fc=${system_dlkm_file_contexts}\n" >> ${system_dlkm_props_file}
+
+    echo -e "/system_dlkm(/.*)? u:object_r:system_dlkm_file:s0" > ${system_dlkm_file_contexts}
   else
     system_dlkm_props_file="${SYSTEM_DLKM_PROPS}"
     if [[ -f "${ROOT_DIR}/${system_dlkm_props_file}" ]]; then
@@ -361,6 +369,11 @@ function build_system_dlkm() {
 
   build_image "${SYSTEM_DLKM_STAGING_DIR}" "${system_dlkm_props_file}" \
     "${DIST_DIR}/system_dlkm.img" /dev/null
+
+  if [ -z "${SYSTEM_DLKM_PROPS}" ]; then
+    rm ${system_dlkm_props_file}
+    rm ${system_dlkm_file_contexts}
+  fi
 
   # No need to sign the image as modules are signed
   avbtool add_hashtree_footer \
@@ -714,6 +727,17 @@ function gki_add_avb_footer() {
     ${additional_props}
 }
 
+function check_gki_boot_img_certification_key() {
+  if [ -z "${KLEAF_INTERNAL_GKI_BOOT_IMG_CERTIFICATION_KEY}" ]; then
+   KLEAF_INTERNAL_GKI_BOOT_IMG_CERTIFICATION_KEY="tools/mkbootimg/gki/testdata/testkey_rsa4096.pem"
+  fi
+
+  if [ ! -f "${KLEAF_INTERNAL_GKI_BOOT_IMG_CERTIFICATION_KEY}" ]; then
+    echo "GKI boot.img certification key not found. KLEAF_INTERNAL_GKI_BOOT_IMG_CERTIFICATION_KEY = ${KLEAF_INTERNAL_GKI_BOOT_IMG_CERTIFICATION_KEY}"
+    exit 1
+  fi
+}
+
 # gki_dry_run_certify_bootimg <boot_image> <gki_artifacts_info_file> <security_patch_level>
 # The certify_bootimg script will be executed on a server over a GKI
 # boot.img during the official certification process, which embeds
@@ -721,6 +745,8 @@ function gki_add_avb_footer() {
 # VTS to verify that a GKI boot.img is authentic.
 # Dry running the process here so we can catch related issues early.
 function gki_dry_run_certify_bootimg() {
+  check_gki_boot_img_certification_key
+
   local spl_date="$3"
   local additional_props=()
   if [ -n "${spl_date}" ]; then
@@ -730,7 +756,7 @@ function gki_dry_run_certify_bootimg() {
 
   certify_bootimg --boot_img "$1" \
     --algorithm SHA256_RSA4096 \
-    --key tools/mkbootimg/gki/testdata/testkey_rsa4096.pem \
+    --key ${KLEAF_INTERNAL_GKI_BOOT_IMG_CERTIFICATION_KEY} \
     --gki_info "$2" \
     --output "$1" \
     "${additional_props[@]}"
