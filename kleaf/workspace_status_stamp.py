@@ -63,13 +63,10 @@ class PresetResult(PathCollectible):
 @dataclasses.dataclass(kw_only=True)
 class LocalversionResult(PathPopen):
     """Consists of results of localversion."""
-    removed_prefix: str | None
     suffix: str | None
 
     def collect(self) -> str:
         ret = super().collect()
-        if self.removed_prefix:
-            ret = ret.removeprefix(self.removed_prefix)
         if self.suffix:
             ret += self.suffix
         return ret
@@ -86,46 +83,6 @@ def load_attribute_from_json[T](json_file: pathlib.Path, attr_name: str, attr_ty
                               attr_name, json_file, attr_type, value)
                 sys.exit(1)
             return value
-    return None
-
-
-def get_localversion_from_script(bin: pathlib.Path | None, project: pathlib.Path, *args) \
-        -> PathCollectible | None:
-    """Call setlocalversion.
-
-    Args:
-      bin: path to setlocalversion, or None if it does not exist.
-      project: relative path to the project
-      args: additional arguments
-    Return:
-      A PathCollectible object that resolves to the result, or None if bin or
-      project does not exist.
-    """
-    if not project.is_dir():
-        return None
-    srctree = project.resolve()
-
-    if bin:
-        working_dir = "build/kernel/kleaf/workspace_status_dir"
-        env = dict(os.environ)
-        env["KERNELVERSION"] = _FAKE_KERNEL_VERSION
-        env.pop("BUILD_NUMBER", None)
-        popen = subprocess.Popen([bin, srctree] + list(args),
-                                 text=True,
-                                 stdout=subprocess.PIPE,
-                                 cwd=working_dir,
-                                 env=env)
-
-        suffix = None
-        if os.environ.get("BUILD_NUMBER"):
-            suffix = "-ab" + os.environ["BUILD_NUMBER"]
-        return LocalversionResult(
-            path=project,
-            popen=popen,
-            removed_prefix=_FAKE_KERNEL_VERSION,
-            suffix=suffix
-        )
-
     return None
 
 
@@ -165,7 +122,6 @@ def get_localversion_from_git(project: pathlib.Path) -> PathCollectible | None:
     return LocalversionResult(
         path=project,
         popen=popen,
-        removed_prefix=None,
         suffix=suffix
     )
 
@@ -256,8 +212,6 @@ class Stamp(object):
     def __init__(self):
         self.ignore_missing_projects = os.environ.get(
             "KLEAF_IGNORE_MISSING_PROJECTS") == "true"
-        self.use_kleaf_localversion = os.environ.get(
-            "KLEAF_USE_KLEAF_LOCALVERSION") == "true"
 
         self.bzlmod_mapping = self._init_bzlmod_mapping()
 
@@ -321,8 +275,6 @@ class Stamp(object):
             self.kernel_rel = self.kernel_dir.relative_to(
                 pathlib.Path(".").resolve())
 
-        self.find_setlocalversion()
-
     def main(self) -> int:
         scmversion_map = self.get_localversion_all()
 
@@ -338,38 +290,10 @@ class Stamp(object):
         )
         return 0
 
-    def find_setlocalversion(self) -> None:
-        self.setlocalversion = None
-
-        if self.use_kleaf_localversion:
-            return
-
-        all_projects = []
-        if self.kernel_dir:
-            all_projects.append(self.kernel_rel)
-        all_projects.extend(self.projects)
-
-        if self.ignore_missing_projects:
-            all_projects = filter(pathlib.Path.is_dir, all_projects)
-
-        for proj in all_projects:
-            if not proj.is_dir():
-                logging.error(
-                    "Project %s in repo manifest does not exist on disk.",
-                    proj
-                )
-                sys.exit(1)
-
-            candidate = proj / "scripts/setlocalversion"
-            if os.access(candidate, os.X_OK):
-                self.setlocalversion = candidate.resolve()
-                return
-
     def get_localversion_all(self) -> dict[pathlib.Path, PathCollectible]:
         all_projects: set[pathlib.Path] = set()
         if self.kernel_dir:
             all_projects.add(self.kernel_rel)
-        all_projects |= set(self.get_ext_modules())
         all_projects |= set(self.projects)
 
         if self.ignore_missing_projects:
@@ -391,37 +315,12 @@ class Stamp(object):
         return scmversion_map
 
     def get_localversion(self, project: pathlib.Path) -> PathCollectible | None:
-        if not self.use_kleaf_localversion:
-            return get_localversion_from_script(self.setlocalversion, project)
-
         if (scmversion := load_attribute_from_json(
             project / _FIXED_WORKSPACE_STATUS_FILE, "SCMVERSION", str
         )) is not None:
             return PresetResult(project, scmversion)
 
         return get_localversion_from_git(project)
-
-    def get_ext_modules(self) -> list[pathlib.Path]:
-        if not self.setlocalversion:
-            return []
-        try:
-            cmd = """
-                    source build/build_utils.sh
-                    source build/_setup_env.sh
-                    echo $EXT_MODULES
-                  """
-            out = subprocess.check_output(cmd,
-                                          shell=True,
-                                          text=True,
-                                          stderr=subprocess.PIPE,
-                                          executable="/bin/bash")
-            return [pathlib.Path(path) for path in out.split()]
-        except subprocess.CalledProcessError as e:
-            logging.warning(
-                "Unable to determine EXT_MODULES; scmversion "
-                "for external modules may be incorrect. "
-                "code=%d, stderr=%s", e.returncode, e.stderr.strip())
-        return []
 
     def async_get_source_date_epoch_all(self) \
             -> dict[str, PathCollectible]:

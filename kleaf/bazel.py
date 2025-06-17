@@ -363,12 +363,7 @@ class BazelWrapper(KleafHelpPrinter):
         )
         group.add_argument(
             "--kleaf_localversion",
-            help=textwrap.dedent("""\
-                Default is true.
-                Use Kleaf's logic to determine localversion, not
-                scripts/setlocalversion. This removes the unstable patch number
-                from scmversion.
-                """),
+            help="No-op. Do not set explicitly.",
             action="store_true",
             default=True,
         )
@@ -376,7 +371,7 @@ class BazelWrapper(KleafHelpPrinter):
             "--nokleaf_localversion",
             dest="kleaf_localversion",
             action="store_false",
-            help="Equivalent to --kleaf_localversion=false",
+            help="No longer supported.",
         )
         group.add_argument(
             "--user_clang_toolchain",
@@ -501,8 +496,10 @@ class BazelWrapper(KleafHelpPrinter):
         if self.known_args.ignore_missing_projects:
             self.env["KLEAF_IGNORE_MISSING_PROJECTS"] = "true"
 
-        if self.known_args.kleaf_localversion:
-            self.env["KLEAF_USE_KLEAF_LOCALVERSION"] = "true"
+        if not self.known_args.kleaf_localversion:
+            print("ERROR: --nokleaf_localversion is no longer supported.", file=sys.stderr)
+            # https://bazel.build/run/scripts: bad flags = 2
+            sys.exit(2)
 
         if self.known_args.user_clang_toolchain is not None:
             self.env["KLEAF_USER_CLANG_TOOLCHAIN_PATH"] = self.known_args.user_clang_toolchain
