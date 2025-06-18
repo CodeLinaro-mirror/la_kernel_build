@@ -22,6 +22,8 @@ TOOLCHAIN_VERSION_FILENAME = "toolchain_version"
 # the list of `module_outs` for that kernel_build.
 MODULE_OUTS_FILE_SUFFIX = "_modules"
 
+MODULE_SYMVERS_FILE_SUFFIX = "_Module.symvers"
+
 # The output group of the file of a kernel_build that stores
 # the list of `module_outs` for that kernel_build.
 MODULE_OUTS_FILE_OUTPUT_GROUP = "module_outs_file"
