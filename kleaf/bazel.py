@@ -404,6 +404,7 @@ class BazelWrapper(KleafHelpPrinter):
                 this on fixes an error about SOURCE_DATE_EPOCH.
                 """),
             action="store_true",
+            default=True,
         )
         group.add_argument(
             "--nosource_date_epoch_fix",

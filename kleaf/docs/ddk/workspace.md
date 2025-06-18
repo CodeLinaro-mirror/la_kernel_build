@@ -47,13 +47,10 @@ $ python3 init.py --local \
 
 ##### Known issues
 
-Due to a known issue, the `--kleaf_repo` must be
-`<ddk_workspace>/external/kleaf` so that the SCM version works correctly with
-`--config=stamp`. See
-[kleaf: temp workaround for SOURCE_DATE_EPOCH when @kleaf is submodule.](https://r.android.com/3343301)
-for details.
-
-<!-- TODO: b/377954908 delete this section when bug is fixed. -->
+Due to a known issue, if `--kleaf_repo` is not
+`<ddk_workspace>/external/kleaf`, the SCM version may not work correctly with
+`--config=stamp`. Enable the `--source_date_epoch_fix` flag (which is enabled
+by default on android16-6.12 and above) to fix the issue.
 
 #### Build against prebuilts from a build
 
