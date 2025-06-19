@@ -404,17 +404,7 @@ def _kernel_filegroup_impl(ctx):
             directories = depset([unstripped_dir], order = "postorder"),
         )
 
-    protected_modules_list = None
-    if ctx.files.protected_modules_list:
-        if len(ctx.files.protected_modules_list) != 1:
-            fail("{}: protected_modules_list {} produces multiple files, expected 0 or 1".format(
-                ctx.label,
-                ctx.attr.protected_modules_list,
-            ))
-        protected_modules_list = ctx.files.protected_modules_list[0]
-
     abi_info = KernelBuildAbiInfo(
-        src_protected_modules_list = protected_modules_list,
         modules_staging_archive = utils.find_file(MODULES_STAGING_ARCHIVE, all_deps, what = ctx.label),
     )
     in_tree_modules_info = KernelBuildInTreeModulesInfo(all_module_names = ctx.attr.all_module_names)
@@ -456,6 +446,7 @@ def _kernel_filegroup_impl(ctx):
         pre_defconfig_fragments = depset(transitive = [target.files for target in ctx.attr.pre_defconfig_fragments]),
         post_defconfig_fragments = depset(transitive = [target.files for target in ctx.attr.post_defconfig_fragments]),
         check_pre_defconfig_fragments = ctx.attr.check_pre_defconfig_fragments,
+        check_post_defconfig_fragments = ctx.attr.check_post_defconfig_fragments,
     )
 
     infos = [
@@ -575,7 +566,6 @@ default, which in turn sets `collect_unstripped_modules` to `True` by default.
             allow_files = True,
             doc = """A label providing files similar to a [`kernel_images`](#kernel_images) target.""",
         ),
-        "protected_modules_list": attr.label(allow_files = True),
         "gki_artifacts": attr.label(
             allow_files = True,
             doc = """A list of files that were built from the [`gki_artifacts`](#gki_artifacts) target.
@@ -659,6 +649,13 @@ default, which in turn sets `collect_unstripped_modules` to `True` by default.
             allow_files = True,
         ),
         "check_pre_defconfig_fragments": attr.string(
+            doc = """See [kernel_build.check_defconfig](#kernel_build-check_defconfig).""",
+            # kernel_filegroup itself has no base_kernel, so the default is just "match".
+            # See documentation for kernel_build.check_defconfig.
+            default = "match",
+            values = ["disabled", "minimized", "match"],
+        ),
+        "check_post_defconfig_fragments": attr.string(
             doc = """See [kernel_build.check_defconfig](#kernel_build-check_defconfig).""",
             # kernel_filegroup itself has no base_kernel, so the default is just "match".
             # See documentation for kernel_build.check_defconfig.
