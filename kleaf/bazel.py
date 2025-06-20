@@ -647,10 +647,19 @@ class BazelWrapper(KleafHelpPrinter):
 
         modified_startup_options.extend(self.user_startup_options)
 
+        # --incompatible_hermetic_actions sets --action_env=PATH which causes
+        # --default_javabase (a startup option) to change, so it needs to be
+        # brought in as well.
+        modified_command_options = []
+        if self.known_args.hermetic_actions:
+            modified_command_options.append("--incompatible_hermetic_actions")
+
         return subprocess.check_output(
             [sys.executable, __file__] +
             modified_startup_options +
-            ["info", "output_base"], text=True).strip()
+            ["info"] +
+            modified_command_options +
+            ["output_base"], text=True).strip()
 
     def _transform_bazelrc_files(self, bazelrc_files: list[pathlib.Path]) -> list[str]:
         """Given a list of bazelrc files, return startup options."""
