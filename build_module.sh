@@ -205,7 +205,7 @@ KERNEL_SRC="${COMMON_OUT_DIR}/super_kernel"
 SOC_DIR="soc-repo"
 COMMON_DIR="common"
 mkdir -p ${KERNEL_SRC}
-cp -ardf ${ROOT_DIR}/${COMMON_DIR}/* ${KERNEL_SRC}/ || true > /dev/null
+rsync -a "${ROOT_DIR}"/"${COMMON_DIR}"/ "${KERNEL_SRC}"/ || true > /dev/null
 cp -ardf ${ROOT_DIR}/${SOC_DIR}/* ${KERNEL_SRC}/ || true > /dev/null
 
 if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
