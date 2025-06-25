@@ -58,11 +58,22 @@ to be "unverified".
 # External Dependencies
 
 7z - unpack ext4 filesystem images
+fsck.erofs - unpack erofs images
 git - get common commit hash, for informational purposes
 llvm-objcopy - convert vmlinux to an Image; strip ELF objects
 llvm-readelf - extract symbol information from vmlinux
 '''
 
+def _get_name_or_value(entry: dict):
+    '''Returns the first value available in a dict entry between name and value.
+
+    This is needed to do the correct lookup given that different versions of
+    llvm-readelf structure the information differently.
+
+    Args:
+       entry: An entry from a json dictionary.
+    '''
+    return entry.get('Name', entry.get('Value'))
 
 def get_vmlinux_info(vmlinux: pathlib.Path):
     _WANTED_SYMBOLS = {
@@ -91,7 +102,7 @@ def get_vmlinux_info(vmlinux: pathlib.Path):
     elf_sections = elf['Sections']
     for elf_section_dict in elf_sections:
         elf_section = elf_section_dict['Section']
-        name = elf_section['Name']['Value']
+        name = _get_name_or_value(elf_section['Name'])
         address = elf_section['Address']
         offset = elf_section['Offset']
         size = elf_section['Size']
@@ -101,11 +112,11 @@ def get_vmlinux_info(vmlinux: pathlib.Path):
     elf_symbols = elf['Symbols']
     for elf_symbol_dict in elf_symbols:
         elf_symbol = elf_symbol_dict['Symbol']
-        name = elf_symbol['Name']['Value']
+        name = _get_name_or_value(elf_symbol['Name'])
         if name in _WANTED_SYMBOLS:
             value = elf_symbol['Value']
             size = elf_symbol['Size']
-            section_name = elf_symbol['Section']['Value']
+            section_name = _get_name_or_value(elf_symbol['Section'])
             symbols[name] = SymbolInfo(section_name, value, size)
 
     def symbol_range(symbol: str):
@@ -300,10 +311,7 @@ def process_boot_image(gki: pathlib.Path, info: Info, kernel: str, boot_image: s
     # TODO: decompress kernels extracted from boot images
 
 
-def process_system_dlkm(info: Info, copy_args: list[str], system_dlkm: str) -> None:
-    archive = info.distribution / system_dlkm
-    unpacked = info.working_directory / (system_dlkm + '.unpacked')
-    subprocess.check_call(['7z', f'-o{unpacked}', 'x', archive], stdout=subprocess.DEVNULL)
+def process_system_dlkm(info: Info, copy_args: list[str], system_dlkm: str, unpacked: pathlib.Path) -> None:
     for root, dirs, files in os.walk(unpacked):
         for module_name in files:
             if module_name.endswith('.ko'):
@@ -326,9 +334,18 @@ def process_distribution(gki: pathlib.Path, info: Info, copy_args: list[str]) ->
     for kernel, boot_image in _BOOT_IMAGES.items():
         process_kernel(gki, info, kernel)
         process_boot_image(gki, info, kernel, boot_image)
+    _FILESYSTEMS = {
+        'erofs' : lambda archive, unpacked: ['fsck.erofs', f'--extract={unpacked}', '--', archive],
+        'ext4' : lambda archive, unpacked: ['7z', f'-o{unpacked}', 'x', archive],
+    }
     for system_dlkm in os.listdir(info.distribution):
-        if re.fullmatch(r'system_dlkm.*\.ext4\.img', system_dlkm):
-            process_system_dlkm(info, copy_args, system_dlkm)
+        if m := re.fullmatch(r'system_dlkm.*\.(erofs|ext4)\.img', system_dlkm):
+            fs = m.group(1)
+            archive = info.distribution / system_dlkm
+            unpacked = info.working_directory / (system_dlkm + '.unpacked')
+            unpack = _FILESYSTEMS[fs](archive, unpacked)
+            subprocess.check_call(unpack, stdout=subprocess.DEVNULL)
+            process_system_dlkm(info, copy_args, system_dlkm, unpacked)
 
 
 def initialise_side(side: str, distribution: pathlib.Path, temporary_path: pathlib.Path) -> Info:
