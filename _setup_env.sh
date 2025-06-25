@@ -18,6 +18,14 @@
 # a shell, please let kernel-team@android.com know and we are happy to help
 # with your use case.
 
+# Setting the epoch timestamp
+if [ -n "$SOURCE_DATE_EPOCH" ]; then
+  SOURCE_DATE_EPOCH="$(date +%s)"
+  export SOURCE_DATE_EPOCH
+fi
+
+echo "SOURCE_DATE_EPOCH: $SOURCE_DATE_EPOCH"
+
 [ -n "$_SETUP_ENV_SH_INCLUDED" ] && return || export _SETUP_ENV_SH_INCLUDED=1
 
 # TODO: Use a $(gettop) style method.

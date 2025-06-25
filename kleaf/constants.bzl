@@ -22,6 +22,7 @@ load(
     "GKI_ARTIFACTS_AARCH64_OUTS",
     "MODULES_STAGING_ARCHIVE",
     "MODULE_OUTS_FILE_SUFFIX",
+    "MODULE_SYMVERS_FILE_SUFFIX",
     "SYSTEM_DLKM_COMMON_OUTS",
     "TOOLCHAIN_VERSION_FILENAME",
 )
@@ -131,8 +132,20 @@ CI_TARGET_MAPPING = {
     # TODO(b/206079661): Allow downloaded prebuilts for x86_64 and debug targets.
     "kernel_aarch64": {
         "repo_name": "gki_prebuilts",
+        "ci_target_name": "kernel_aarch64",
         "outs": DEFAULT_GKI_OUTS + [
             "kernel_aarch64" + MODULE_OUTS_FILE_SUFFIX,
+            "kernel_aarch64" + MODULE_SYMVERS_FILE_SUFFIX,
+        ],
+        "protected_modules": "gki_aarch64_protected_modules",
+        "gki_prebuilts_outs": GKI_ARTIFACTS_AARCH64_OUTS,
+    },
+    "kernel_aarch64_16k": {
+        "repo_name": "gki_prebuilts_aarch64_16k",
+        "ci_target_name": "kernel_aarch64_16k",
+        "outs": DEFAULT_GKI_OUTS + [
+            "kernel_aarch64_16k" + MODULE_OUTS_FILE_SUFFIX,
+            "kernel_aarch64_16k" + MODULE_SYMVERS_FILE_SUFFIX,
         ],
         "protected_modules": "gki_aarch64_protected_modules",
         "gki_prebuilts_outs": GKI_ARTIFACTS_AARCH64_OUTS,
