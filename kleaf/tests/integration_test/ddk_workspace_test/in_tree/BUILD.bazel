@@ -2,8 +2,9 @@ load(
     "@kleaf//build/kernel/kleaf:kernel.bzl",
     "ddk_module",
     "kernel_build",
-    "kernel_images",
     "kernel_modules_install",
+    "system_dlkm_image",
+    "vendor_dlkm_image",
 )
 
 # Test building in-tree module against kernel from sources
@@ -40,9 +41,22 @@ kernel_modules_install(
     ],
 )
 
-kernel_images(
-    name = "device_images",
-    build_vendor_dlkm = True,
+system_dlkm_image(
+    name = "device_system_dlkm_image",
+    base = "@kleaf//common:kernel_aarch64_system_dlkm_image",
     kernel_modules_install = ":device_modules_install",
+)
+
+vendor_dlkm_image(
+    name = "device_vendor_dlkm_image",
+    kernel_modules_install = ":device_modules_install",
+)
+
+filegroup(
+    name = "device_images",
+    srcs = [
+        ":device_system_dlkm_image",
+        ":device_vendor_dlkm_image",
+    ],
     visibility = ["//tests:__pkg__"],
 )

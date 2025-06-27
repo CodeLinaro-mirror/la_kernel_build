@@ -57,6 +57,7 @@ def _system_dlkm_image_impl(ctx):
                 base_kernel_label = kernel_build_infos.images_info.base_kernel_label,
             ))
 
+    if ctx.attr.base != None:
         # When building device-specific system_dlkm against GKI's
         # system_dlkm_staging_archive.tar.gz, do not restore the modules_install archive from
         # the device build.
@@ -249,6 +250,11 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
             `kernel_build`. This is required for building a device-specific `system_dlkm` image.
             For example, if `base_kernel` of `kernel_build()` is `//common:kernel_aarch64`,
             then `base` is `//common:kernel_aarch64_system_dlkm_image`.
+
+            **Prebuilts**: For example, if `base_kernel` of `kernel_build()` is
+            `@gki_prebuilts//kernel_aarch64`, then use
+            `@gki_prebuilts//kernel_aarch64:kernel_aarch64_system_dlkm_staging_archive`
+            in this attribute.
         """),
         "build_flatten": attr.bool(
             default = False,
