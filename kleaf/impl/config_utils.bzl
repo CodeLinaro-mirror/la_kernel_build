@@ -34,13 +34,27 @@ def _create_merge_config_cmd(base_expr, defconfig_fragments_paths_expr, quiet = 
         the command that merges defconfig fragments into the .config represented by `base_expr`
     """
     cmd = """
-        # Merge target defconfig into .config from kernel_build
-        KCONFIG_CONFIG={base_expr}.tmp \\
-            ${{KERNEL_DIR}}/scripts/kconfig/merge_config.sh \\
-                -m -r {quiet_arg} \\
-                {base_expr} \\
-                {defconfig_fragments_paths_expr} > /dev/null
-        mv {base_expr}.tmp {base_expr}
+        (
+            # Remove any trailing comments
+            sanitized_fragments=
+            for fragment in {defconfig_fragments_paths_expr}; do
+                new_fragment=${{OUT_DIR}}/defconfig_fragments/${{fragment}}
+                mkdir -p $(dirname ${{new_fragment}})
+                # Use Python, not sed, to support non-greedy regex matching
+                # I avoided perl because it is not hermetic yet.
+                python3 -c 'import re, sys; [print(re.sub(r"(\\S+=[^#]*?)\\s*#.*$", r"\\1", l.rstrip("\\
+n"))) for l in open(sys.argv[1])]' ${{fragment}} > ${{new_fragment}}
+                sanitized_fragments="${{sanitized_fragments}} ${{new_fragment}}"
+            done
+
+            # Merge target defconfig into .config from kernel_build
+            KCONFIG_CONFIG={base_expr}.tmp \\
+                ${{KERNEL_DIR}}/scripts/kconfig/merge_config.sh \\
+                    -m -r {quiet_arg} \\
+                    {base_expr} \\
+                    ${{sanitized_fragments}} > /dev/null
+            mv {base_expr}.tmp {base_expr}
+        )
     """.format(
         base_expr = base_expr,
         defconfig_fragments_paths_expr = defconfig_fragments_paths_expr,
