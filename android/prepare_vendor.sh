@@ -245,21 +245,23 @@ if [ "${RECOMPILE_KERNEL}" == "1" ]; then
 fi
 
 ################################################################################
-ANDROID_GBL_OUT_DIR=${ANDROID_KERNEL_OUT}/kernel-gbl
+if [ "${RECOMPILE_KERNEL}" == "1" ]; then
+  ANDROID_GBL_OUT_DIR=${ANDROID_KERNEL_OUT}/kernel-gbl
 
-GBL_IMAGE=gbl_aarch64.efi
+  GBL_IMAGE=gbl_aarch64.efi
 
-# Source and destination paths
-SRC_GBL_IMAGE="out/gbl_efi/${GBL_IMAGE}"
-DST_GBL_DIR="${ANDROID_GBL_OUT_DIR}"
+  # Source and destination paths
+  SRC_GBL_IMAGE="out/gbl_efi/${GBL_IMAGE}"
+  DST_GBL_DIR="${ANDROID_GBL_OUT_DIR}"
 
-# Ensure destination directory exists
-mkdir -p "${DST_GBL_DIR}"
+  # Ensure destination directory exists
+  mkdir -p "${DST_GBL_DIR}"
 
-# Check if copy is needed
-if [ ! -e "${DST_GBL_DIR}/${GBL_IMAGE}" ] || ! diff -q "${DST_GBL_DIR}/${GBL_IMAGE}" \
-    "${SRC_GBL_IMAGE}" > /dev/null; then
-  cp "${ANDROID_KP_OUT_DIR}"/../gbl_efi/${GBL_IMAGE} "${DST_GBL_DIR}"/
+  # Check if copy is needed
+  if [ ! -e "${DST_GBL_DIR}/${GBL_IMAGE}" ] || ! diff -q "${DST_GBL_DIR}/${GBL_IMAGE}" \
+      "${SRC_GBL_IMAGE}" > /dev/null; then
+    cp "${ANDROID_KP_OUT_DIR}"/../gbl_efi/${GBL_IMAGE} "${DST_GBL_DIR}"/
+  fi
 fi
 
 ################################################################################
