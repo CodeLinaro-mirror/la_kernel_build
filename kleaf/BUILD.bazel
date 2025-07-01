@@ -29,9 +29,9 @@ load(":print_flags.bzl", "print_flags")
 string_flag(
     name = "lto",
     build_setting_default = "default",
+    error_message = "DO NOT SET --lto. It is deprecated.",
     values = LTO_VALUES,
     visibility = ["//visibility:public"],
-    warn_message = "DO NOT SET --lto. It is deprecated.",
 )
 
 # The final LTO setting is "default" (use defconfig value).
