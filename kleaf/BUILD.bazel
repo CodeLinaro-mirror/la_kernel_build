@@ -423,8 +423,7 @@ bool_flag(
     visibility = ["//build/kernel:__pkg__"],
 )
 
-# Default is true.
-# If true, build toybox / lz4 from sources.
+# No-op. Do not set it explicitly.
 bool_flag(
     name = "toolchain_from_sources",
     build_setting_default = True,
