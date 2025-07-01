@@ -434,7 +434,7 @@ bool_flag(
 # If true, build depmod from sources
 bool_flag(
     name = "depmod_from_sources",
-    build_setting_default = False,
+    build_setting_default = True,
     visibility = ["//visibility:private"],
 )
 
