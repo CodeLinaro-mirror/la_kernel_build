@@ -245,6 +245,26 @@ if [ "${RECOMPILE_KERNEL}" == "1" ]; then
 fi
 
 ################################################################################
+if [ "${RECOMPILE_KERNEL}" == "1" ]; then
+  ANDROID_GBL_OUT_DIR=${ANDROID_KERNEL_OUT}/kernel-gbl
+
+  GBL_IMAGE=gbl_aarch64.efi
+
+  # Source and destination paths
+  SRC_GBL_IMAGE="out/gbl_efi/${GBL_IMAGE}"
+  DST_GBL_DIR="${ANDROID_GBL_OUT_DIR}"
+
+  # Ensure destination directory exists
+  mkdir -p "${DST_GBL_DIR}"
+
+  # Check if copy is needed
+  if [ ! -e "${DST_GBL_DIR}/${GBL_IMAGE}" ] || ! diff -q "${DST_GBL_DIR}/${GBL_IMAGE}" \
+      "${SRC_GBL_IMAGE}" > /dev/null; then
+    cp "${ANDROID_KP_OUT_DIR}"/../gbl_efi/${GBL_IMAGE} "${DST_GBL_DIR}"/
+  fi
+fi
+
+################################################################################
 # Set up recompile and copy variables for edk2
 ANDROID_ABL_OUT_DIR=${ANDROID_KERNEL_OUT}/kernel-abl
 
