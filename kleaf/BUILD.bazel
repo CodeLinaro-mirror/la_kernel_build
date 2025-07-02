@@ -16,6 +16,7 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("//build/kernel/kleaf:fail.bzl", "fail_rule")
 load("//build/kernel/kleaf/impl:common_settings.bzl", "bool_flag", "string_flag")
 load("//build/kernel/kleaf/impl:ddk/gen_ddk_headers.bzl", "gen_ddk_headers")
 load("//build/kernel/kleaf/impl:phony_defconfig.bzl", "phony_defconfig")
@@ -35,40 +36,30 @@ string_flag(
 )
 
 # The final LTO setting is "default" (use defconfig value).
-# If --lto=default, and none of --kasan/--kcsan/--kasan_sw_tags/--kasan_generic/--debug, LTO is default
-selects.config_setting_group(
+fail_rule(
     name = "lto_is_default",
-    match_all = [
-        "//build/kernel/kleaf/impl:lto_is_set_to_default",
-        ":kasan_is_false",
-        ":kcsan_is_false",
-        ":debug_is_false",
-    ],
+    message = "--lto is deprecated; do not rely on config_setting()s for LTO. You may assume this always evaluates to true.",
     visibility = ["//visibility:public"],
 )
 
 # The final LTO setting is "none".
-# If --lto=none, or if --lto=default AND --kasan/--kcsan/--kasan_sw_tags/--kasan_generic/--debug, LTO should be set to none.
-selects.config_setting_group(
+fail_rule(
     name = "lto_is_none",
-    match_any = [
-        "//build/kernel/kleaf/impl:lto_is_set_to_none",
-        "//build/kernel/kleaf/impl:lto_is_set_to_default_but_lto_should_be_none",
-    ],
+    message = "--lto is deprecated; do not rely on config_setting()s for LTO. Note: LTO is disabled on gki_defconfig since 5.19.",
     visibility = ["//visibility:public"],
 )
 
 # The final LTO setting is "thin".
-config_setting(
+fail_rule(
     name = "lto_is_thin",
-    flag_values = {":lto": "thin"},
+    message = "--lto is deprecated; do not rely on config_setting()s for LTO. You may assume this always evaluates to false.",
     visibility = ["//visibility:public"],
 )
 
 # The final LTO setting is "full".
-config_setting(
+fail_rule(
     name = "lto_is_full",
-    flag_values = {":lto": "full"},
+    message = "--lto is deprecated; do not rely on config_setting()s for LTO. You may assume this always evaluates to false.",
     visibility = ["//visibility:public"],
 )
 
@@ -95,8 +86,6 @@ bool_flag(
 )
 
 # If true, enable kasan (any mode).
-# This assumes --lto=none, but :print_flags only shows
-# values from the command line.
 bool_flag(
     name = "kasan",
     build_setting_default = False,
@@ -104,15 +93,9 @@ bool_flag(
 )
 
 # KASAN (any mode) is enabled in the final build.
-# One of the following:
-# --kasan --lto=default
-# --kasan --lto=none
-selects.config_setting_group(
+config_setting(
     name = "kasan_any_mode_is_true",
-    match_all = [
-        "//build/kernel/kleaf/impl:lto_is_set_to_default_or_none",
-        "//build/kernel/kleaf/impl:kasan_any_mode_is_set_to_true",
-    ],
+    flag_values = {":kasan": "1"},
     # All kernel_* from different packages can see this
     visibility = ["//visibility:public"],
 )
@@ -125,8 +108,6 @@ config_setting(
 )
 
 # If true, enable kasan sw tags.
-# This assumes --lto=none, but :print_flags only shows
-# values from the command line.
 bool_flag(
     name = "kasan_sw_tags",
     build_setting_default = False,
@@ -134,15 +115,9 @@ bool_flag(
 )
 
 # KASAN (Software Tag-based) is enabled in the final build.
-# One of the following:
-# --kasan_sw_tags --lto=default
-# --kasan_sw_tags --lto=none
-selects.config_setting_group(
+config_setting(
     name = "kasan_sw_tags_is_true",
-    match_all = [
-        "//build/kernel/kleaf/impl:lto_is_set_to_default_or_none",
-        "//build/kernel/kleaf/impl:kasan_sw_tags_is_set_to_true",
-    ],
+    flag_values = {"//build/kernel/kleaf:kasan_sw_tags": "1"},
     # All kernel_* from different packages can see this
     visibility = ["//visibility:public"],
 )
@@ -155,8 +130,6 @@ config_setting(
 )
 
 # If true, enable kasan generic.
-# This assumes --lto=none, but :print_flags only shows
-# values from the command line.
 bool_flag(
     name = "kasan_generic",
     build_setting_default = False,
@@ -164,15 +137,9 @@ bool_flag(
 )
 
 # KASAN (Generic) is enabled in the final build.
-# One of the following:
-# --kasan_generic --lto=default
-# --kasan_generic --lto=none
-selects.config_setting_group(
+config_setting(
     name = "kasan_generic_is_true",
-    match_all = [
-        "//build/kernel/kleaf/impl:lto_is_set_to_default_or_none",
-        "//build/kernel/kleaf/impl:kasan_generic_is_set_to_true",
-    ],
+    flag_values = {"//build/kernel/kleaf:kasan_generic": "1"},
     # All kernel_* from different packages can see this
     visibility = ["//visibility:public"],
 )
@@ -207,8 +174,6 @@ selects.config_setting_group(
 )
 
 # If true, enable kcsan.
-# This assumes --lto=none, but :print_flags only shows
-# values from the command line.
 bool_flag(
     name = "kcsan",
     build_setting_default = False,
@@ -216,15 +181,9 @@ bool_flag(
 )
 
 # KCSAN is enabled in the final build.
-# One of the following:
-# --kcsan --lto=default
-# --kcsan --lto=none
-selects.config_setting_group(
+config_setting(
     name = "kcsan_is_true",
-    match_all = [
-        "//build/kernel/kleaf/impl:lto_is_set_to_default_or_none",
-        "//build/kernel/kleaf/impl:kcsan_is_set_to_true",
-    ],
+    flag_values = {"//build/kernel/kleaf:kcsan": "1"},
     # All kernel_* from different packages can see this
     visibility = ["//visibility:public"],
 )
@@ -477,14 +436,9 @@ bool_flag(
 )
 
 # One of the following:
-# --debug --lto=default
-# --debug --lto=none
-selects.config_setting_group(
+config_setting(
     name = "debug_is_true",
-    match_all = [
-        "//build/kernel/kleaf/impl:lto_is_set_to_default_or_none",
-        "//build/kernel/kleaf/impl:debug_is_set_to_true",
-    ],
+    flag_values = {"//build/kernel/kleaf:debug": "1"},
     # All kernel_* from different packages can see this
     visibility = ["//visibility:public"],
 )
@@ -693,7 +647,6 @@ print_flags(
         ":kasan_generic",
         ":kcsan",
         ":kbuild_symtypes",
-        ":lto",
     ] + [":config_" + value for value in _config_values],
 )
 

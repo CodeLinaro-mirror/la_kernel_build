@@ -15,7 +15,6 @@
 # Implementation details. These aren't part of the public API.
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
-load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "bool_setting")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
@@ -218,104 +217,6 @@ bool_setting(
 bool_setting(
     name = "force_ignore_base_kernel",
     build_setting_default = False,
-    # All kernel_* from different packages can see this
-    visibility = ["//visibility:public"],
-)
-
-# The --lto flag is set to none.
-# Note: This does not imply that the final LTO setting is "none".
-config_setting(
-    name = "lto_is_set_to_none",
-    flag_values = {"//build/kernel/kleaf:lto": "none"},
-    # All kernel_* from different packages can see this
-    visibility = ["//visibility:public"],
-)
-
-# The --lto flag is set to default.
-# Note: This does not imply that the final LTO setting is "default".
-config_setting(
-    name = "lto_is_set_to_default",
-    flag_values = {"//build/kernel/kleaf:lto": "default"},
-    # All kernel_* from different packages can see this
-    visibility = ["//visibility:public"],
-)
-
-# The --lto flag is set to either default or none.
-selects.config_setting_group(
-    name = "lto_is_set_to_default_or_none",
-    match_any = [
-        ":lto_is_set_to_default",
-        ":lto_is_set_to_none",
-    ],
-    # All kernel_* from different packages can see this
-    visibility = ["//visibility:public"],
-)
-
-# LTO should be none due to other flags. One of the following:
-# * --debug
-# * --kasan
-# * --kasan_sw_tags
-# * --kasan_generic
-# * --kcsan
-selects.config_setting_group(
-    name = "lto_should_be_none",
-    match_any = [
-        ":debug_is_set_to_true",
-        ":kasan_any_mode_is_set_to_true",
-        ":kasan_sw_tags_is_set_to_true",
-        ":kasan_generic_is_set_to_true",
-        ":kcsan_is_set_to_true",
-    ],
-)
-
-# --lto=default, but it should be none due to other flags. One of the following:
-# * --lto=default --debug
-# * --lto=default --kasan
-# * --lto=default --kasan_sw_tags
-# * --lto=default --kasan_generic
-# * --lto=default --kcsan
-selects.config_setting_group(
-    name = "lto_is_set_to_default_but_lto_should_be_none",
-    match_all = [
-        ":lto_is_set_to_default",
-        ":lto_should_be_none",
-    ],
-    # All kernel_* from different packages can see this
-    visibility = ["//visibility:public"],
-)
-
-# --kasan
-config_setting(
-    name = "kasan_any_mode_is_set_to_true",
-    flag_values = {"//build/kernel/kleaf:kasan": "1"},
-    visibility = ["//visibility:public"],
-)
-
-# --kasan_sw_tags
-config_setting(
-    name = "kasan_sw_tags_is_set_to_true",
-    flag_values = {"//build/kernel/kleaf:kasan_sw_tags": "1"},
-    visibility = ["//visibility:public"],
-)
-
-# --kasan_generic
-config_setting(
-    name = "kasan_generic_is_set_to_true",
-    flag_values = {"//build/kernel/kleaf:kasan_generic": "1"},
-    visibility = ["//visibility:public"],
-)
-
-# --kcsan
-config_setting(
-    name = "kcsan_is_set_to_true",
-    flag_values = {"//build/kernel/kleaf:kcsan": "1"},
-    visibility = ["//visibility:public"],
-)
-
-# --debug
-config_setting(
-    name = "debug_is_set_to_true",
-    flag_values = {"//build/kernel/kleaf:debug": "1"},
     # All kernel_* from different packages can see this
     visibility = ["//visibility:public"],
 )
