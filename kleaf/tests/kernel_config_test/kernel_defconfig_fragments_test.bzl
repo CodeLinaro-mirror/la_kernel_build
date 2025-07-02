@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """
-Test kernel_config against options (e.g. lto).
+Test kernel_config against options.
 Require //common package.
 """
 

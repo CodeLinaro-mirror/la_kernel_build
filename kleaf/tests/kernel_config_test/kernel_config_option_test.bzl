@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """
-Test kernel_config against options (e.g. lto).
+Test kernel_config against options.
 Require //common package.
 
 Deprecated:
@@ -21,7 +21,6 @@ Deprecated:
 """
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
-load("//build/kernel/kleaf:constants.bzl", "LTO_VALUES")
 load("//build/kernel/kleaf:kernel.bzl", "kernel_build")
 load("//build/kernel/kleaf/impl:hermetic_toolchain.bzl", "hermetic_toolchain")
 load("//build/kernel/kleaf/impl:utils.bzl", "utils")
@@ -33,7 +32,6 @@ load(":kernel_config_aspect.bzl", "KernelConfigAspectInfo", "kernel_config_aspec
 _KASAN_FLAG = "//build/kernel/kleaf:kasan"
 _KCSAN_FLAG = "//build/kernel/kleaf:kcsan"
 _KGDB_FLAG = "//build/kernel/kleaf:kgdb"
-_LTO_FLAG = "//build/kernel/kleaf:lto"
 _ARCHS = (
     struct(arch = "aarch64", kernel_build_arch = "arm64", srcarch = "arm64"),
     struct(arch = "x86_64", kernel_build_arch = "x86_64", srcarch = "x86"),
@@ -146,33 +144,6 @@ _get_config = rule(
 
 # Tests
 
-## Tests on --lto
-
-def _lto_transition_impl(_settings, _attr):
-    return {value: {_LTO_FLAG: value} for value in LTO_VALUES}
-
-_lto_transition = transition(
-    implementation = _lto_transition_impl,
-    inputs = [],
-    outputs = [_LTO_FLAG],
-)
-
-_lto_test_data = rule(
-    implementation = _get_transitioned_config_impl,
-    doc = "Get `.config` for a kernel with the LTO transition.",
-    attrs = _get_config_attrs_common(_lto_transition),
-    toolchains = [hermetic_toolchain.type],
-)
-
-def _lto_test(name, kernel_build):
-    """Test the effect of a `--lto` on `kernel_config`."""
-    _transition_test(
-        name = name,
-        kernel_build = kernel_build,
-        test_data_rule = _lto_test_data,
-        expected = ["data/{}_config".format(lto) for lto in LTO_VALUES],
-    )
-
 ## Tests on --kasan
 def _kasan_str(kasan):
     return "kasan" if kasan else "nokasan"
@@ -186,22 +157,10 @@ _kasan_transition = transition(
     outputs = [_KASAN_FLAG],
 )
 
-# Kasan|Kcsan requires LTO=none to run, otherwise it fails.
-def _no_lto_impl(settings, attr):
-    _ignore = (settings, attr)  # @unused
-    return {_LTO_FLAG: "default"}
-
-_force_no_lto_transition = transition(
-    implementation = _no_lto_impl,
-    inputs = [],
-    outputs = [_LTO_FLAG],
-)
-
 _kasan_test_data = rule(
     implementation = _get_transitioned_config_impl,
     doc = "Get `.config` for a kernel with the KASAN transition.",
     attrs = _get_config_attrs_common(_kasan_transition),
-    cfg = _force_no_lto_transition,
     toolchains = [hermetic_toolchain.type],
 )
 
@@ -231,7 +190,6 @@ _kcsan_test_data = rule(
     implementation = _get_transitioned_config_impl,
     doc = "Get `.config` for a kernel with the KCSAN transition.",
     attrs = _get_config_attrs_common(_kcsan_transition),
-    cfg = _force_no_lto_transition,
     toolchains = [hermetic_toolchain.type],
 )
 
@@ -320,34 +278,25 @@ def _trim_test(name, kernels):
 
 def _combined_test_combinations(key):
     ret = {}
-    for lto in LTO_VALUES:
-        for kasan in (True, False):
-            for kcsan in (True, False):
-                for kgdb in (True, False):
-                    if kasan and lto not in ("default", "none"):
-                        continue
-                    if kcsan and lto not in ("default", "none"):
-                        continue
-
-                    test_name = "_".join([
-                        key.arch,
-                        _trim_str(key.trim),
-                        lto,
-                        _kasan_str(kasan),
-                        _kgdb_str(kgdb, key.arch),
-                    ])
-                    ret_key = {
-                        "lto": lto,
-                        "kasan": kasan,
-                        "kcsan": kcsan,
-                        "kgdb": kgdb,
-                    }
-                    ret[test_name] = ret_key
+    for kasan in (True, False):
+        for kcsan in (True, False):
+            for kgdb in (True, False):
+                test_name = "_".join([
+                    key.arch,
+                    _trim_str(key.trim),
+                    _kasan_str(kasan),
+                    _kgdb_str(kgdb, key.arch),
+                ])
+                ret_key = {
+                    "kasan": kasan,
+                    "kcsan": kcsan,
+                    "kgdb": kgdb,
+                }
+                ret[test_name] = ret_key
     return ret
 
 def _combined_test_expected_impl(ctx):
     expected_file_names = [
-        ctx.attr.lto + "_config",
         _kasan_str(ctx.attr.kasan) + "_config",
         _kcsan_str(ctx.attr.kcsan) + "_config",
         _kgdb_str(ctx.attr.kgdb, ctx.attr.arch) + "_config",
@@ -393,7 +342,6 @@ _combined_test_expected = rule(
     doc = "Test on a given combination of flags and attributes on `kernel_config`",
     attrs = {
         "trim": attr.bool(),
-        "lto": attr.string(values = LTO_VALUES),
         "kasan": attr.bool(),
         "kcov": attr.bool(),
         "kcsan": attr.bool(),
@@ -407,7 +355,6 @@ _combined_test_expected = rule(
 
 def _combined_test_actual_transition_impl(_settings, attr):
     return {
-        _LTO_FLAG: attr.lto,
         _KASAN_FLAG: attr.kasan,
         _KCSAN_FLAG: attr.kcsan,
         _KGDB_FLAG: attr.kgdb,
@@ -416,7 +363,7 @@ def _combined_test_actual_transition_impl(_settings, attr):
 _combined_test_actual_transition = transition(
     implementation = _combined_test_actual_transition_impl,
     inputs = [],
-    outputs = [_KASAN_FLAG, _KCSAN_FLAG, _KGDB_FLAG, _LTO_FLAG],
+    outputs = [_KASAN_FLAG, _KCSAN_FLAG, _KGDB_FLAG],
 )
 
 def _combined_test_actual_impl(ctx):
@@ -429,7 +376,6 @@ _combined_test_actual = rule(
     implementation = _combined_test_actual_impl,
     doc = "Test on a given combination of flags and attributes on `kernel_config`",
     attrs = dicts.add(_get_config_attrs_common(_combined_test_actual_transition), {
-        "lto": attr.string(values = LTO_VALUES),
         "kasan": attr.bool(),
         "kcsan": attr.bool(),
         "kgdb": attr.bool(),
@@ -469,8 +415,7 @@ def _combined_option_test(name, kernels):
             _combined_test_expected(
                 name = test_name + "_expected",
                 out = out_prefix + "_config",
-                srcs = ["data/{}_config".format(lto) for lto in LTO_VALUES] +
-                       ["data/{}_config".format(_kasan_str(kasan)) for kasan in (True, False)] +
+                srcs = ["data/{}_config".format(_kasan_str(kasan)) for kasan in (True, False)] +
                        ["data/{}_config".format(_kcsan_str(kcsan)) for kcsan in (True, False)] +
                        ["data/{}_config".format(_kgdb_str(kgdb, key.arch)) for kgdb in (True, False)] +
                        ["data/{}_config".format(_trim_str(trim)) for trim in (True, False)],
@@ -553,12 +498,6 @@ def kernel_config_option_test_suite(name):
     tests = []
 
     for arch in _ARCHS:
-        _lto_test(
-            name = "{}_lto_{}_test".format(name, arch.arch),
-            kernel_build = ":{}_kernel_{}".format(name, arch.arch),
-        )
-        tests.append(":{}_lto_{}_test".format(name, arch.arch))
-
         _kasan_test(
             name = "{}_kasan_{}_test".format(name, arch.arch),
             kernel_build = ":{}_kernel_{}".format(name, arch.arch),
