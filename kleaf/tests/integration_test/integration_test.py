@@ -63,13 +63,8 @@ _BAZEL = pathlib.Path("tools/bazel")
 # See local.bazelrc
 _LOCAL = ["--//build/kernel/kleaf:config_local"]
 
-_LTO_NONE = [
-    "--lto=none",
-    "--nokmi_symbol_list_strict_mode",
-]
-
 # Handy arguments to build as fast as possible.
-_FASTEST = _LOCAL + _LTO_NONE
+_FASTEST = _LOCAL
 
 
 def load_arguments():
@@ -548,21 +543,6 @@ class KleafIntegrationTestAbiTest(KleafIntegrationTestBase):
 # Slow integration tests belong to their own shard.
 class KleafIntegrationTestShard1(KleafIntegrationTestBase):
 
-    @unittest.skip("b/407564168")
-    def test_incremental_switch_local_and_lto(self):
-        """Tests the following:
-
-        - switching from non-local to local and back works
-        - with --config=local, changing from --lto=none to --lto=thin and back works
-
-        See b/257288175."""
-        self._build([f"//{self._common()}:kernel_dist"] + _LTO_NONE + _LOCAL)
-        self._build([f"//{self._common()}:kernel_dist"] + _LTO_NONE)
-        self._build([f"//{self._common()}:kernel_dist"] + _LTO_NONE + _LOCAL)
-        self._build([f"//{self._common()}:kernel_dist"] +
-                    ["--lto=thin"] + _LOCAL)
-        self._build([f"//{self._common()}:kernel_dist"] + _LTO_NONE + _LOCAL)
-
     def test_config_sync(self):
         """Test that, with --config=local, .config is reflected in vmlinux.
 
@@ -619,7 +599,7 @@ class KleafIntegrationTestShard2(KleafIntegrationTestBase):
         args = [
             f"--user_clang_toolchain={clang_dir}",
             f"//{self._common()}:kernel",
-        ] + _LTO_NONE
+        ]
         self._build(args)
 
 
