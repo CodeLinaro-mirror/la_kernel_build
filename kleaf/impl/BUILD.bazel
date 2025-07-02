@@ -82,7 +82,7 @@ bzl_library(
         "gki_artifacts.bzl",
         "image/boot_images.bzl",
         "image/dtb_image.bzl",
-        "image/dtbo.bzl",
+        "image/dtbo_image.bzl",
         "image/image_utils.bzl",
         "image/initramfs.bzl",
         "image/kernel_images.bzl",

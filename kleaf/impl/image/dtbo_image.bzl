@@ -20,7 +20,7 @@ load(":utils.bzl", "kernel_utils", "utils")
 
 visibility("//build/kernel/kleaf/...")
 
-def _dtbo_impl(ctx):
+def _dtbo_image_impl(ctx):
     output = ctx.actions.declare_file("{}/dtbo.img".format(ctx.label.name))
     dtbo_staging_dir = output.dirname + "/staging"
     inputs = []
@@ -68,9 +68,9 @@ def _dtbo_impl(ctx):
     )
     return DefaultInfo(files = depset([output]))
 
-dtbo = rule(
-    implementation = _dtbo_impl,
-    doc = "Build dtbo.",
+dtbo_image = rule(
+    implementation = _dtbo_image_impl,
+    doc = "Build dtbo image.",
     attrs = {
         "kernel_build": attr.label(
             mandatory = True,

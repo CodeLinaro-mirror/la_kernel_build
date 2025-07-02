@@ -21,7 +21,7 @@ load(
     "ImagesInfo",
 )
 load(":image/boot_images.bzl", "boot_images")
-load(":image/dtbo.bzl", "dtbo")
+load(":image/dtbo_image.bzl", "dtbo_image")
 load(":image/image_utils.bzl", "image_utils")
 load(":image/initramfs.bzl", "initramfs")
 load(":image/kernel_images_replace.bzl", "kernel_images_replace")
@@ -517,7 +517,7 @@ def kernel_images(
             fail("{}: build_dtbo must be True if dtbo_srcs is non-empty.")
 
     if build_dtbo:
-        dtbo(
+        dtbo_image(
             name = "{}_dtbo".format(name),
             srcs = dtbo_srcs,
             config_file = dtbo_config,

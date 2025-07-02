@@ -44,7 +44,7 @@ load("//build/kernel/kleaf/impl:ddk/ddk_submodule.bzl", _ddk_submodule = "ddk_su
 load("//build/kernel/kleaf/impl:ddk/ddk_uapi_headers.bzl", _ddk_uapi_headers = "ddk_uapi_headers")
 load("//build/kernel/kleaf/impl:gki_artifacts.bzl", _gki_artifacts = "gki_artifacts", _gki_artifacts_prebuilts = "gki_artifacts_prebuilts")
 load("//build/kernel/kleaf/impl:image/dtb_image.bzl", _dtb_image = "dtb_image")
-load("//build/kernel/kleaf/impl:image/dtbo.bzl", _dtbo = "dtbo")
+load("//build/kernel/kleaf/impl:image/dtbo_image.bzl", _dtbo_image = "dtbo_image")
 load("//build/kernel/kleaf/impl:image/initramfs.bzl", _initramfs = "initramfs")
 load("//build/kernel/kleaf/impl:image/kernel_images.bzl", _kernel_images = "kernel_images")
 load("//build/kernel/kleaf/impl:image/super_image.bzl", _super_image = "super_image", _unsparsed_image = "unsparsed_image")
@@ -83,7 +83,7 @@ dependency_graph = _dependency_graph
 dependency_graph_drawer = _dependency_graph_drawer
 dependency_graph_extractor = _dependency_graph_extractor
 dtb_image = _dtb_image
-dtbo = _dtbo
+dtbo_image = _dtbo_image
 extract_symbols = _extract_symbols
 gki_artifacts = _gki_artifacts
 gki_artifacts_prebuilts = _gki_artifacts_prebuilts
@@ -117,3 +117,21 @@ vendor_dlkm_image = _vendor_dlkm_image
 # Tests
 kernel_module_test = _kernel_module_test
 kunit_test = _kunit_test
+
+# Legacy symbols
+def dtbo(name, **kwargs):
+    """Builds DTBO image.
+
+    Args:
+        name: name of the target
+        **kwargs: See [`dtbo_image()`](#dtbo_image)
+
+    Deprecated:
+        Use [`dtbo_image()`](#dtbo_image) instead.
+    """
+
+    # buildifier: disable=print
+    print("WARNING: {}: dtbo() is deprecated; use dtbo_image() instead.".format(
+        native.package_relative_label(name),
+    ))
+    return dtbo_image(name = name, **kwargs)

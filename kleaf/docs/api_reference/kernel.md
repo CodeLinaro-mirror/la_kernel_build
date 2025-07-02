@@ -332,27 +332,27 @@ Build `dtb` image.
 | <a id="dtb_image-out"></a>out |  Name of `dtb` image.<br><br>Default to `name` if not set   | String | optional |  `""`  |
 
 
-<a id="dtbo"></a>
+<a id="dtbo_image"></a>
 
-## dtbo
+## dtbo_image
 
 <pre>
-load("@kleaf//build/kernel/kleaf:kernel.bzl", "dtbo")
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "dtbo_image")
 
-dtbo(<a href="#dtbo-name">name</a>, <a href="#dtbo-srcs">srcs</a>, <a href="#dtbo-config_file">config_file</a>, <a href="#dtbo-kernel_build">kernel_build</a>)
+dtbo_image(<a href="#dtbo_image-name">name</a>, <a href="#dtbo_image-srcs">srcs</a>, <a href="#dtbo_image-config_file">config_file</a>, <a href="#dtbo_image-kernel_build">kernel_build</a>)
 </pre>
 
-Build dtbo.
+Build dtbo image.
 
 **ATTRIBUTES**
 
 
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="dtbo-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="dtbo-srcs"></a>srcs |  List of `*.dtbo` files used to package the `dtbo.img`. This corresponds to `MKDTIMG_DTBOS` in build configs; see example below.<br><br>Example: <pre><code>kernel_build(&#10;    name = "tuna_kernel",&#10;    outs = [&#10;        "path/to/foo.dtbo",&#10;        "path/to/bar.dtbo",&#10;    ],&#10;)&#10;dtbo(&#10;    name = "tuna_images",&#10;    kernel_build = ":tuna_kernel",&#10;    srcs = [&#10;        ":tuna_kernel/path/to/foo.dtbo",&#10;        ":tuna_kernel/path/to/bar.dtbo",&#10;    ],&#10;)</code></pre>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="dtbo-config_file"></a>config_file |  A config file to create dtbo image by cfg_create command.<br><br>If set, use mkdtimg cfg_create with the given config file, instead of mkdtimg create   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
-| <a id="dtbo-kernel_build"></a>kernel_build |  The [`kernel_build`](#kernel_build).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="dtbo_image-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="dtbo_image-srcs"></a>srcs |  List of `*.dtbo` files used to package the `dtbo.img`. This corresponds to `MKDTIMG_DTBOS` in build configs; see example below.<br><br>Example: <pre><code>kernel_build(&#10;    name = "tuna_kernel",&#10;    outs = [&#10;        "path/to/foo.dtbo",&#10;        "path/to/bar.dtbo",&#10;    ],&#10;)&#10;dtbo(&#10;    name = "tuna_images",&#10;    kernel_build = ":tuna_kernel",&#10;    srcs = [&#10;        ":tuna_kernel/path/to/foo.dtbo",&#10;        ":tuna_kernel/path/to/bar.dtbo",&#10;    ],&#10;)</code></pre>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="dtbo_image-config_file"></a>config_file |  A config file to create dtbo image by cfg_create command.<br><br>If set, use mkdtimg cfg_create with the given config file, instead of mkdtimg create   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="dtbo_image-kernel_build"></a>kernel_build |  The [`kernel_build`](#kernel_build).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
 <a id="extract_symbols"></a>
@@ -1504,6 +1504,31 @@ Output:
 | <a id="dependency_graph-colorful"></a>colorful |  When set to True, outgoing edges from every node are colored differently.   |  `None` |
 | <a id="dependency_graph-exclude_base_kernel_modules"></a>exclude_base_kernel_modules |  Whether the analysis should made for only external modules.   |  `None` |
 | <a id="dependency_graph-kwargs"></a>kwargs |  Additional attributes to the internal rule, e.g. [`visibility`](https://docs.bazel.build/versions/main/visibility.html). See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
+
+
+<a id="dtbo"></a>
+
+## dtbo
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "dtbo")
+
+dtbo(<a href="#dtbo-name">name</a>, <a href="#dtbo-kwargs">**kwargs</a>)
+</pre>
+
+Builds DTBO image.
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="dtbo-name"></a>name |  name of the target   |  none |
+| <a id="dtbo-kwargs"></a>kwargs |  See [`dtbo_image()`](#dtbo_image)   |  none |
+
+**DEPRECATED**
+
+Use [`dtbo_image()`](#dtbo_image) instead.
 
 
 <a id="initramfs_modules_lists_test"></a>
