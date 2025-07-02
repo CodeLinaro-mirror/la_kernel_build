@@ -81,7 +81,7 @@ tools/bazel build --explain=/tmp/explain.txt --verbose_explanations \
 This produces text like below in `explain.txt`:
 
 ```
-Executing action 'Creating build environment (lto=default;notrim) @@//common:kernel_x86_64_env': One of the files has changed.
+Executing action 'Creating build environment (notrim) @@//common:kernel_x86_64_env': One of the files has changed.
 ```
 
 To understand which input files to the action has changed, see below.

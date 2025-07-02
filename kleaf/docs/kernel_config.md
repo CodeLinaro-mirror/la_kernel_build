@@ -276,7 +276,7 @@ Example:
 # path/to/tuna/BUILD.bazel
 filegroup(
     name = "all_kasan_defconfigs",
-    srcs = ["kasan_defconfig", "lto_none_defconfig"]
+    srcs = ["kasan_defconfig", "common_sanitizer_defconfig"]
 )
 kernel_build(name = "tuna", ...)
 ```

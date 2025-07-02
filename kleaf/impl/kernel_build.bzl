@@ -543,7 +543,7 @@ def kernel_build(
             **after** `make defconfig`.
 
             As a convention, files should usually be named `<prop>_defconfig`
-            (e.g. `kasan_defconfig`) or `<prop>_<value>_defconfig` (e.g. `lto_none_defconfig`)
+            (e.g. `kasan_defconfig`) or `<prop>_<value>_defconfig`
             to provide human-readable hints during the build. The prefix should
             describe what the defconfig does. However, this is not a requirement.
             These configs are also applied to external modules, including

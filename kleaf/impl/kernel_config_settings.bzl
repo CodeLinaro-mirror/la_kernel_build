@@ -33,7 +33,6 @@ mentioned here. In particular:
   - btf_debug_info
   - gcov
   - kcov
-  - lto (b/257288175)
   - trim_nonlisted_kmi
 
 """

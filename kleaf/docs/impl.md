@@ -304,7 +304,7 @@ See [scmversion.md](scmversion.md).
 
 ### Disable LTO during development
 
-See [lto.md](lto.md).
+LTO is already disabled by default in `gki_defconfig` since 5.19.
 
 ### Using configurable build attributes `select()`
 

@@ -42,10 +42,4 @@ $ tools/bazel run //common:kernel_aarch64_abi_update
 
 ## LTO
 
-```text
---lto={none,thin,default,full}
-```
-
-```shell
-$ bazel run --lto=none //common:kernel_aarch64_dist
-```
+Configuring LTO is no longer supported.

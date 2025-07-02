@@ -124,7 +124,6 @@ Sample output snippet:
   "@//build/kernel/kleaf:kasan": true,
   "@//build/kernel/kleaf:kbuild_symtypes": false,
   "@//build/kernel/kleaf:kmi_symbol_list_strict_mode": true,
-  "@//build/kernel/kleaf:lto": "none",
   "_kernel_build": "@//common:kernel_aarch64"
 }
 ```

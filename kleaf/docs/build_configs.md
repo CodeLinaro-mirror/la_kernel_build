@@ -394,12 +394,7 @@ You may define a `genrule` target with appropriate inputs (possibly from a
 
 ## LTO
 
-```shell
-$ bazel build --lto={default,none,thin,full} TARGETS
-$ bazel run   --lto={default,none,thin,full} TARGETS
-```
-
-See [disable LTO during development](lto.md).
+[Configuring LTO is no longer supported.](lto.md)
 
 ## TAGS\_CONFIG
 
