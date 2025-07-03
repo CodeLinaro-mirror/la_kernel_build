@@ -45,6 +45,7 @@ _PATH_PREFIX_DENY_LIST = (
     "external/",
     "bootable/",
     "prebuilts/fuchsia_sdk",
+    "test/dittosuite",
 )
 
 def load_arguments() -> dict[str, Any]:
