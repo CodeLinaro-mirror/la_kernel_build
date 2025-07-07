@@ -583,6 +583,7 @@ class BazelWrapper(KleafHelpPrinter):
                 f.write(textwrap.dedent(f"""\
                     common --override_module={override_module}={override_module_path}
                     common:docs --override_module={override_module}=
+                    common:ditto --override_module={override_module}=
                 """))
 
         self.transformed_startup_options += self._transform_bazelrc_files([
@@ -607,6 +608,8 @@ class BazelWrapper(KleafHelpPrinter):
             # Control Network access - with no internet by default.
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/network.bazelrc",
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/docs.bazelrc",
+            # Makes it possible to build //test/dittosuite
+            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/ditto.bazelrc",
             # Experimental bzlmod support
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/bzlmod.bazelrc",
 

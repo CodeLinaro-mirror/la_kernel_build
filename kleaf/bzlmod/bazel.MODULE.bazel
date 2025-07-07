@@ -132,6 +132,7 @@ bazel_dep(
     version = "1.0.1",
 )
 
+# For --config=docs
 bazel_dep(
     name = "stardoc",
     version = "0.7.2",
@@ -139,6 +140,11 @@ bazel_dep(
     repo_name = "io_bazel_stardoc",
 )
 
+# For --config=ditto
+bazel_dep(
+    name = "dittosuite",
+    version = "0.0.0",
+)
 bazel_dep(
     name = "rules_python",
     version = "1.0.0",
