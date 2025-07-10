@@ -435,7 +435,7 @@ class Stamp(object):
             all_projects = filter(pathlib.Path.is_dir, all_projects)
 
         ret = {}
-        for proj in filter(os.path.exists, all_projects)
+        for proj in filter(os.path.exists, all_projects):
             for execroot_rel in self.get_execroot_rel_paths(proj):
                 ret[execroot_rel] = self.async_get_source_date_epoch(proj)
         return ret
