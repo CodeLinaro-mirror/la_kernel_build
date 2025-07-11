@@ -38,7 +38,7 @@ class ScmVersionTestCase(unittest.TestCase):
             with self.subTest(module=module):
                 self._assert_contains_scmversion(module)
 
-    _scmversion_pattern = re.compile(r"^g[0-9a-f]{12,40}(-dirty)?$")
+    _scmversion_pattern = re.compile(r"^g[0-9a-f]{12,40}(-dirty)?(-ab[A-Z]?\d+)?$")
 
     def _assert_contains_scmversion(self, module):
         basename = os.path.basename(module)
