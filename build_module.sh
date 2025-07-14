@@ -182,12 +182,15 @@ fi
 
 # KERNEL_KIT should be explicitly defined, but default it to something sensible
 KERNEL_KIT="${KERNEL_KIT:-${COMMON_OUT_DIR}}"
+HOST_DIR="${KERNEL_KIT}/host"
 
 if [ ! -e "${KERNEL_KIT}/.config" ]; then
   # Try a couple reasonable/reliable fallback locations
   if [ -e "${KERNEL_KIT}/dist/.config" ]; then
+    HOST_DIR="${KERNEL_KIT}/host"
     KERNEL_KIT="${KERNEL_KIT}/dist"
   elif [ -e "${KERNEL_KIT}/${KERNEL_DIR}/.config" ]; then
+    HOST_DIR="${KERNEL_KIT}/host"
     KERNEL_KIT="${KERNEL_KIT}/${KERNEL_DIR}"
   fi
 fi
@@ -204,11 +207,11 @@ if [ ! -e "${OUT_DIR}/Makefile" -o -z "${EXT_MODULES}" ]; then
   mkdir -p ${OUT_DIR}/
   cp ${KERNEL_KIT}/.config ${KERNEL_KIT}/Module.symvers ${OUT_DIR}/
 
-  if [ -z "${EXT_MODULES}" -a ! ${KERNEL_KIT}/host -ef ${COMMON_OUT_DIR}/host ]; then
-    rm -rf ${COMMON_OUT_DIR}/host
+  if [ -z "${EXT_MODULES}" ] && [ ! "${HOST_DIR}" -ef "${COMMON_OUT_DIR}/host" ]; then
+    rm -rf "${COMMON_OUT_DIR}/host"
   fi
-  if [ -e ${KERNEL_KIT}/host -a ! -e ${COMMON_OUT_DIR}/host ]; then
-    cp -r ${KERNEL_KIT}/host ${COMMON_OUT_DIR}
+  if [ -e "${HOST_DIR}" ] && [ ! -e "${COMMON_OUT_DIR}/host" ]; then
+    cp -r "${HOST_DIR}" "${COMMON_OUT_DIR}"
   fi
 
   # Install .config from kernel platform
