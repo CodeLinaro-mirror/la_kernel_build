@@ -61,6 +61,10 @@ _ACTION_HERMETIC_TOOLS = [
     "prebuilts/build-tools/path/linux-x86/python3",
     # for rules_python toolchain resolution
     "prebuilts/build-tools/path/linux-x86/uname",
+    # TODO: b/431683256 -- Needed for workspace_status
+    #  when using canary config.
+    "prebuilts/build-tools/path/linux-x86/dirname",
+    "prebuilts/build-tools/path/linux-x86/readlink",
 ]
 _ACTION_EXTRA_HOST_TOOLS = [
     # For workspace_status
