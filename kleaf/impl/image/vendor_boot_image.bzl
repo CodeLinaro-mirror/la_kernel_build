@@ -41,7 +41,7 @@ def _vendor_boot_image_impl(ctx):
         initramfs = ctx.attr.initramfs,
         deps = ctx.attr.deps,
         outs = outs,
-        mkbootimg = ctx.attr.mkbootimg,
+        mkbootimg = ctx.executable.mkbootimg,
         build_boot = False,
         vendor_boot_name = ctx.attr.vendor_boot_name,
         vendor_ramdisk_binaries = ctx.attr.vendor_ramdisk_binaries,
@@ -93,8 +93,9 @@ vendor_boot_image = rule(
             allow_empty = False,
         ),
         "mkbootimg": attr.label(
-            allow_single_file = True,
-            default = "//tools/mkbootimg:mkbootimg.py",
+            default = "//tools/mkbootimg",
+            executable = True,
+            cfg = "exec",
             doc = """mkbootimg.py script which builds boot.img.
                 Only used if `build_boot`. If `None`,
                 default to `//tools/mkbootimg:mkbootimg.py`.

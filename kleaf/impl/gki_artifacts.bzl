@@ -27,10 +27,10 @@ visibility("//build/kernel/kleaf/...")
 def _gki_artifacts_impl(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
     inputs = [
-        ctx.file.mkbootimg,
         ctx.file._testkey,
     ]
     tools = [
+        ctx.executable.mkbootimg,
         ctx.file._build_utils_sh,
     ]
     transitive_tools = [hermetic_tools.deps]
@@ -113,7 +113,7 @@ def _gki_artifacts_impl(ctx):
         kernel_release = kernel_release.path,
         quoted_gki_kernel_cmdline = shell.quote(ctx.attr.gki_kernel_cmdline),
         quoted_arch = shell.quote(ctx.attr.arch),
-        mkbootimg = ctx.file.mkbootimg.path,
+        mkbootimg = ctx.executable.mkbootimg.path,
         testkey = ctx.file._testkey.path,
         size_cmd = size_cmd,
         skip_avb_cmd = skip_avb_cmd,
@@ -152,8 +152,9 @@ gki_artifacts = rule(
             doc = "The [`kernel_build`](kernel.md#kernel_build) that provides all `Image` and `Image.*`.",
         ),
         "mkbootimg": attr.label(
-            allow_single_file = True,
-            default = "//tools/mkbootimg:mkbootimg.py",
+            default = "//tools/mkbootimg",
+            executable = True,
+            cfg = "exec",
             doc = "path to the `mkbootimg.py` script; `MKBOOTIMG_PATH`.",
         ),
         "boot_img_sizes": attr.string_dict(

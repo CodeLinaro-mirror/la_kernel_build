@@ -93,7 +93,6 @@ def _build_boot_or_vendor_boot(
         ]
 
     transitive_inputs = [
-        mkbootimg.files,
         kernel_build_outs,
         kernel_build[KernelSerializedEnvInfo].inputs,
     ]
@@ -102,7 +101,9 @@ def _build_boot_or_vendor_boot(
     if dtb_image_file:
         inputs.append(dtb_image_file)
 
-    transitive_tools = [kernel_build[KernelSerializedEnvInfo].tools]
+    transitive_tools = [
+        kernel_build[KernelSerializedEnvInfo].tools,
+    ]
 
     command = kernel_utils.setup_serialized_env_cmd(
         serialized_env_info = kernel_build[KernelSerializedEnvInfo],
@@ -111,7 +112,7 @@ def _build_boot_or_vendor_boot(
 
     command += """
         MKBOOTIMG_PATH={mkbootimg}
-    """.format(mkbootimg = utils.optional_single_path(mkbootimg.files.to_list()))
+    """.format(mkbootimg = mkbootimg.path)
 
     if build_boot:
         boot_flag_cmd = "BUILD_BOOT_IMG=1"
@@ -303,6 +304,7 @@ def _build_boot_or_vendor_boot(
         inputs = depset(inputs, transitive = transitive_inputs),
         outputs = out_files,
         tools = [
+            mkbootimg,
             # See https://github.com/bazelbuild/bazel/issues/13854.
             # The FilesToRunProvider is added directly here to also add its runfiles.
             _search_and_cp_output,
@@ -338,7 +340,7 @@ def _boot_images_impl(ctx):
         initramfs = ctx.attr.initramfs,
         deps = ctx.attr.deps,
         outs = ctx.attr.outs,
-        mkbootimg = ctx.attr.mkbootimg,
+        mkbootimg = ctx.executable.mkbootimg,
         build_boot = ctx.attr.build_boot,
         vendor_boot_name = ctx.attr.vendor_boot_name,
         vendor_ramdisk_binaries = ctx.attr.vendor_ramdisk_binaries,
@@ -379,8 +381,9 @@ Execute `build_boot_images` in `build_utils.sh`.""",
             allow_empty = False,
         ),
         "mkbootimg": attr.label(
-            allow_single_file = True,
-            default = "//tools/mkbootimg:mkbootimg.py",
+            default = "//tools/mkbootimg",
+            executable = True,
+            cfg = "exec",
         ),
         "build_boot": attr.bool(),
         "vendor_boot_name": attr.string(doc = """
