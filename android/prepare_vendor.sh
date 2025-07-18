@@ -244,8 +244,18 @@ if [ "${RECOMPILE_KERNEL}" == "1" ]; then
   COPY_NEEDED=1
 fi
 
+if [ "${RECOMPILE_GBL}" == "1" ]; then
+  echo
+  echo "  Recompiling GBL"
+  # shellcheck disable=SC2086
+  "${ROOT_DIR}/build_with_bazel.py" \
+    -t "$KERNEL_TARGET" "$KERNEL_VARIANT" --build_gbl --out_dir "${ANDROID_KP_OUT_DIR}"
+
+  COPY_GBL_NEEDED=1
+fi
+
 ################################################################################
-if [ "${RECOMPILE_KERNEL}" == "1" ]; then
+if [ "${COPY_GBL_NEEDED}" == "1" ]; then
   ANDROID_GBL_OUT_DIR=${ANDROID_KERNEL_OUT}/kernel-gbl
 
   GBL_IMAGE=gbl_aarch64.efi
