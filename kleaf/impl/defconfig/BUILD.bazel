@@ -212,3 +212,37 @@ filegroup(
     }),
     visibility = ["//visibility:public"],
 )
+
+# --livepatch is x86_64 only. See kernel/livepatch/Kconfig in kernel tree.
+filegroup(
+    name = "x86_64_livepatch",
+    srcs = select({
+        "//build/kernel/kleaf:livepatch_is_true": ["livepatch_defconfig"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:public"],
+)
+
+fail_action(
+    name = "livepatch_not_supported",
+    message = "--livepatch only supported on x86_64.",
+    visibility = ["//visibility:private"],
+)
+
+[
+    filegroup(
+        name = "{}_livepatch".format(arch),
+        srcs = select({
+            "//build/kernel/kleaf:livepatch_is_true": [":livepatch_not_supported"],
+            "//conditions:default": [],
+        }),
+        visibility = ["//visibility:public"],
+    )
+    for arch in [
+        # keep sorted
+        "arm",
+        "arm64",
+        "i386",
+        "riscv64",
+    ]
+]

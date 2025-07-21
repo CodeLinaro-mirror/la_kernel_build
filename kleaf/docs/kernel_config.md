@@ -302,6 +302,7 @@ own defconfig fragments to avoid fragmentation in the ecosystem (pun intended).
 *   `--kasan_sw_tags`
 *   `--kasan_generic`
 *   `--kcsan`
+*   `--livepatch`
 *   `--notrim`
 *   `--page_size`
 *   `--rust` / `--norust`
