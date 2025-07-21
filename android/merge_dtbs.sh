@@ -1,5 +1,6 @@
 #! /bin/bash
 # Copyright (c) 2020, The Linux Foundation. All rights reserved.
+# Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -26,17 +27,21 @@
 # OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-ROOT_DIR=$(realpath $(dirname $0)/../../..)
+# Changes from Qualcomm Technologies, Inc. are provided under the following license:
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+ROOT_DIR="$("$(dirname "$(readlink -f "$0")")/../gettop.sh")"
 
 set -e
 
 source "${ROOT_DIR}/build/_setup_env.sh"
 
-rm -rf $3
-mkdir $3
+rm -rf "$3"
+mkdir "$3"
 
 set -x
-$ROOT_DIR/build/android/merge_dtbs.py $1 $2 $3
+"$ROOT_DIR/build/android/merge_dtbs.py" --base "$1" --techpack "$2" --out "$3"
 set +x
 
 [[ -n "$(find ${3} -type f -name '*.dtb')" ]] && cat ${3}/*.dtb > ${3}/dtb.img
