@@ -272,4 +272,4 @@ is not set:
 - `rules_python` uses `uname` during toolchain resolution
 - Host `python3` is needed to run any `py_binary` (
   [reference](https://github.com/bazelbuild/bazel/issues/19355))
-- [workspace_status.sh](../workspace_status.sh) uses readlink.
+- [workspace_status.sh](../workspace_status.sh) uses readlink and dirname.
