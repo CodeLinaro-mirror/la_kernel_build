@@ -50,6 +50,7 @@ def _get_top_level_file_impl(ctx):
         inputs = ctx.files.target,
         tools = hermetic_tools.deps,
         command = command,
+        mnemonic = "KernelImageTestGetTopLevelFile",
     )
     return DefaultInfo(
         files = depset([out]),
