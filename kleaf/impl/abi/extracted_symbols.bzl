@@ -147,4 +147,7 @@ extracted_symbols = rule(
         ),
     } | abi_common_attrs(),
     cfg = notrim_transition,
+    subrules = [
+        utils.get_check_sandbox_cmd,
+    ],
 )

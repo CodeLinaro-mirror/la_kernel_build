@@ -209,6 +209,9 @@ dependency_graph_drawer = rule(
         ),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
     },
+    subrules = [
+        utils.get_check_sandbox_cmd,
+    ],
 )
 
 def dependency_graph(

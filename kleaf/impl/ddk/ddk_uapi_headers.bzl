@@ -115,4 +115,7 @@ ddk_uapi_headers = rule(
         ),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
     },
+    subrules = [
+        utils.get_check_sandbox_cmd,
+    ],
 )

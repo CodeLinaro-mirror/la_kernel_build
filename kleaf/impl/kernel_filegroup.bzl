@@ -665,4 +665,7 @@ default, which in turn sets `collect_unstripped_modules` to `True` by default.
         ),
     } | _kernel_filegroup_additional_attrs(),
     toolchains = [hermetic_toolchain.type],
+    subrules = [
+        utils.get_check_sandbox_cmd,
+    ],
 )

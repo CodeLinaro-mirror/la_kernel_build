@@ -222,6 +222,7 @@ ddk_config_main_action_subrule = subrule(
         create_merge_dot_config_step,
         create_kconfig_ext_step,
         create_oldconfig_step,
+        utils.get_check_sandbox_cmd,
         utils.write_depset,
     ],
 )

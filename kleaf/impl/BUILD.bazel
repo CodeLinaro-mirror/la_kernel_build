@@ -228,6 +228,13 @@ bool_setting(
     visibility = ["//build/kernel/kleaf:__pkg__"],
 )
 
+# INTERNAL ONLY: If false, disable sandbox checks within actions.
+bool_flag(
+    name = "check_sandbox_in_actions",
+    build_setting_default = True,
+    visibility = ["//build/kernel/kleaf:__subpackages__"],
+)
+
 py_binary(
     name = "ddk/gen_makefiles",
     srcs = ["ddk/gen_makefiles.py"],

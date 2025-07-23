@@ -338,4 +338,7 @@ kernel_modules_install(
 """.format(repr(_OUT_ALLOWLIST)),
         ),
     } | gcov_attrs(),
+    subrules = [
+        utils.get_check_sandbox_cmd,
+    ],
 )

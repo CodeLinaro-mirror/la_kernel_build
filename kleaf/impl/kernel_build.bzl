@@ -2492,6 +2492,7 @@ _kernel_build = rule(
     subrules = [
         _get_dot_config,
         _pack_generated_headers_for_module_step,
+        utils.get_check_sandbox_cmd,
     ],
 )
 

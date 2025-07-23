@@ -330,6 +330,7 @@ build_boot_or_vendor_boot = subrule(
     subrules = [
         debug.print_scripts_subrule,
         utils.write_depset,
+        utils.get_check_sandbox_cmd,
     ],
 )
 
@@ -446,5 +447,7 @@ Execute `build_boot_images` in `build_utils.sh`.""",
             allow_single_file = True,
         ),
     },
-    subrules = [build_boot_or_vendor_boot],
+    subrules = [
+        build_boot_or_vendor_boot,
+    ],
 )

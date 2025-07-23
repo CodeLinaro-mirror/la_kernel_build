@@ -179,10 +179,13 @@ def _hash_hex(x):
         ret = "0" * (8 - len(ret)) + ret
     return ret
 
-def _get_check_sandbox_cmd():
+def _get_check_sandbox_cmd_impl(_subrule_ctx, _check_sandbox_in_actions):
     """Returns a script that tries to check if we are running in a sandbox.
 
     Note: This is not always accurate."""
+
+    if not _check_sandbox_in_actions[BuildSettingInfo].value:
+        return ""
 
     return """
            if [[ ! $PWD =~ /(sandbox|bazel-working-directory|linux-sandbox|processwrapper-sandbox)/ ]]; then
@@ -190,6 +193,13 @@ def _get_check_sandbox_cmd():
              exit 1
            fi
     """
+
+_get_check_sandbox_cmd = subrule(
+    implementation = _get_check_sandbox_cmd_impl,
+    attrs = {
+        "_check_sandbox_in_actions": attr.label(default = "//build/kernel/kleaf/impl:check_sandbox_in_actions"),
+    },
+)
 
 def _write_short_depset_arg(file):
     return file.short_path

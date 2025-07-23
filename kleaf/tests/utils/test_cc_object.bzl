@@ -60,4 +60,7 @@ test_cc_object = rule(
             KernelBuildExtModuleInfo,
         ]),
     },
+    subrules = [
+        utils.get_check_sandbox_cmd,
+    ],
 )

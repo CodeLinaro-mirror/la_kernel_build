@@ -190,7 +190,10 @@ _build_modules_image = subrule(
             default = "//build/kernel/kleaf:set_ext_modules",
         ),
     },
-    subrules = [debug.print_scripts_subrule],
+    subrules = [
+        debug.print_scripts_subrule,
+        utils.get_check_sandbox_cmd,
+    ],
 )
 
 def _ramdisk_options(ramdisk_compression, ramdisk_compression_args):
