@@ -41,7 +41,7 @@ def _vendor_boot_image_impl(ctx):
         initramfs = ctx.attr.initramfs,
         deps = ctx.attr.deps,
         outs = outs,
-        mkbootimg = ctx.executable.mkbootimg,
+        mkbootimg = ctx.attr.mkbootimg[DefaultInfo].files_to_run,
         build_boot = False,
         vendor_boot_name = ctx.attr.vendor_boot_name,
         vendor_ramdisk_binaries = ctx.attr.vendor_ramdisk_binaries,

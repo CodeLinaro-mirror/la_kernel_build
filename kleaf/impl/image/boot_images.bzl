@@ -112,7 +112,7 @@ def _build_boot_or_vendor_boot(
 
     command += """
         MKBOOTIMG_PATH={mkbootimg}
-    """.format(mkbootimg = mkbootimg.path)
+    """.format(mkbootimg = mkbootimg.executable.path)
 
     if build_boot:
         boot_flag_cmd = "BUILD_BOOT_IMG=1"
@@ -340,7 +340,7 @@ def _boot_images_impl(ctx):
         initramfs = ctx.attr.initramfs,
         deps = ctx.attr.deps,
         outs = ctx.attr.outs,
-        mkbootimg = ctx.executable.mkbootimg,
+        mkbootimg = ctx.attr.mkbootimg[DefaultInfo].files_to_run,
         build_boot = ctx.attr.build_boot,
         vendor_boot_name = ctx.attr.vendor_boot_name,
         vendor_ramdisk_binaries = ctx.attr.vendor_ramdisk_binaries,
