@@ -25,22 +25,22 @@ echo "KERNEL_OUT=$KERNEL_OUT"
 pushd $BASE > /dev/null
 
 rm -rf $KERNEL_OUT
-rm -f WORKSPACE
+rm -f $BASE/WORKSPACE
 
-ln -s build/kernel/kleaf/bazel.WORKSPACE WORKSPACE
+ln -s $BASE/build/kernel/kleaf/bazel.WORKSPACE $BASE/WORKSPACE
 
 if [ "${RECOMPILE_KERNEL}" == "1" ]; then
     # remove all trace of previously built kernel
     echo "cleaning previously built kernel"
-    tools/bazel clean --expunge
+    $BASE/tools/bazel clean --expunge
 else
     #bazel tool will simply just copy a previously built kernel to the target directory.
     echo "re-using previous build"
 fi
 
-tools/bazel run //common-modules/virtual-device:virtual_device_aarch64_dist  -- --dist_dir=$KERNEL_OUT
+$BASE/tools/bazel run //common-modules/virtual-device:virtual_device_aarch64_dist  -- --dist_dir=$KERNEL_OUT
 
-rm -f WORKSPACE
+rm -f $BASE/WORKSPACE
 
 # Generate kalama-vm-cdp.dtb needed for by ghgvm-pilsplitter.sh tool.
 
