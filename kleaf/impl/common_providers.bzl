@@ -610,6 +610,7 @@ KernelConfigInfo = provider(
     doc = "For `kernel_config` to provide files to replay the environment",
     fields = {
         "env_setup_script": "script from `kernel_env`",
+        "rustavailable_out_dir": "out_dir for rustavailable",
     },
 )
 

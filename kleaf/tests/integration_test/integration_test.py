@@ -1123,6 +1123,21 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
         )
         self.assertEqual(1, output.count("@pigz//:pigz"))
 
+    def test_rustavailable(self):
+        """Tests that --output_groups rustavailable works."""
+        build_config_constants_path = (
+            pathlib.Path(self._common()) / "build.config.constants")
+        self.restore_file_after_test(build_config_constants_path)
+        lines = build_config_constants_path.read_text().splitlines()
+        lines = [line for line in lines if not line.startswith("RUSTC_VERSION")]
+        build_config_constants_path.write_text("\n".join(lines))
+
+        errors = self._check_errors("build", [
+            f"//{self._common()}:kernel_aarch64",
+            "--output_groups=rustavailable",
+        ])
+
+        self.assertIn("Rust compiler 'rustc' could not be found.", errors)
 class ScmversionIntegrationTest(KleafIntegrationTestBase):
 
     def setUp(self) -> None:

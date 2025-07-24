@@ -196,15 +196,23 @@ approximate steps:
 
 To check `make rustavailable`, run the following:
 
-```
+```shell
 tools/bazel build --output_groups=rustavailable //common:kernel_aarch64
 ```
 
 If Rust is available, you should see:
 
 ```
-INFO: From Checking rustavailable:
+INFO: From Checking rustavailable //common:kernel_aarch64_config:
 Rust is available!
 ```
 
-Otherwise, a build error is raised indicating why is Rust not available.
+You might also not see any output if the build is cached, which indicates
+that `make rustavailable` passed in prior runs and no changes were detected.
+If you want to forcifully rerun it, use `--nouse_action_cache`:
+
+```shell
+tools/bazel build --output_groups=rustavailable --nouse_action_cache //common:kernel_aarch64
+```
+
+If Rust is not available, a build error is raised indicating why.

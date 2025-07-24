@@ -489,11 +489,13 @@ _pre_defconfig = subrule(
     implementation = _pre_defconfig_impl,
 )
 
-def _make_defconfig_impl(_subrule_ctx):
+def _call_make_impl(_subrule_ctx, goal):
     cmd = """
         # Actual defconfig
-        make -C ${KERNEL_DIR} ${TOOL_ARGS} O=${OUT_DIR} ${DEFCONFIG}
-    """
+        make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} {goal}
+    """.format(
+        goal = goal,
+    )
     return StepInfo(
         inputs = depset(),
         cmd = cmd,
@@ -501,8 +503,8 @@ def _make_defconfig_impl(_subrule_ctx):
         tools = [],
     )
 
-_make_defconfig = subrule(
-    implementation = _make_defconfig_impl,
+_call_make = subrule(
+    implementation = _call_make_impl,
 )
 
 def _post_defconfig_impl(
@@ -672,7 +674,8 @@ def _build_out_dir(
         progress_message,
         defconfig_info,
         defconfig_fragments_info,
-        defconfig_fragments_list_info):
+        defconfig_fragments_list_info,
+        rustavailable):
     """Builds out_dir, the main output of this rule.
 
     Args:
@@ -683,6 +686,7 @@ def _build_out_dir(
         defconfig_info: DefconfigInfo
         defconfig_fragments_info: DefconfigFragmentsInfo
         defconfig_fragments_list_info: _DefconfigFragmentsListInfo
+        rustavailable: Whether this action is for running rustavailable.
     Returns:
         out_dir
     """
@@ -717,8 +721,13 @@ def _build_out_dir(
             is_run_env = False,
             pre_defconfig_fragment_files = defconfig_fragments_list_info.pre_list,
         ),
-        _make_defconfig(),
+        _call_make(goal = "${DEFCONFIG}"),
     ]
+
+    if rustavailable:
+        step_returns.append(
+            _call_make(goal = "rustavailable"),
+        )
 
     check_defconfig_minimized_ret = _check_defconfig_minimized(
         check_defconfig_attr_value = defconfig_fragments_info.check_pre_defconfig_fragments,
@@ -740,22 +749,27 @@ def _build_out_dir(
             ),
         )
 
-    step_returns += [
-        _post_defconfig(
-            trim_attr_value = trim_nonlisted_kmi_utils.get_value(ctx),
-            raw_kmi_symbol_list_file = utils.optional_file(ctx.files.raw_kmi_symbol_list),
-            protected_module_names_list_file = utils.optional_file(ctx.files.protected_module_names_list),
-            module_signing_key_file = ctx.file.module_signing_key,
-            system_trusted_key_file = ctx.file.system_trusted_key,
-            post_defconfig_fragment_files = defconfig_fragments_list_info.post_list,
-        ),
+    if not rustavailable:
+        step_returns.append(
+            _post_defconfig(
+                trim_attr_value = trim_nonlisted_kmi_utils.get_value(ctx),
+                raw_kmi_symbol_list_file = utils.optional_file(ctx.files.raw_kmi_symbol_list),
+                protected_module_names_list_file = utils.optional_file(ctx.files.protected_module_names_list),
+                module_signing_key_file = ctx.file.module_signing_key,
+                system_trusted_key_file = ctx.file.system_trusted_key,
+                post_defconfig_fragment_files = defconfig_fragments_list_info.post_list,
+            ),
+        )
+
+    step_returns.append(
         _check_dot_config_against_defconfig(
             check_defconfig_attr_value = defconfig_fragments_info.check_post_defconfig_fragments,
             defconfig_info = DefconfigInfo(file = None, make_target = None),
             pre_defconfig_fragment_files = [],
             post_defconfig_fragment_files = defconfig_fragments_list_info.post_list,
         ),
-    ]
+    )
+
     transitive_inputs += [step_return.inputs for step_return in step_returns]
     outputs += [out for step_return in step_returns for out in step_return.outputs]
     tools += [tool for step_return in step_returns for tool in step_return.tools]
@@ -866,6 +880,18 @@ def _kernel_config_impl(ctx):
         defconfig_info = defconfig_info,
         defconfig_fragments_info = defconfig_fragments_info,
         defconfig_fragments_list_info = defconfig_fragments_list_info,
+        rustavailable = False,
+    )
+
+    rustavailable_ret = _build_out_dir(
+        ctx,
+        out_dir_name = "out_dir_rustavailable",
+        mnemonic = "KernelConfigRustAvailable",
+        progress_message = "Checking rustavailable %{label}",
+        defconfig_info = defconfig_info,
+        defconfig_fragments_info = defconfig_fragments_info,
+        defconfig_fragments_list_info = defconfig_fragments_list_info,
+        rustavailable = True,
     )
 
     post_setup_deps = [main_action_ret.out_dir]
@@ -938,6 +964,7 @@ def _kernel_config_impl(ctx):
         ),
         KernelConfigInfo(
             env_setup_script = ctx.file.env,
+            rustavailable_out_dir = rustavailable_ret.out_dir,
         ),
     ]
 
@@ -968,7 +995,7 @@ def _get_config_script_impl(
             is_run_env = True,
             pre_defconfig_fragment_files = pre_defconfig_fragment_files,
         ),
-        _make_defconfig(),
+        _call_make(goal = "${DEFCONFIG}"),
     ]
 
     # We can't handle outputs because this is a `run` command not a `build` command.
@@ -1096,7 +1123,7 @@ _get_config_script = subrule(
     subrules = [
         _set_up_defconfig,
         _pre_defconfig,
-        _make_defconfig,
+        _call_make,
     ],
 )
 
@@ -1235,7 +1262,7 @@ kernel_config = rule(
     subrules = [
         _set_up_defconfig,
         _pre_defconfig,
-        _make_defconfig,
+        _call_make,
         _check_defconfig_minimized,
         _post_defconfig,
         _check_dot_config_against_defconfig,
