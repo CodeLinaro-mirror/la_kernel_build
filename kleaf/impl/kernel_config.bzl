@@ -594,27 +594,7 @@ _check_dot_config_against_defconfig = subrule(
     subrules = [config_utils.create_check_defconfig_step],
 )
 
-def _kernel_config_impl(ctx):
-    localversion_file = stamp.write_localversion(ctx)
-
-    inputs = [
-        s
-        for s in ctx.files.srcs
-        if any([token in s.path for token in [
-            "Kbuild",
-            "Kconfig",
-            "Makefile",
-            "configs/",
-            "scripts/",
-            ".fragment",
-        ]])
-    ]
-    transitive_inputs = []
-    tools = []
-
-    out_dir = ctx.actions.declare_directory(ctx.attr.name + "/out_dir")
-    outputs = [out_dir]
-
+def _get_defconfig_info(ctx):
     defconfig_info = None
     if ctx.attr.defconfig:
         if DefconfigInfo in ctx.attr.defconfig:
@@ -625,7 +605,9 @@ def _kernel_config_impl(ctx):
             fail("{}: defconfig {} must provide exactly one file".format(ctx.label, ctx.attr.defconfig.label))
     else:
         defconfig_info = DefconfigInfo(file = None, make_target = None)
+    return defconfig_info
 
+def _get_defconfig_fragments_info_pair(ctx):
     # Inherit pre_defconfig_fragments from base_kernel so that
     # for mixed builds, the device kernel_build() won't have to reiterate pre_defconfig_fragments
     inherit_pre = ctx.attr._inherit_pre_defconfig_fragments_from_base_kernel[BuildSettingInfo].value
@@ -652,6 +634,7 @@ def _kernel_config_impl(ctx):
         else:
             check_post_defconfig_fragments = "match"
 
+    # The DefconfigFragmentsInfo used by this target.
     defconfig_fragments_info = DefconfigFragmentsInfo(
         pre_defconfig_fragments = depset(transitive = (
             [base_pre] + [target.files for target in ctx.attr.pre_defconfig_fragments]
@@ -664,10 +647,65 @@ def _kernel_config_impl(ctx):
         check_pre_defconfig_fragments = check_pre_defconfig_fragments,
         check_post_defconfig_fragments = check_post_defconfig_fragments,
     )
-    defconfig_fragments_list_info = _DefconfigFragmentsListInfo(
-        pre_list = defconfig_fragments_info.pre_defconfig_fragments.to_list(),
-        post_list = defconfig_fragments_info.post_defconfig_fragments.to_list(),
+
+    # The returned DefconfigFragmentsInfo is used by device kernel_build() setting
+    # base_kernel to this kernel_build(), and hence excludes non-inherited
+    # post_defconfig_fragments.
+    mixed_defconfig_fragments_info = DefconfigFragmentsInfo(
+        pre_defconfig_fragments = defconfig_fragments_info.pre_defconfig_fragments,
+        post_defconfig_fragments = depset(transitive = (
+            [base_post] +
+            [target.files for target in ctx.attr.post_defconfig_fragments_inherited]
+        )),
+        check_pre_defconfig_fragments = defconfig_fragments_info.check_pre_defconfig_fragments,
+        check_post_defconfig_fragments = defconfig_fragments_info.check_post_defconfig_fragments,
     )
+    return struct(
+        defconfig_fragments_info = defconfig_fragments_info,
+        mixed_defconfig_fragments_info = mixed_defconfig_fragments_info,
+    )
+
+def _build_out_dir(
+        ctx,
+        out_dir_name,
+        mnemonic,
+        progress_message,
+        defconfig_info,
+        defconfig_fragments_info,
+        defconfig_fragments_list_info):
+    """Builds out_dir, the main output of this rule.
+
+    Args:
+        ctx: ctx
+        out_dir_name: Name of the output directory
+        mnemonic: mnemonic of the action.
+        progress_message: progress message of the action.
+        defconfig_info: DefconfigInfo
+        defconfig_fragments_info: DefconfigFragmentsInfo
+        defconfig_fragments_list_info: _DefconfigFragmentsListInfo
+    Returns:
+        out_dir
+    """
+
+    localversion_file = stamp.write_localversion(ctx)
+
+    inputs = [
+        s
+        for s in ctx.files.srcs
+        if any([token in s.path for token in [
+            "Kbuild",
+            "Kconfig",
+            "Makefile",
+            "configs/",
+            "scripts/",
+            ".fragment",
+        ]])
+    ]
+    transitive_inputs = []
+    tools = []
+
+    out_dir = ctx.actions.declare_directory(ctx.attr.name + "/" + out_dir_name)
+    outputs = [out_dir]
 
     step_returns = [
         _set_up_defconfig(
@@ -683,7 +721,7 @@ def _kernel_config_impl(ctx):
     ]
 
     check_defconfig_minimized_ret = _check_defconfig_minimized(
-        check_defconfig_attr_value = check_pre_defconfig_fragments,
+        check_defconfig_attr_value = defconfig_fragments_info.check_pre_defconfig_fragments,
         defconfig_info = defconfig_info,
         pre_defconfig_fragment_files = defconfig_fragments_list_info.pre_list,
     )
@@ -695,7 +733,7 @@ def _kernel_config_impl(ctx):
     if not check_defconfig_minimized_ret.cmd:
         step_returns.append(
             _check_dot_config_against_defconfig(
-                check_defconfig_attr_value = check_pre_defconfig_fragments,
+                check_defconfig_attr_value = defconfig_fragments_info.check_pre_defconfig_fragments,
                 defconfig_info = defconfig_info,
                 pre_defconfig_fragment_files = defconfig_fragments_list_info.pre_list,
                 post_defconfig_fragment_files = [],
@@ -712,7 +750,7 @@ def _kernel_config_impl(ctx):
             post_defconfig_fragment_files = defconfig_fragments_list_info.post_list,
         ),
         _check_dot_config_against_defconfig(
-            check_defconfig_attr_value = check_post_defconfig_fragments,
+            check_defconfig_attr_value = defconfig_fragments_info.check_post_defconfig_fragments,
             defconfig_info = DefconfigInfo(file = None, make_target = None),
             pre_defconfig_fragment_files = [],
             post_defconfig_fragment_files = defconfig_fragments_list_info.post_list,
@@ -793,18 +831,44 @@ def _kernel_config_impl(ctx):
 
     debug.print_scripts(ctx, command)
     ctx.actions.run_shell(
-        mnemonic = "KernelConfig",
+        mnemonic = mnemonic,
         inputs = depset(inputs, transitive = transitive_inputs),
         outputs = outputs,
         tools = tools + [depset(transitive = transitive_tools)],
-        progress_message = "Creating kernel config{} %{{label}}".format(
-            ctx.attr.env[KernelEnvAttrInfo].progress_message_note,
-        ),
+        progress_message = progress_message,
         command = command,
         execution_requirements = kernel_utils.local_exec_requirements(ctx),
     )
 
-    post_setup_deps = [out_dir]
+    return struct(
+        inputs = inputs,
+        transitive_inputs = transitive_inputs,
+        out_dir = out_dir,
+    )
+
+def _kernel_config_impl(ctx):
+    defconfig_info = _get_defconfig_info(ctx)
+
+    defconfig_fragments_info_pair = _get_defconfig_fragments_info_pair(ctx)
+    defconfig_fragments_info = defconfig_fragments_info_pair.defconfig_fragments_info
+    defconfig_fragments_list_info = _DefconfigFragmentsListInfo(
+        pre_list = defconfig_fragments_info.pre_defconfig_fragments.to_list(),
+        post_list = defconfig_fragments_info.post_defconfig_fragments.to_list(),
+    )
+
+    main_action_ret = _build_out_dir(
+        ctx,
+        out_dir_name = "out_dir",
+        mnemonic = "KernelConfig",
+        progress_message = "Creating kernel config{} %{{label}}".format(
+            ctx.attr.env[KernelEnvAttrInfo].progress_message_note,
+        ),
+        defconfig_info = defconfig_info,
+        defconfig_fragments_info = defconfig_fragments_info,
+        defconfig_fragments_list_info = defconfig_fragments_list_info,
+    )
+
+    post_setup_deps = [main_action_ret.out_dir]
 
     extra_restore_outputs_cmd = ""
     for file in (ctx.file.module_signing_key, ctx.file.system_trusted_key):
@@ -829,7 +893,7 @@ def _kernel_config_impl(ctx):
         output = serialized_env_info_setup_script,
         content = get_config_setup_command(
             env_setup_command = ctx.attr.env[KernelEnvInfo].setup,
-            out_dir = out_dir,
+            out_dir = main_action_ret.out_dir,
             extra_restore_outputs_cmd = extra_restore_outputs_cmd,
         ),
     )
@@ -839,7 +903,7 @@ def _kernel_config_impl(ctx):
         tools = ctx.attr.env[KernelEnvInfo].tools,
         inputs = depset(post_setup_deps + [
             serialized_env_info_setup_script,
-        ], transitive = transitive_inputs),
+        ], transitive = main_action_ret.transitive_inputs),
     )
 
     config_script_ret = _get_config_script(
@@ -849,30 +913,17 @@ def _kernel_config_impl(ctx):
         pre_defconfig_fragment_files = defconfig_fragments_list_info.pre_list,
     )
     config_script_runfiles = ctx.runfiles(
-        files = inputs,
-        transitive_files = depset(transitive = transitive_inputs + [
+        files = main_action_ret.inputs,
+        transitive_files = depset(transitive = main_action_ret.transitive_inputs + [
             ctx.attr.env[KernelEnvInfo].inputs,
             ctx.attr.env[KernelEnvInfo].tools,
             config_script_ret.inputs,
         ]),
     )
 
-    # The returned DefconfigFragmentsInfo is used by device kernel_build() setting
-    # base_kernel to this kernel_build(), and hence excludes non-inherited
-    # post_defconfig_fragments.
-    mixed_defconfig_fragments_info = DefconfigFragmentsInfo(
-        pre_defconfig_fragments = defconfig_fragments_info.pre_defconfig_fragments,
-        post_defconfig_fragments = depset(transitive = (
-            [base_post] +
-            [target.files for target in ctx.attr.post_defconfig_fragments_inherited]
-        )),
-        check_pre_defconfig_fragments = defconfig_fragments_info.check_pre_defconfig_fragments,
-        check_post_defconfig_fragments = defconfig_fragments_info.check_post_defconfig_fragments,
-    )
-
     return [
         defconfig_info,
-        mixed_defconfig_fragments_info,
+        defconfig_fragments_info_pair.mixed_defconfig_fragments_info,
         serialized_env_info,
         ctx.attr.env[KernelEnvAttrInfo],
         ctx.attr.env[KernelEnvMakeGoalsInfo],
@@ -881,7 +932,7 @@ def _kernel_config_impl(ctx):
             env_info = ctx.attr.env[KernelEnvInfo],
         ),
         DefaultInfo(
-            files = depset([out_dir]),
+            files = depset([main_action_ret.out_dir]),
             executable = config_script_ret.executable,
             runfiles = config_script_runfiles,
         ),
