@@ -19,7 +19,7 @@ load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
     "//build/kernel/kleaf:kernel.bzl",
     "ddk_module",
-    "kernel_images",
+    "initramfs",
     "kernel_module_group",
     "kernel_modules_install",
 )
@@ -50,6 +50,7 @@ def _get_top_level_file_impl(ctx):
         inputs = ctx.files.target,
         tools = hermetic_tools.deps,
         command = command,
+        mnemonic = "KernelImageTestGetTopLevelFile",
     )
     return DefaultInfo(
         files = depset([out]),
@@ -124,11 +125,10 @@ def ddk_images_test_suite(name):
         tags = ["manual"],
     )
 
-    kernel_images(
-        name = name + "_image",
-        kernel_modules_install = name + "_modules_install",
-        build_initramfs = True,
+    initramfs(
+        name = name + "_image_initramfs",
         tags = ["manual"],
+        kernel_modules_install = name + "_modules_install",
     )
     # Setup END
 
