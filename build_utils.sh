@@ -155,11 +155,36 @@ function create_modules_order_lists() {
   rm -f ${tmp_modules_order_file}
 }
 
+
+# $1 LIST <File to be copied to staging dir>
+# $2 STAGING_DIR <staging dir>
+# $3 DESTINATION_NAME <Final base name for the file>
+# $4 WHAT_MESSAGE <Purpose of the file>
+function copy_file_to_staging() {
+  local list_file=$1
+  local dest_dir=$2
+  local final_base_name=$3
+  local what=$4
+  if [ -n "${list_file}" ]; then
+    # Need to make sure we can find the file.
+    if [[ -f "${ROOT_DIR}/${list_file}" ]]; then
+      list_file="${ROOT_DIR}/${list_file}"
+    elif [[ "${list_file}" != /* ]]; then
+      echo "ERROR: ${what} must be an absolute path or relative to ${ROOT_DIR}: ${list_file}" >&2
+      exit 1
+    elif [[ ! -f "${list_file}" ]]; then
+      echo "ERROR: Failed to find ${what}: ${modules_blocklist_file}" >&2
+      exit 1
+    fi
+    cp ${list_file} ${dest_dir}/${final_base_name}
+  fi
+}
+
 # $1 MODULES_LIST, <File contains the list of modules that should go in the ramdisk>
 # $2 MODULES_STAGING_DIR    <The directory to look for all the compiled modules>
 # $3 IMAGE_STAGING_DIR  <The destination directory in which MODULES_LIST is
 #                        expected, and it's corresponding modules.* files>
-# $4 MODULES_BLOCKLIST, <File contains the list of modules to prevent from loading>
+# $4 MODULES_BLOCKLIST <File contains the list of modules to prevent from loading>
 # $5 MODULES_RECOVERY_LIST <File contains the list of modules that should go in
 #                           the ramdisk but should only be loaded when booting
 #                           into recovery.
@@ -253,20 +278,7 @@ function create_modules_staging() {
   create_modules_order_lists "${modules_list_file:-""}" "${modules_recovery_list_file:-""}" \
 	                     "${modules_charger_list_file:-""}" ${dest_dir}/modules.order
 
-  if [ -n "${modules_blocklist_file}" ]; then
-    # Need to make sure we can find modules_blocklist_file from the staging dir
-    if [[ -f "${ROOT_DIR}/${modules_blocklist_file}" ]]; then
-      modules_blocklist_file="${ROOT_DIR}/${modules_blocklist_file}"
-    elif [[ "${modules_blocklist_file}" != /* ]]; then
-      echo "ERROR: modules blocklist must be an absolute path or relative to ${ROOT_DIR}: ${modules_blocklist_file}" >&2
-      exit 1
-    elif [[ ! -f "${modules_blocklist_file}" ]]; then
-      echo "ERROR: Failed to find modules blocklist: ${modules_blocklist_file}" >&2
-      exit 1
-    fi
-
-    cp ${modules_blocklist_file} ${dest_dir}/modules.blocklist
-  fi
+  copy_file_to_staging "${modules_blocklist_file}" "${dest_dir}" "modules.blocklist" "modules blocklist"
 
   if [ -n "${TRIM_UNUSED_MODULES}" ]; then
     local used_blocklist_modules=$(mktemp)
