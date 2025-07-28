@@ -210,7 +210,7 @@ def create_kernel(vmlinux: pathlib.Path, kernel: pathlib.Path) -> None:
     subprocess.check_call(['llvm-objcopy', '-S', '-O', 'binary', vmlinux, kernel])
 
 
-def canonicalise_vmlinux(info: Info, original: pathlib.Path, canonical: pathlib.Path) -> None:
+def canonicalise_kernel(info: Info, original: pathlib.Path, canonical: pathlib.Path) -> None:
     original_bytes = original.read_bytes()
     variable_ranges = [
         find_kernel_build_ID(original_bytes),
@@ -238,14 +238,14 @@ def process_vmlinux(info: Info, copy_args) -> None:
     add_edge(info, key1, key2)
 
     canonical_vmlinux_path = info.working_directory / 'vmlinux.canonical'
-    canonicalise_vmlinux(info, vmlinux_path, canonical_vmlinux_path)
+    canonicalise_kernel(info, vmlinux_path, canonical_vmlinux_path)
     key3 = add_artefact(info, 'vmlinux', canonical_vmlinux_path, f'canonical vmlinux from vmlinux')
     add_edge(info, key1, key3)
 
-    canonical_kernel_path = info.working_directory / 'vmlinux.canonical.Image'
-    create_kernel(canonical_vmlinux_path, canonical_kernel_path)
-    key4 = add_artefact(info, 'Image', canonical_kernel_path, f'Image recreated from canonical vmlinux from vmlinux')
-    add_edge(info, key3, key4)
+    canonical_kernel_path = info.working_directory / 'vmlinux.Image.canonical'
+    canonicalise_kernel(info, recreated_kernel_path, canonical_kernel_path)
+    key4 = add_artefact(info, 'Image', canonical_kernel_path, f'canonical Image recreated from vmlinux')
+    add_edge(info, key2, key4)
 
     copied_canonical_vmlinux_path = info.working_directory / 'vmlinux.canonical.copied'
     subprocess.run(['llvm-objcopy', *copy_args, canonical_vmlinux_path, copied_canonical_vmlinux_path], check=True)
