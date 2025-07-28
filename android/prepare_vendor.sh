@@ -82,6 +82,7 @@
 #   LTO                - Specify Link-Time Optimization level. See LTO_VALUES in kleaf/constants.bzl
 #                        for list of valid values.
 #   EXTRA_KBUILD_ARGS  - Arguments to pass to kernel build (build_with_bazel.py)
+#   DESKTOPOS_PREBUILT - Create the QCOM kernel prebuilt path in desktop_OS when enable.
 #
 # To compile out-of-tree kernel objects and set up the prebuilt UAPI headers,
 # these environment variables must be set.
@@ -336,8 +337,29 @@ if [ "${COPY_NEEDED}" == "1" ]; then
   echo
   echo "  Preparing prebuilt folder ${ANDROID_KERNEL_OUT}"
 
+  if [ "${RECOMPILE_MODULE}" == "1" ] && [ "${DESKTOPOS_PREBUILT}" == "1" ]; then
+    echo " Prepare desktop_OS Kernel prebuilt folder"
+    rm -f "${ANDROID_KERNEL_OUT}/vendor_dlkm/"*.ko "${ANDROID_KERNEL_OUT}/"vendor_dlkm/modules.*
+    mkdir -p "${ANDROID_KERNEL_OUT}/vendor_dlkm"
+    cp "${ANDROID_KP_OUT_DIR}/dist/"*.ko "${ANDROID_KERNEL_OUT}/vendor_dlkm"
+    cp "${ANDROID_KP_OUT_DIR}/dist/"*.modules.blocklist "${ANDROID_KERNEL_OUT}"
+    cp "${ANDROID_KP_OUT_DIR}/dist/"*.modules.load "${ANDROID_KERNEL_OUT}"
+    mv "${ANDROID_KERNEL_OUT}/vendor_boot.modules.load" \
+	 "${ANDROID_KERNEL_OUT}/vendor_kernel_boot.modules.load"
 
-  if [ "${RECOMPILE_MODULE}" == "1" ]; then
+    rm -rf "${ANDROID_KERNEL_OUT}/system_dlkm/"*
+    rm -rf "${ANDROID_PRODUCT_OUT}/"system_dlkm*
+    system_dlkm_archive="${ANDROID_KP_OUT_DIR}/dist/system_dlkm_staging_archive.tar.gz"
+    if [ -e "$system_dlkm_archive" ]; then
+       mkdir -p "${ANDROID_KERNEL_OUT}/system_dlkm/"
+       # Unzip the system_dlkm staging tar copied from kernel_platform to system_dlkm out directory
+       tar -xf "$system_dlkm_archive" -C "${ANDROID_KERNEL_OUT}/system_dlkm/"
+    else
+       echo "  WARNING!! No system_dlkm (second stage) modules found"
+    fi
+  fi
+
+  if [ "${RECOMPILE_MODULE}" == "1" ] && [ "${DESKTOPOS_PREBUILT}" != "1" ]; then
     first_stage_kos=$(mktemp)
     if [ -e ${ANDROID_KP_OUT_DIR}/dist/modules.load ]; then
       cat ${ANDROID_KP_OUT_DIR}/dist/modules.load | \
@@ -473,7 +495,7 @@ if [ "${COPY_NEEDED}" == "1" ]; then
     echo "$KERNEL_VARIANT" > ${ANDROID_KERNEL_OUT}/_variant
   fi
 
-  if [ "${RECOMPILE_MODULE}" == "1" ]; then
+  if [ "${RECOMPILE_MODULE}" == "1" ] && [ "${DESKTOPOS_PREBUILT}" != "1" ]; then
     rm ${first_stage_kos}
     rm ${unprotected_dlkm_kos}
     rm ${system_dlkm_kos}
