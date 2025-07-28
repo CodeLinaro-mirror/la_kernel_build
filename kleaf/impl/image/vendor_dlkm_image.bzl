@@ -83,6 +83,7 @@ def _vendor_dlkm_image_impl(ctx):
     additional_inputs += exclude_system_dlkm_step.inputs
 
     additional_inputs.extend(ctx.files.modules_list)
+    additional_inputs.extend(ctx.files.modules_load)
     additional_inputs.extend(ctx.files.modules_blocklist)
     additional_inputs.extend(ctx.files.props)
 
@@ -109,6 +110,7 @@ def _vendor_dlkm_image_impl(ctx):
               mkdir -p {vendor_dlkm_staging_dir}
               (
                 VENDOR_DLKM_MODULES_LIST={modules_list}
+                VENDOR_DLKM_MODULES_LOAD={modules_load_list}
                 VENDOR_DLKM_MODULES_BLOCKLIST={input_modules_blocklist}
                 VENDOR_DLKM_PROPS={props}
                 MODULES_STAGING_DIR={modules_staging_dir}
@@ -140,6 +142,7 @@ def _vendor_dlkm_image_impl(ctx):
         modules_staging_dir = modules_staging_dir,
         quoted_etc_files = shell.quote(etc_files),
         modules_list = utils.optional_path(ctx.file.modules_list),
+        modules_load_list = utils.optional_single_path(ctx.files.modules_load),
         input_modules_blocklist = utils.optional_path(ctx.file.modules_blocklist),
         props = utils.optional_path(ctx.file.props),
         fs_type = ctx.attr.fs_type,
@@ -294,6 +297,9 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
                 become part of the `vendor_boot.modules.load` will be trimmed from the
                 `vendor_dlkm.modules.load`.""",
         ),
+        "modules_load": attr.label(allow_files = True, doc = """
+            An optional file containing the list of kernel modules which shall be loaded.
+        """),
         "etc_files": attr.label_list(
             allow_files = True,
             doc = "Files that need to be copied to `vendor_dlkm.img` etc/ directory.",

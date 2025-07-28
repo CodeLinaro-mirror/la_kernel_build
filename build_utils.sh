@@ -200,6 +200,7 @@ function copy_file_to_staging() {
 #                          be passed as an empty string to ensure that the
 #                          depmod flags are assigned correctly.>
 # $7 flags to pass to depmod
+# $8 MODULES_LOAD <File contains the list of modules to load>
 function create_modules_staging() {
   local modules_list_file=$1
   local src_dir=$(echo $2/lib/modules/*)
@@ -210,6 +211,7 @@ function create_modules_staging() {
   local modules_recovery_list_file=$5
   local modules_charger_list_file=$6
   local depmod_flags=$7
+  local modules_load_file=$8
 
   rm -rf ${dest_dir}
   mkdir -p ${dest_dir}/kernel
@@ -279,6 +281,8 @@ function create_modules_staging() {
 	                     "${modules_charger_list_file:-""}" ${dest_dir}/modules.order
 
   copy_file_to_staging "${modules_blocklist_file}" "${dest_dir}" "modules.blocklist" "modules blocklist"
+
+  copy_file_to_staging "${modules_load_file}" "${dest_dir}" "modules.load" "modules load"
 
   if [ -n "${TRIM_UNUSED_MODULES}" ]; then
     local used_blocklist_modules=$(mktemp)
@@ -388,7 +392,7 @@ function build_system_dlkm() {
   # modes, so do not consider them, and pass empty strings instead.
   create_modules_staging "${SYSTEM_DLKM_MODULES_LIST:-${MODULES_LIST}}" "${MODULES_STAGING_DIR}" \
     ${SYSTEM_DLKM_STAGING_DIR} "${SYSTEM_DLKM_MODULES_BLOCKLIST:-${MODULES_BLOCKLIST}}" \
-    "" "" "-e"
+    "" "" "-e" "${SYSTEM_DLKM_MODULES_LOAD}"
 
   local system_dlkm_root_dir=$(echo ${SYSTEM_DLKM_STAGING_DIR}/lib/modules/*)
   cp ${system_dlkm_root_dir}/modules.load ${DIST_DIR}/system_dlkm.modules.load
@@ -491,7 +495,8 @@ function build_vendor_dlkm() {
   local vendor_dlkm_archive=$1
 
   create_modules_staging "${VENDOR_DLKM_MODULES_LIST}" "${MODULES_STAGING_DIR}" \
-    "${VENDOR_DLKM_STAGING_DIR}" "${VENDOR_DLKM_MODULES_BLOCKLIST}"
+    "${VENDOR_DLKM_STAGING_DIR}" "${VENDOR_DLKM_MODULES_BLOCKLIST}" "" "" "" \
+    "${VENDOR_DLKM_MODULES_LOAD}"
 
   local vendor_dlkm_modules_root_dir=$(echo ${VENDOR_DLKM_STAGING_DIR}/lib/modules/*)
   local vendor_dlkm_modules_load=${vendor_dlkm_modules_root_dir}/modules.load
