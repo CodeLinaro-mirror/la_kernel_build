@@ -232,9 +232,9 @@ def process_vmlinux(info: Info, copy_args) -> None:
     vmlinux_path = info.distribution / 'vmlinux'
     key1 = add_artefact(info, 'vmlinux', vmlinux_path, 'vmlinux')
 
-    recreated_kernel = info.working_directory / 'vmlinux.Image'
-    create_kernel(vmlinux_path, recreated_kernel)
-    key2 = add_artefact(info, 'Image', recreated_kernel, f'Image recreated from vmlinux')
+    recreated_kernel_path = info.working_directory / 'vmlinux.Image'
+    create_kernel(vmlinux_path, recreated_kernel_path)
+    key2 = add_artefact(info, 'Image', recreated_kernel_path, f'Image recreated from vmlinux')
     add_edge(info, key1, key2)
 
     canonical_vmlinux_path = info.working_directory / 'vmlinux.canonical'
