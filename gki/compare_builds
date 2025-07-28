@@ -183,7 +183,6 @@ def add_artefact(info: Info, name: str, path: pathlib.Path, provenance: str) -> 
 def add_edge(info: Info, key1: str, key2: str) -> None:
     edges = info.edges
     edges.add((key1, key2))
-    edges.add((key2, key1))
 
 
 def process_kernel(gki: pathlib.Path, info: Info, kernel: str) -> None:
@@ -362,7 +361,7 @@ def report_artefacts(built_nodes, given_nodes, given_edges) -> bool:
                 continue
             found_edge = False
             for good in good_nodes:
-                if (good, node) in given_edges:
+                if (node, good) in given_edges:
                     found_edge = True
                     print(f' {node} {given_nodes[node]} <- {good} {given_nodes[good]}')
                     break
