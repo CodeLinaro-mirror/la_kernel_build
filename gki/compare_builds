@@ -181,7 +181,7 @@ def parse_banner(which: str, banner: bytes) -> tuple[str, str, str, str, int]:
     version: {uts_version}
     date: {date}
     epoch: {epoch}
-'''.format(which=which, banner=banner, **dataclasses.asdict(banner_info)))
+'''.format(which=which, **dataclasses.asdict(banner_info)))
 
     return (
         banner_info.uts_release,

@@ -19,8 +19,9 @@ import re
 
 @dataclasses.dataclass
 class LinuxBanner:
-    """Represents information extracted upon parsing a Linux banner."""
+    """Represents information extracted from a Linux banner."""
 
+    banner: str
     uts_release: str
     scmversion: str
     commit: str
@@ -30,17 +31,18 @@ class LinuxBanner:
     epoch: int
 
 
-def get_linux_banner(banner: bytes) -> LinuxBanner:
+def get_linux_banner(kernel: bytes) -> LinuxBanner:
     if m := re.search(
         rb'Linux version (?P<release>[^(\n\0]*) \([^\n\0]*\) (?P<version>#\d+'
         rb' [^\n\0]*)\n\0',
-        banner,
+        kernel,
     ):
-        release, version = m.group('release', 'version')
+        banner, release, version = m.group(0, 'release', 'version')
+        banner = banner[0:len(banner) - 2].decode()
         release = release.decode()
         version = version.decode()
     else:
-        raise ValueError(f'bad Linux banner: {banner}')
+        raise ValueError(f'did not find Linux banner')
 
     if m := re.fullmatch(r'^[^-]*-[^-]*-[^-]*-([^-]*)(.*)$', release):
         scmversion, trailer = m.group(1, 2)
@@ -95,6 +97,7 @@ def get_linux_banner(banner: bytes) -> LinuxBanner:
     epoch = int(dt.timestamp() + 0.5)
 
     return LinuxBanner(
+        banner=banner,
         uts_release=release,
         scmversion=scmversion,
         commit=commit,
