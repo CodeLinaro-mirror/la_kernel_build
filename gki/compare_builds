@@ -166,7 +166,7 @@ class Info(typing.NamedTuple):
     epoch: int
     working_directory: pathlib.Path
     nodes: dict[str, str]
-    edges: dict[str, str]
+    edges: dict[str, set[str]]
 
 
 def add_artefact(info: Info, name: str, path: pathlib.Path, provenance: str) -> str:
@@ -177,12 +177,12 @@ def add_artefact(info: Info, name: str, path: pathlib.Path, provenance: str) -> 
         nodes[key] = nodes[key] + ' | ' + provenance
     else:
         nodes[key] = provenance
+        info.edges[key] = set()
     return key
 
 
 def add_edge(info: Info, key1: str, key2: str) -> None:
-    edges = info.edges
-    edges.add((key1, key2))
+    info.edges[key1].add(key2)
 
 
 def process_kernel(gki: pathlib.Path, info: Info, kernel: str) -> None:
@@ -313,7 +313,7 @@ def initialise_side(side: str, distribution: pathlib.Path, temporary_path: pathl
     release, version, commit, build, epoch = get_kernel_information(side, vmlinux_bytes)
     working_directory = temporary_path / side
     os.mkdir(working_directory)
-    return Info(distribution, release, version, commit, build, epoch, working_directory, {}, set())
+    return Info(distribution, release, version, commit, build, epoch, working_directory, {}, {})
 
 
 def compare_metadata(gki: pathlib.Path, built: Info, given: Info):
@@ -347,37 +347,32 @@ def build_gki(gki: pathlib.Path, commit: str, build: str, epoch: int) -> pathlib
     return gki / 'out_abi' / 'kernel_aarch64' / 'dist'
 
 
+def partition(predicate, items):
+    result = ([], [])
+    for element in items:
+        result[predicate(element)].append(element)
+    return result
+
 def report_artefacts(built_nodes, given_nodes, given_edges) -> bool:
-    good_nodes = set(p for p in given_nodes if p in built_nodes)
+    def is_good(memo: dict[str, bool], node: str) -> bool:
+        if node not in memo:
+            memo[node] = any(is_good(memo, n) for n in given_edges[node])
+        return memo[node]
+
+    memo = {node: True for node in built_nodes}
+    check = lambda n: is_good(memo, n)
+    bad_nodes, good_nodes = partition(check, sorted(given_nodes.keys()))
+
+    def print_nodes(nodes):
+        for node in nodes:
+            print(f' {node} {given_nodes[node]}')
 
     print('verified artefacts:')
-    for g in good_nodes:
-        print(f' {g} {given_nodes[g]} <- {built_nodes[g]}')
-
-    while True:
-        todo = False
-        for node in sorted(given_nodes.keys()):
-            if node in good_nodes:
-                continue
-            found_edge = False
-            for good in good_nodes:
-                if (node, good) in given_edges:
-                    found_edge = True
-                    print(f' {node} {given_nodes[node]} <- {good} {given_nodes[good]}')
-                    break
-            if found_edge:
-                good_nodes.add(node)
-                todo = True
-        if not todo:
-            break
-
-    bad_nodes = set(p for p in given_nodes if p not in good_nodes)
-
+    print_nodes(good_nodes)
     if bad_nodes:
         print()
         print('unverified artefacts:')
-        for node in sorted(bad_nodes):
-            print(f' {node} {given_nodes[node]}')
+        print_nodes(bad_nodes)
 
     print()
     print(f'{len(good_nodes)} verified, {len(bad_nodes)} unverified artefacts')
