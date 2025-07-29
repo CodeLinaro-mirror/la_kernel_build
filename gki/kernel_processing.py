@@ -25,7 +25,7 @@ class LinuxBanner:
     scmversion: str
     commit: str
     build: str
-    version: str
+    uts_version: str
     date: str
     epoch: int
 
@@ -99,7 +99,7 @@ def get_linux_banner(banner: bytes) -> LinuxBanner:
         scmversion=scmversion,
         commit=commit,
         build=build,
-        version=version,
+        uts_version=version,
         date=date,
         epoch=epoch,
     )

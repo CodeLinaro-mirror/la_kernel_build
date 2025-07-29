@@ -178,14 +178,14 @@ def parse_banner(which: str, banner: bytes) -> tuple[str, str, str, str, int]:
     scmversion: {scmversion}
     commit: {commit}
     build: {build}
-    version: {version}
+    version: {uts_version}
     date: {date}
     epoch: {epoch}
 '''.format(which=which, banner=banner, **dataclasses.asdict(banner_info)))
 
     return (
         banner_info.uts_release,
-        banner_info.version,
+        banner_info.uts_version,
         banner_info.commit,
         banner_info.build,
         banner_info.epoch,
