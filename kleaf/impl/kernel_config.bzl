@@ -610,6 +610,19 @@ def _get_defconfig_info(ctx):
     return defconfig_info
 
 def _get_defconfig_fragments_info_pair(ctx):
+    """Returns a pair of DefconfigFragmentsInfo.
+
+    Args:
+        ctx: ctx
+
+    Returns:
+        A struct with these fields:
+        -   defconfig_fragments_info: DefconfigFragmentsInfo for `kernel_config` to use when
+            calculating defconfig.
+        -   mixed_defconfig_fragments_info: DefconfigFragmentsInfo for downstream targets
+            (e.g. `kernel_build`) to use. This excludes non-inherited post_defconfig_fragments.
+    """
+
     # Inherit pre_defconfig_fragments from base_kernel so that
     # for mixed builds, the device kernel_build() won't have to reiterate pre_defconfig_fragments
     inherit_pre = ctx.attr._inherit_pre_defconfig_fragments_from_base_kernel[BuildSettingInfo].value
