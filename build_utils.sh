@@ -324,7 +324,10 @@ function create_modules_staging() {
       else
         run_depmod ${dest_stage} "${depmod_flags}" "${version}" "${mod_order_filepath}"
       fi
-      cp ${mod_order_filepath} ${mod_load_filepath}
+      # Do not override the modules.load file when provided.
+      if [ ! -f ${mod_load_filepath} ]; then
+        cp ${mod_order_filepath} ${mod_load_filepath}
+      fi
     fi
   done
 
