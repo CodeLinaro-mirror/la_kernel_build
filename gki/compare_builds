@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import argparse
+import dataclasses
 import datetime
 import hashlib
 import json
@@ -26,6 +27,8 @@ import subprocess
 import sys
 import tempfile
 import typing
+
+import kernel_processing
 
 '''
 # Purpose
@@ -167,53 +170,26 @@ def hash_file(path: pathlib.Path) -> str:
 
 
 def parse_banner(which: str, banner: bytes) -> tuple[str, str, str, str, int]:
-    if m := re.fullmatch(rb'Linux version (?P<release>[^(\n\0]*) \([^\n\0]*\) (?P<version>#\d+ [^\n\0]*)\n\0', banner):
-        release, version = m.group('release', 'version')
-        release = release.decode()
-        version = version.decode()
-    else:
-        raise ValueError(f'bad {which} linux_banner: {banner}')
+    banner_info = kernel_processing.get_linux_banner(banner)
 
-    if m := re.fullmatch(r'^[^-]*-[^-]*-[^-]*-([^-]*)(.*)$', release):
-        scmversion, trailer = m.group(1, 2)
-    else:
-        raise ValueError(f'bad {which} UTS_RELEASE {release}')
-
-    commit = None
-    if m := re.fullmatch(r'g(.*)', scmversion):
-        commit = m.group(1)
-
-    build = None
-    if m := re.fullmatch(r'-ab([^-]*).*', trailer):
-        build = m.group(1)
-
-    if m := re.fullmatch(r'#\d+ (?:(?:SMP|PREEMPT)\ )*(.*)', version):
-        date = m.group(1)
-    else:
-        raise ValueError(f'bad {which} UTS_VERSION {version}')
-
-    # we don't want to mess with TZ and LC_TIME, so do this by hand
-    match = re.fullmatch(r'(?:\w{3}) (\w{3}) {1,2}(\d{1,2}) (\d{2}):(\d{2}):(\d{2}) UTC (\d{4})', date)
-    if not match:
-        raise ValueError(f'bad date: {date}')
-    month, day, hour, minute, second, year = match.group(1, 2, 3, 4, 5, 6)
-    month_number = {'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6, 'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12};
-    dt = datetime.datetime(int(year), month_number[month], int(day), int(hour), int(minute), int(second), tzinfo=datetime.timezone.utc)
-    # round floating point timestamp to the nearest second
-    epoch = int(dt.timestamp() + 0.5)
-
-    print(f'''{which} version information:
+    print('''{which} version information:
     banner: {banner}
-    release: {release}
+    release: {uts_release}
     scmversion: {scmversion}
     commit: {commit}
     build: {build}
     version: {version}
     date: {date}
     epoch: {epoch}
-''')
+'''.format(which=which, banner=banner, **dataclasses.asdict(banner_info)))
 
-    return release, version, commit, build, epoch
+    return (
+        banner_info.uts_release,
+        banner_info.version,
+        banner_info.commit,
+        banner_info.build,
+        banner_info.epoch,
+    )
 
 
 class Info(typing.NamedTuple):
