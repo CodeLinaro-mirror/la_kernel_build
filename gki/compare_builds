@@ -125,8 +125,8 @@ def find_kernel_module_certificate(kernel: bytes) -> tuple[int, int]:
     serial_length = int.from_bytes(serial_length_bytes, 'big')
     if serial_length != len(serial):
         raise ValueError('serial number length mismatch')
-    length = int.from_bytes(length_bytes, 'big')
-    return found.start(), found.start() + 4 + length
+    length = 4 + int.from_bytes(length_bytes, 'big')
+    return found.start(), found.start() + length
 
 
 def hash_file(path: pathlib.Path) -> str:
