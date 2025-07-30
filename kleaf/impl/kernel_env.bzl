@@ -161,6 +161,38 @@ def _get_build_config_inputs_impl(_subrule_ctx, *, srcs, build_config):
 
 _get_build_config_inputs = subrule(implementation = _get_build_config_inputs_impl)
 
+def _get_root_dir_realpath(ctx):
+    """Find equivalent of ROOT_DIR outside of sandbox.
+
+    Use relative path to some file from kernel sources, get its real path
+    and substract relative path from it. For example:
+
+    makefile=common/Makefile
+    makefile_realpath=/foo/bar/common/Makefile
+    root_dir_realpath=${makefile_realpath%/${makefile}}
+    root_dir_realpath=/foo/bar
+    """
+    if not ctx.file.makefile:
+        cmd = """
+            echo "WARNING: Using kernel_env without makefile is deprecated and will trigger" >&2
+            echo "         a warning/error in the future. " >&2
+        """
+        deps = []
+    else:
+        # If Makefile doesn't, this means that something went wrong.
+        # For example, if KLEAF_FIX_KERNEL_DIR is set, makefile path need adjustment.
+        # TODO(b/436248288): make it work without -e check
+        cmd = """
+            if [ -e "${{ROOT_DIR}}/{makefile}" ]; then
+                makefile_realpath=$(realpath "${{ROOT_DIR}}/{makefile}")
+                export KLEAF_INTERNAL_ROOT_DIR_REALPATH="${{makefile_realpath%/{makefile}}}"
+            fi
+        """.format(
+            makefile = ctx.file.makefile.path,
+        )
+        deps = [ctx.file.makefile]
+    return struct(cmd = cmd, deps = deps)
+
 def _kernel_env_impl(ctx):
     kconfig_ext = ctx.file.kconfig_ext
     dtstree_makefile = None
@@ -403,7 +435,7 @@ def _kernel_env_impl(ctx):
     setup_inputs = [
         out_file,
         ctx.version_file,
-    ]
+    ] + env_setup_cmds.inputs
     setup_transitive_inputs = []
     if kconfig_ext:
         setup_inputs.append(kconfig_ext)
@@ -463,6 +495,7 @@ def get_env_info_setup_command(
 def _get_env_setup_cmds(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
 
+    inputs = []
     pre_env = ""
     if ctx.attr._debug_annotate_scripts[BuildSettingInfo].value:
         pre_env += debug.trap()
@@ -513,7 +546,13 @@ def _get_env_setup_cmds(ctx):
         kleaf_repo_workspace_root = kleaf_repo_workspace_root,
     )
 
-    post_env = """
+    post_env = ""
+
+    root_dir_realpath_ret = _get_root_dir_realpath(ctx)
+    post_env += root_dir_realpath_ret.cmd
+    inputs += root_dir_realpath_ret.deps
+
+    post_env += """
         # Increase parallelism # TODO(b/192655643): do not use -j anymore
         export MAKEFLAGS="${{MAKEFLAGS}} -j$(
             make_jobs="$({get_make_jobs_cmd})"
@@ -569,21 +608,23 @@ def _get_env_setup_cmds(ctx):
         # layout on the top of the repo, so if you start a debugger from the
         # top directory, all paths should resolve correctly even on another
         # machine.
-        export KCPPFLAGS="-ffile-prefix-map=${{ROOT_DIR}}=/proc/self/cwd"
-        export KRUSTFLAGS="--remap-path-prefix=${{ROOT_DIR}}=/proc/self/cwd"
+        export KCPPFLAGS="-ffile-prefix-map=\"${{ROOT_DIR}}=/proc/self/cwd\""
+        export KRUSTFLAGS="--remap-path-prefix=\"${{ROOT_DIR}}=/proc/self/cwd\""
 
-        # For Kleaf local (non-sandbox) builds, $ROOT_DIR is under execroot but
-        # $ROOT_DIR/$KERNEL_DIR is a symlink to the real source tree under
-        # workspace root, making $abs_srctree not under $ROOT_DIR.
-        # Because compiler puts a real path to a binary, it should be a real
-        # path in -ffile-prefix-map. Also we would like to leave
-        # ${{KERNEL_DIR}} part in the path to be able to run debugger from the
-        # top directory, so we go one directory up from
-        # ${{ROOT_DIR}}/${{KERNEL_DIR}} before calling realpath.
-        if [[ "$(realpath ${{ROOT_DIR}}/${{KERNEL_DIR}})" != "${{ROOT_DIR}}/${{KERNEL_DIR}}" ]]; then
-            export KCPPFLAGS="$KCPPFLAGS -ffile-prefix-map=$(realpath ${{ROOT_DIR}}/${{KERNEL_DIR}}/..)=/proc/self/cwd"
-            export KRUSTFLAGS="$KRUSTFLAGS --remap-path-prefix=$(realpath ${{ROOT_DIR}}/${{KERNEL_DIR}}/..)=/proc/self/cwd"
+        # Some files are symlinked to real files in project. When such file is
+        # used in debug information, they are resolved to a real path outside
+        # of ${{ROOT_DIR}}. To ensure that such paths doesn't leak to debug
+        # information, it should be replaced with /proc/self/cwd.
+        #
+        # Also ROOT_DIR is usually inside of KLEAF_INTERNAL_ROOT_DIR_REALPATH,
+        # and if multiple remappings are given and several of them match, the
+        # last matching one is applied. So we need to have
+        # KLEAF_INTERNAL_ROOT_DIR_REALPATH remapping before ROOT_DIR remapping.
+        if [ -n "${{KLEAF_INTERNAL_ROOT_DIR_REALPATH}}" ]; then
+            export KCPPFLAGS="-ffile-prefix-map=\"${{KLEAF_INTERNAL_ROOT_DIR_REALPATH}}=/proc/self/cwd\" $KCPPFLAGS"
+            export KRUSTFLAGS="--remap-path-prefix\"=${{KLEAF_INTERNAL_ROOT_DIR_REALPATH}}=/proc/self/cwd\" $KRUSTFLAGS"
         fi
+
         export KCPPFLAGS_COMPAT="$KCPPFLAGS"
 
         # Set libclang.so location for use by bindgen for Rust
@@ -599,6 +640,7 @@ def _get_env_setup_cmds(ctx):
     return struct(
         pre_env = pre_env,
         post_env = post_env,
+        inputs = inputs,
     )
 
 def _get_make_verbosity_command(ctx):
