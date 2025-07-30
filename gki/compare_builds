@@ -223,22 +223,22 @@ def process_vmlinux(info: Info, copy_args) -> None:
 
     recreated_kernel_path = info.working_directory / 'vmlinux.Image'
     create_kernel(vmlinux_path, recreated_kernel_path)
-    key2 = add_artefact(info, 'Image', recreated_kernel_path, f'Image recreated from vmlinux')
+    key2 = add_artefact(info, 'Image', recreated_kernel_path, 'Image from vmlinux')
     add_edge(info, key1, key2)
 
     canonical_vmlinux_path = info.working_directory / 'vmlinux.canonical'
     canonicalise_kernel(info, vmlinux_path, canonical_vmlinux_path)
-    key3 = add_artefact(info, 'vmlinux', canonical_vmlinux_path, f'canonical vmlinux from vmlinux')
+    key3 = add_artefact(info, 'vmlinux', canonical_vmlinux_path, 'canonical vmlinux')
     add_edge(info, key1, key3)
 
     canonical_kernel_path = info.working_directory / 'vmlinux.Image.canonical'
     canonicalise_kernel(info, recreated_kernel_path, canonical_kernel_path)
-    key4 = add_artefact(info, 'Image', canonical_kernel_path, f'canonical Image recreated from vmlinux')
+    key4 = add_artefact(info, 'Image', canonical_kernel_path, 'canonical Image from vmlinux')
     add_edge(info, key2, key4)
 
-    copied_canonical_vmlinux_path = info.working_directory / 'vmlinux.canonical.copied'
+    copied_canonical_vmlinux_path = info.working_directory / 'vmlinux.canonical.objcopy'
     subprocess.run(['llvm-objcopy', *copy_args, canonical_vmlinux_path, copied_canonical_vmlinux_path], check=True)
-    key5 = add_artefact(info, 'vmlinux', copied_canonical_vmlinux_path, f'objcopied from canonical vmlinux from vmlinux')
+    key5 = add_artefact(info, 'vmlinux', copied_canonical_vmlinux_path, 'objcopy of canonical vmlinux')
     add_edge(info, key3, key5)
 
 
@@ -253,9 +253,9 @@ def process_boot_image(gki: pathlib.Path, info: Info, kernel: str, boot_image: s
     ramdisk_file = unpacked / 'ramdisk'
     kernel_file =  unpacked / 'kernel'
     if os.stat(ramdisk_file).st_size > 0:
-        logging.error(f'bad ramdisk {ramdisk_file} extracted from {boot_image}')
+        logging.error(f'non-empty ramdisk {ramdisk_file} from {boot_image}')
     key1 = add_artefact(info, boot_image, boot_image_path, boot_image)
-    key2 = add_artefact(info, kernel, kernel_file, f'{kernel} extracted from {boot_image}')
+    key2 = add_artefact(info, kernel, kernel_file, f'{kernel} from {boot_image}')
     add_edge(info, key1, key2)
     # TODO: decompress kernels extracted from boot images
 
@@ -266,10 +266,10 @@ def process_system_dlkm(info: Info, copy_args: list[str], system_dlkm: str, unpa
             if module_name.endswith('.ko'):
                 root_path = pathlib.Path(root)
                 module_path = root_path / module_name
-                key1 = add_artefact(info, module_name, module_path, f'extracted from {system_dlkm}')
-                copied_path = root_path / (module_name + '.copied')
+                key1 = add_artefact(info, module_name, module_path, f'{module_name} from {system_dlkm}')
+                copied_path = root_path / (module_name + '.objcopy')
                 subprocess.check_call(['llvm-objcopy', *copy_args, module_path, copied_path])
-                key2 = add_artefact(info, module_name, copied_path, f'objcopied from {module_name} extracted from {system_dlkm}')
+                key2 = add_artefact(info, module_name, copied_path, f'objcopy of {module_name} from {system_dlkm}')
                 add_edge(info, key1, key2)
 
 
