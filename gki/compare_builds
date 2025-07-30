@@ -79,8 +79,8 @@ git - get common commit hash, for informational purposes
 llvm-objcopy - convert vmlinux to an Image; strip ELF objects
 '''
 
-def find_kernel_build_ID(kernel: bytes) -> tuple[int, int]:
-    '''Find the byte range containing the kernel build ID.
+def blank_kernel_build_ID(kernel: bytearray) -> None:
+    '''Blank the kernel build ID.
 
     The kernel has a single section containing 3 notes, the last of
     which has the GNU build ID. The ID consists of 20 random bytes.
@@ -88,15 +88,15 @@ def find_kernel_build_ID(kernel: bytes) -> tuple[int, int]:
     regex = (
         rb'\x06\x00\x00\x00\x01\x00\x00\x00\x00\x01\x00\x00Linux\x00\x00\x00\x00\x00\x00\x00'
         rb'\x06\x00\x00\x00\x04\x00\x00\x00\x01\x01\x00\x00Linux\x00\x00\x00\x00\x00\x00\x00'
-        rb'\x04\x00\x00\x00\x14\x00\x00\x00\x03\x00\x00\x00GNU\x00(.{20})'
+        rb'\x04\x00\x00\x00\x14\x00\x00\x00\x03\x00\x00\x00GNU\x00.{20}'
     )
     found = re.search(regex, kernel, flags=re.DOTALL)
     if not found:
         raise ValueError('no kernel notes found')
-    return found.end() - 20, found.end()
+    kernel[found.end() - 20:found.end()] = bytearray(20)
 
 
-def find_kernel_module_certificate(kernel: bytes) -> tuple[int, int]:
+def blank_kernel_module_certificate(kernel: bytearray) -> None:
     '''The start of the ASN.1 module signing certificate looks like this.
 
     SEQUENCE 30 82 hi lo
@@ -126,7 +126,7 @@ def find_kernel_module_certificate(kernel: bytes) -> tuple[int, int]:
     if serial_length != len(serial):
         raise ValueError('serial number length mismatch')
     length = 4 + int.from_bytes(length_bytes, 'big')
-    return found.start(), found.start() + length
+    kernel[found.start():found.start() + length] = bytearray(length)
 
 
 def hash_file(path: pathlib.Path) -> str:
@@ -210,21 +210,10 @@ def create_kernel(vmlinux: pathlib.Path, kernel: pathlib.Path) -> None:
 
 
 def canonicalise_kernel(info: Info, original: pathlib.Path, canonical: pathlib.Path) -> None:
-    original_bytes = original.read_bytes()
-    variable_ranges = [
-        find_kernel_build_ID(original_bytes),
-        find_kernel_module_certificate(original_bytes),
-    ]
-
-    array = bytearray(original_bytes)
-
-    for start, limit in variable_ranges:
-        logging.debug(f'start={start} limit={limit}')
-        for i in range(start, limit):
-            array[i] = 0  # b'\0' does not work
-
-    with canonical.open('wb') as f:
-        f.write(array)
+    array = bytearray(original.read_bytes())
+    blank_kernel_build_ID(array)
+    blank_kernel_module_certificate(array)
+    canonical.write_bytes(array)
 
 
 def process_vmlinux(info: Info, copy_args) -> None:
