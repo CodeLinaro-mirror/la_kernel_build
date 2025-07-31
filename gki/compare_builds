@@ -264,10 +264,10 @@ def process_module(info: Info, copy_args: list[str], root_path: pathlib.Path, mo
 
 def process_system_dlkm(info: Info, copy_args: list[str], system_dlkm: str, unpacked: pathlib.Path) -> None:
     for root, dirs, files in os.walk(unpacked):
-        for module_name in files:
-            if module_name.endswith('.ko'):
+        for name in files:
+            if name.endswith('.ko'):
                 root_path = pathlib.Path(root)
-                process_module(info, copy_args, root_path, module_name, f'{module_name} from {system_dlkm}')
+                process_module(info, copy_args, root_path, name, f'{name} from {system_dlkm}')
 
 
 def process_distribution(gki: pathlib.Path, info: Info, copy_args: list[str]) -> None:
