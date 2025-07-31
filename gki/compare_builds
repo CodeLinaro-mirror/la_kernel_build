@@ -370,7 +370,7 @@ def report_artefacts(built_nodes, given_nodes, given_edges) -> bool:
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--strip-btf', action='store_true')
