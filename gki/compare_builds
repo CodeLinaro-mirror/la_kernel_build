@@ -355,7 +355,7 @@ def partition(predicate, items):
         result[predicate(element)].append(element)
     return result
 
-def report_artefacts(built_nodes, given_nodes, given_edges) -> bool:
+def report_artefacts(built_nodes, given_nodes, given_edges, happy: str, sad: str) -> int:
     def is_good(memo: dict[str, bool], node: str) -> bool:
         if node not in memo:
             memo[node] = any(is_good(memo, n) for n, label in given_edges[node])
@@ -366,10 +366,10 @@ def report_artefacts(built_nodes, given_nodes, given_edges) -> bool:
     bad_nodes, good_nodes = partition(check, sorted(given_nodes.keys()))
 
     if good_nodes:
-        print(f'{len(good_nodes)} verified artefacts')
+        print(f'{len(good_nodes)} {happy} artefacts')
         print()
     if bad_nodes:
-        print(f'{len(bad_nodes)} unverified artefacts:')
+        print(f'{len(bad_nodes)} {sad} artefacts:')
         for node in bad_nodes:
             files = ' '.join(sorted(map(str, given_nodes[node])))
             print(f'  {node} ({files})')
@@ -377,7 +377,7 @@ def report_artefacts(built_nodes, given_nodes, given_edges) -> bool:
                 print(f'    --{label}-> {other}')
         print()
 
-    return not bad_nodes
+    return len(bad_nodes)
 
 
 def main() -> int:
@@ -422,13 +422,15 @@ def main() -> int:
             for f in futures:
                 f.result()
 
-        if report_artefacts(built.nodes, given.nodes, given.edges):
-            build_ID = hashlib.sha256(given.release.encode()).hexdigest()
-            print(f'verified build ID: {build_ID}')
-            return 0
+        problems = (report_artefacts(given.nodes, built.nodes, built.edges, 'present', 'missing') +
+                    report_artefacts(built.nodes, given.nodes, given.edges, 'verified', 'unverified'))
+        if problems > 0:
+            input(f'temporary working directory is {t}; press enter to exit')
+            return 1
 
-        input(f'temporary working directory is {t}, press enter to exit')
-        return 1
+        build_ID = hashlib.sha256(given.release.encode()).hexdigest()
+        print(f'verified build ID: {build_ID}')
+        return 0
 
 
 if __name__ == '__main__':
