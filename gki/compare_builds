@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import argparse
+import concurrent.futures
 import dataclasses
 import datetime
 import hashlib
@@ -185,24 +186,21 @@ def add_edge(info: Info, key1: str, key2: str) -> None:
     info.edges[key1].add(key2)
 
 
-def process_kernel(gki: pathlib.Path, info: Info, kernel: str) -> None:
-    kernel_path = info.distribution / kernel
-    if not kernel_path.exists():
-        return
-    key1 = add_artefact(info, kernel, kernel_path, kernel)
+def process_kernel(gki: pathlib.Path, info: Info, kernel: str, kernel_path: pathlib.Path, provenance: str) -> str:
+    key1 = add_artefact(info, kernel, kernel_path, provenance)
     _DECOMPRESSORS = {
         'Image': None,
         'Image.gz': gki / 'prebuilts' / 'build-tools' / 'path' / 'linux-x86' / 'gzip',
         'Image.lz4': gki / 'prebuilts' / 'kernel-build-tools' / 'linux-x86' / 'bin' / 'lz4',
     }
     decompressor = _DECOMPRESSORS[kernel]
-    if decompressor == None:
-        return
-    uncompressed_path = info.working_directory / (kernel + '.uncompressed')
-    with uncompressed_path.open('wb') as f:
-        subprocess.check_call([decompressor, '-d', '-c', '--', kernel_path], stdout=f)
-        key2 = add_artefact(info, 'Image', uncompressed_path, f'decompressed {kernel}')
-        add_edge(info, key1, key2)
+    if decompressor is not None:
+        uncompressed_path = info.working_directory / (kernel + '.uncompressed')
+        with uncompressed_path.open('wb') as f:
+            subprocess.check_call([decompressor, '-d', '-c', '--', kernel_path], stdout=f)
+            key2 = add_artefact(info, 'Image', uncompressed_path, f'decompressed {provenance}')
+            add_edge(info, key1, key2)
+    return key1
 
 
 def create_kernel(vmlinux: pathlib.Path, kernel: pathlib.Path) -> None:
@@ -222,29 +220,26 @@ def process_vmlinux(info: Info, copy_args) -> None:
 
     recreated_kernel_path = info.working_directory / 'vmlinux.Image'
     create_kernel(vmlinux_path, recreated_kernel_path)
-    key2 = add_artefact(info, 'Image', recreated_kernel_path, f'Image recreated from vmlinux')
+    key2 = add_artefact(info, 'Image', recreated_kernel_path, 'Image from vmlinux')
     add_edge(info, key1, key2)
 
     canonical_vmlinux_path = info.working_directory / 'vmlinux.canonical'
     canonicalise_kernel(info, vmlinux_path, canonical_vmlinux_path)
-    key3 = add_artefact(info, 'vmlinux', canonical_vmlinux_path, f'canonical vmlinux from vmlinux')
+    key3 = add_artefact(info, 'vmlinux', canonical_vmlinux_path, 'canonical vmlinux')
     add_edge(info, key1, key3)
 
     canonical_kernel_path = info.working_directory / 'vmlinux.Image.canonical'
     canonicalise_kernel(info, recreated_kernel_path, canonical_kernel_path)
-    key4 = add_artefact(info, 'Image', canonical_kernel_path, f'canonical Image recreated from vmlinux')
+    key4 = add_artefact(info, 'Image', canonical_kernel_path, 'canonical Image from vmlinux')
     add_edge(info, key2, key4)
 
-    copied_canonical_vmlinux_path = info.working_directory / 'vmlinux.canonical.copied'
+    copied_canonical_vmlinux_path = info.working_directory / 'vmlinux.canonical.objcopy'
     subprocess.run(['llvm-objcopy', *copy_args, canonical_vmlinux_path, copied_canonical_vmlinux_path], check=True)
-    key5 = add_artefact(info, 'vmlinux', copied_canonical_vmlinux_path, f'objcopied from canonical vmlinux from vmlinux')
+    key5 = add_artefact(info, 'vmlinux', copied_canonical_vmlinux_path, 'objcopy of canonical vmlinux')
     add_edge(info, key3, key5)
 
 
-def process_boot_image(gki: pathlib.Path, info: Info, kernel: str, boot_image: str) -> None:
-    boot_image_path = info.distribution / boot_image
-    if not os.path.exists(boot_image_path):
-        return
+def process_boot_image(gki: pathlib.Path, info: Info, kernel: str, boot_image: str, boot_image_path: pathlib.Path) -> None:
     unpacked = info.working_directory / (boot_image + '.unpacked')
     subprocess.check_call([gki / 'tools' / 'mkbootimg' / 'unpack_bootimg.py',
                            '--boot_img', boot_image_path, '--format', 'info', '--out', unpacked],
@@ -252,11 +247,10 @@ def process_boot_image(gki: pathlib.Path, info: Info, kernel: str, boot_image: s
     ramdisk_file = unpacked / 'ramdisk'
     kernel_file =  unpacked / 'kernel'
     if os.stat(ramdisk_file).st_size > 0:
-        logging.error(f'bad ramdisk {ramdisk_file} extracted from {boot_image}')
+        logging.error(f'non-empty ramdisk {ramdisk_file} from {boot_image}')
     key1 = add_artefact(info, boot_image, boot_image_path, boot_image)
-    key2 = add_artefact(info, kernel, kernel_file, f'{kernel} extracted from {boot_image}')
+    key2 = process_kernel(gki, info, kernel, kernel_file, f'{kernel} from {boot_image}')
     add_edge(info, key1, key2)
-    # TODO: decompress kernels extracted from boot images
 
 
 def process_system_dlkm(info: Info, copy_args: list[str], system_dlkm: str, unpacked: pathlib.Path) -> None:
@@ -265,23 +259,29 @@ def process_system_dlkm(info: Info, copy_args: list[str], system_dlkm: str, unpa
             if module_name.endswith('.ko'):
                 root_path = pathlib.Path(root)
                 module_path = root_path / module_name
-                key1 = add_artefact(info, module_name, module_path, f'extracted from {system_dlkm}')
-                copied_path = root_path / (module_name + '.copied')
+                key1 = add_artefact(info, module_name, module_path, f'{module_name} from {system_dlkm}')
+                copied_path = root_path / (module_name + '.objcopy')
                 subprocess.check_call(['llvm-objcopy', *copy_args, module_path, copied_path])
-                key2 = add_artefact(info, module_name, copied_path, f'objcopied from {module_name} extracted from {system_dlkm}')
+                key2 = add_artefact(info, module_name, copied_path, f'objcopy of {module_name} from {system_dlkm}')
                 add_edge(info, key1, key2)
 
 
 def process_distribution(gki: pathlib.Path, info: Info, copy_args: list[str]) -> None:
     process_vmlinux(info, copy_args)
+
     _BOOT_IMAGES = {
         'Image': 'boot.img',
         'Image.gz': 'boot-gz.img',
         'Image.lz4': 'boot-lz4.img',
     }
     for kernel, boot_image in _BOOT_IMAGES.items():
-        process_kernel(gki, info, kernel)
-        process_boot_image(gki, info, kernel, boot_image)
+        kernel_path = info.distribution / kernel
+        if kernel_path.exists():
+            process_kernel(gki, info, kernel, kernel_path, kernel)
+        boot_image_path = info.distribution / boot_image
+        if boot_image_path.exists():
+            process_boot_image(gki, info, kernel, boot_image, boot_image_path)
+
     _FILESYSTEMS = {
         'erofs' : lambda archive, unpacked: ['fsck.erofs', f'--extract={unpacked}', '--', archive],
         'ext4' : lambda archive, unpacked: ['7z', f'-o{unpacked}', 'x', archive],
@@ -370,7 +370,7 @@ def report_artefacts(built_nodes, given_nodes, given_edges) -> bool:
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--strip-btf', action='store_true')
@@ -403,8 +403,13 @@ def main() -> int:
 
         compare_metadata(gki_path, given, built)
 
-        for info in given, built:
-            process_distribution(gki_path, info, copy_args)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(process_distribution, gki_path, info, copy_args)
+                for info in [given, built]
+            ]
+            for f in futures:
+                f.result()
 
         if report_artefacts(built.nodes, given.nodes, given.edges):
             build_ID = hashlib.sha256(given.release.encode()).hexdigest()
