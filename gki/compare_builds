@@ -330,8 +330,9 @@ def compare_metadata(gki: pathlib.Path, built: Info, given: Info):
 
 def build_gki(gki: pathlib.Path, commit: str, build: str, epoch: int) -> pathlib.Path:
     if commit is not None:
+        # 12 character SHA as requested by Kleaf
         gki_commit = subprocess.check_output(
-            ['git', 'rev-parse', '--short', 'HEAD'],
+            ['git', 'rev-parse', '--short=12', 'HEAD'],
             cwd=gki / 'common', text=True).rstrip('\n')
         if commit != gki_commit:
             logging.warning(f'mismatched commits: {commit} != {gki_commit}')
