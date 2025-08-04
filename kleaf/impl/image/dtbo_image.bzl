@@ -14,7 +14,8 @@
 
 """Build dtbo."""
 
-load(":common_providers.bzl", "KernelBuildInfo", "KernelSerializedEnvInfo")
+load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_toolchain")
+load(":common_providers.bzl", "KernelSerializedEnvInfo")
 load(":debug.bzl", "debug")
 load(":utils.bzl", "kernel_utils", "utils")
 
@@ -27,7 +28,8 @@ def _get_deprecation_warning(ctx):
     return """
           if [[ -n ${{MKDTIMG_FLAGS}} ]] ; then
             KLEAF_MKDTIMG_FLAGS=$(echo "${{MKDTIMG_FLAGS% }}" | sed '/^$/d' | sed 's/\\S*/  "&",/g')
-            echo "WARNING: MKDTIMG_FLAGS from build.config is DEPRECATED. Add opts:" >&2
+            echo "WARNING: MKDTIMG_FLAGS from build.config is DEPRECATED!." >&2
+            echo "Use dtbo_image(opts=...) instead." >&2
             echo "opts = [\n${{KLEAF_MKDTIMG_FLAGS}}" >&2
             echo "],\nto {dtbo_target} target." >&2
             unset KLEAF_MKDTIMG_FLAGS
@@ -42,18 +44,32 @@ def _get_mkdtimg_opts_cmd(ctx):
     return "${MKDTIMG_FLAGS}"
 
 def _dtbo_image_impl(ctx):
+    hermetic_tools = hermetic_toolchain.get(ctx)
+    transitive_inputs = []
+
+    if ctx.attr.kernel_build:
+        # buildifier: disable=print
+        print("""\
+WARNING: {}: dtbo_image(kernel_build=) is deprecated. Do not set it.
+Use dtbo_image(opts=...) instead (`opts` should be the same as `MKDTIMG_FLAGS`).
+""".format(
+            ctx.label.name,
+        ))
+        command = kernel_utils.setup_serialized_env_cmd(
+            serialized_env_info = ctx.attr.kernel_build[KernelSerializedEnvInfo],
+            restore_out_dir_cmd = utils.get_check_sandbox_cmd(),
+        )
+        tools = ctx.attr.kernel_build[KernelSerializedEnvInfo].tools
+        transitive_inputs.append(ctx.attr.kernel_build[KernelSerializedEnvInfo].inputs)
+    else:  # Use only hermetic setup
+        tools = hermetic_tools.deps
+        command = hermetic_tools.setup
+
     out_name = ctx.attr.out or (ctx.label.name + "/dtbo.img")
     output = ctx.actions.declare_file(out_name)
     dtbo_staging_dir = output.dirname + "/staging"
     inputs = []
-    transitive_inputs = [target.files for target in ctx.attr.srcs]
-    transitive_inputs.append(ctx.attr.kernel_build[KernelSerializedEnvInfo].inputs)
-    tools = ctx.attr.kernel_build[KernelSerializedEnvInfo].tools
-
-    command = kernel_utils.setup_serialized_env_cmd(
-        serialized_env_info = ctx.attr.kernel_build[KernelSerializedEnvInfo],
-        restore_out_dir_cmd = utils.get_check_sandbox_cmd(),
-    )
+    transitive_inputs += [target.files for target in ctx.attr.srcs]
 
     command += _get_deprecation_warning(ctx)
     mkdtimg_opts_cmd = _get_mkdtimg_opts_cmd(ctx)
@@ -100,9 +116,7 @@ dtbo_image = rule(
     doc = "Build dtbo image.",
     attrs = {
         "kernel_build": attr.label(
-            mandatory = True,
-            providers = [KernelSerializedEnvInfo, KernelBuildInfo],
-            doc = "The [`kernel_build`](#kernel_build).",
+            doc = "**DEPRECATED.** Set opts using the values in `MKDTIMG_FLAGS` instead.",
         ),
         "opts": attr.string_list(
             doc = "Flags passed to `mkdtimg` tool. Successor of `MKDTIMG_FLAGS` ",
@@ -151,5 +165,8 @@ dtbo_image = rule(
     },
     subrules = [
         utils.get_check_sandbox_cmd,
+    ],
+    toolchains = [
+        hermetic_toolchain.type,
     ],
 )
