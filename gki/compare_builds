@@ -77,7 +77,7 @@ to be "unverified".
 7z - unpack ext4 filesystem images
 fsck.erofs - unpack erofs images
 git - get common commit hash, for informational purposes
-llvm-objcopy - convert vmlinux to an Image; strip ELF objects
+llvm-objcopy - convert vmlinux to Image; trim module signature; remove ELF sections
 '''
 
 def blank_kernel_build_ID(kernel: bytearray) -> None:
@@ -253,17 +253,21 @@ def process_boot_image(gki: pathlib.Path, info: Info, kernel: str, boot_image: s
     add_edge(info, key1, key2)
 
 
+def process_module(info: Info, copy_args: list[str], root_path: pathlib.Path, module_name: str, provenance: str) -> None:
+    module_path = root_path / module_name
+    key1 = add_artefact(info, module_name, module_path, provenance)
+    copied_path = root_path / (module_name + '.objcopy')
+    subprocess.check_call(['llvm-objcopy', *copy_args, module_path, copied_path])
+    key2 = add_artefact(info, module_name, copied_path, 'objcopy of ' + provenance)
+    add_edge(info, key1, key2)
+
+
 def process_system_dlkm(info: Info, copy_args: list[str], system_dlkm: str, unpacked: pathlib.Path) -> None:
     for root, dirs, files in os.walk(unpacked):
-        for module_name in files:
-            if module_name.endswith('.ko'):
+        for name in files:
+            if name.endswith('.ko'):
                 root_path = pathlib.Path(root)
-                module_path = root_path / module_name
-                key1 = add_artefact(info, module_name, module_path, f'{module_name} from {system_dlkm}')
-                copied_path = root_path / (module_name + '.objcopy')
-                subprocess.check_call(['llvm-objcopy', *copy_args, module_path, copied_path])
-                key2 = add_artefact(info, module_name, copied_path, f'objcopy of {module_name} from {system_dlkm}')
-                add_edge(info, key1, key2)
+                process_module(info, copy_args, root_path, name, f'{name} from {system_dlkm}')
 
 
 def process_distribution(gki: pathlib.Path, info: Info, copy_args: list[str]) -> None:
@@ -286,14 +290,18 @@ def process_distribution(gki: pathlib.Path, info: Info, copy_args: list[str]) ->
         'erofs' : lambda archive, unpacked: ['fsck.erofs', f'--extract={unpacked}', '--', archive],
         'ext4' : lambda archive, unpacked: ['7z', f'-o{unpacked}', 'x', archive],
     }
-    for system_dlkm in os.listdir(info.distribution):
-        if m := re.fullmatch(r'system_dlkm.*\.(erofs|ext4)\.img', system_dlkm):
+    for name in os.listdir(info.distribution):
+        if name.endswith('.ko'):
+            pathlib.Path(info.working_directory / name).write_bytes(
+                pathlib.Path(info.distribution / name).read_bytes())
+            process_module(info, copy_args, info.working_directory, name, name)
+        elif m := re.fullmatch(r'system_dlkm.*\.(erofs|ext4)\.img', name):
             fs = m.group(1)
-            archive = info.distribution / system_dlkm
-            unpacked = info.working_directory / (system_dlkm + '.unpacked')
+            archive = info.distribution / name
+            unpacked = info.working_directory / (name + '.unpacked')
             unpack = _FILESYSTEMS[fs](archive, unpacked)
             subprocess.check_call(unpack, stdout=subprocess.DEVNULL)
-            process_system_dlkm(info, copy_args, system_dlkm, unpacked)
+            process_system_dlkm(info, copy_args, name, unpacked)
 
 
 def initialise_side(side: str, distribution: pathlib.Path, temporary_path: pathlib.Path) -> Info:
@@ -352,19 +360,17 @@ def report_artefacts(built_nodes, given_nodes, given_edges) -> bool:
     check = lambda n: is_good(memo, n)
     bad_nodes, good_nodes = partition(check, sorted(given_nodes.keys()))
 
-    def print_nodes(nodes):
-        for node in nodes:
-            print(f' {node} {given_nodes[node]}')
+    def print_nodes(kind: str, nodes):
+        if nodes:
+            print(f'{kind} artefacts:')
+            for node in nodes:
+                print(f' {node} {given_nodes[node]}')
+            print()
 
-    print('verified artefacts:')
-    print_nodes(good_nodes)
-    if bad_nodes:
-        print()
-        print('unverified artefacts:')
-        print_nodes(bad_nodes)
-
-    print()
+    print_nodes('verified', good_nodes)
+    print_nodes('unverified', bad_nodes)
     print(f'{len(good_nodes)} verified, {len(bad_nodes)} unverified artefacts')
+    print()
 
     return not bad_nodes
 
