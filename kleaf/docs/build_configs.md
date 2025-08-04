@@ -102,6 +102,7 @@ _"Not supported"_ is displayed. Contact [owners](../OWNERS) if you need support.
   - [KMI\_SYMBOL\_LIST\_ADD\_ONLY](#kmi_symbol_list_add_only)
   - [KCFLAGS](#kcflags)
   - [VENDOR\_BOOTCONFIG](#vendor_bootconfig)
+  - [MKDTIMG\_FLAGS](#mkdtimg_flags)
 
 ## BUILD\_CONFIG
 
@@ -850,3 +851,13 @@ See [vendor_boot_image](api_reference/kernel.md#vendor_boot_image).
 [documentation for ABI monitoring]: abi.md
 
 [documentation for implementing Kleaf]: impl.md
+
+## MKDTIMG\_FLAGS
+
+```python
+dtbo_image(opts = [...])
+```
+
+See [dtbo_image](api_reference/kernel.md#dtbo_image).
+
+[documentation for all rules]: api_reference.md

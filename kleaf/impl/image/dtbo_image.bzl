@@ -20,6 +20,27 @@ load(":utils.bzl", "kernel_utils", "utils")
 
 visibility("//build/kernel/kleaf/...")
 
+def _get_deprecation_warning(ctx):
+    # Omit the warning if opts have been provided.
+    if ctx.attr.opts:
+        return ""
+    return """
+          if [[ -n ${{MKDTIMG_FLAGS}} ]] ; then
+            KLEAF_MKDTIMG_FLAGS=$(echo "${{MKDTIMG_FLAGS% }}" | sed '/^$/d' | sed 's/\\S*/  "&",/g')
+            echo "WARNING: MKDTIMG_FLAGS from build.config is DEPRECATED. Add opts:" >&2
+            echo "opts = [\n${{KLEAF_MKDTIMG_FLAGS}}" >&2
+            echo "],\nto {dtbo_target} target." >&2
+            unset KLEAF_MKDTIMG_FLAGS
+          fi
+    """.format(dtbo_target = str(ctx.label.name))
+
+def _get_mkdtimg_opts_cmd(ctx):
+    if ctx.attr.opts:
+        return " ".join(ctx.attr.opts)
+
+    # Fallback to previous behavior, until is fully deprecated.
+    return "${MKDTIMG_FLAGS}"
+
 def _dtbo_image_impl(ctx):
     out_name = ctx.attr.out or (ctx.label.name + "/dtbo.img")
     output = ctx.actions.declare_file(out_name)
@@ -34,6 +55,9 @@ def _dtbo_image_impl(ctx):
         restore_out_dir_cmd = utils.get_check_sandbox_cmd(),
     )
 
+    command += _get_deprecation_warning(ctx)
+    mkdtimg_opts_cmd = _get_mkdtimg_opts_cmd(ctx)
+
     if ctx.file.config_file:
         inputs.append(ctx.file.config_file)
         command += """
@@ -41,21 +65,23 @@ def _dtbo_image_impl(ctx):
                   cp {srcs} {dtbo_staging_dir}
 
                 # make dtbo
-                  mkdtimg cfg_create {output} {config} ${{MKDTIMG_FLAGS}} -d {dtbo_staging_dir}
+                  mkdtimg cfg_create {output} {config} {mkdtimg_opts} -d {dtbo_staging_dir}
                   rm -rf {dtbo_staging_dir}
         """.format(
             output = output.path,
             srcs = " ".join([f.path for f in ctx.files.srcs]),
             config = ctx.file.config_file.path,
             dtbo_staging_dir = dtbo_staging_dir,
+            mkdtimg_opts = mkdtimg_opts_cmd,
         )
     else:
         command += """
                 # make dtbo
-                  mkdtimg create {output} ${{MKDTIMG_FLAGS}} {srcs}
+                  mkdtimg create {output} {mkdtimg_opts} {srcs}
         """.format(
             output = output.path,
             srcs = " ".join([f.path for f in ctx.files.srcs]),
+            mkdtimg_opts = mkdtimg_opts_cmd,
         )
 
     debug.print_scripts(ctx, command)
@@ -77,6 +103,9 @@ dtbo_image = rule(
             mandatory = True,
             providers = [KernelSerializedEnvInfo, KernelBuildInfo],
             doc = "The [`kernel_build`](#kernel_build).",
+        ),
+        "opts": attr.string_list(
+            doc = "Flags passed to `mkdtimg` tool. Successor of `MKDTIMG_FLAGS` ",
         ),
         "srcs": attr.label_list(
             allow_files = True,
