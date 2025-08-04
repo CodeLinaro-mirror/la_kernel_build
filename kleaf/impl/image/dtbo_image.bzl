@@ -60,11 +60,11 @@ def _dtbo_image_impl(ctx):
 
     debug.print_scripts(ctx, command)
     ctx.actions.run_shell(
-        mnemonic = "Dtbo",
+        mnemonic = "DtboImage",
         inputs = depset(inputs, transitive = transitive_inputs),
         outputs = [output],
         tools = tools,
-        progress_message = "Building dtbo %{label}",
+        progress_message = "Building dtbo image %{label}",
         command = command,
     )
     return DefaultInfo(files = depset([output]))
