@@ -346,7 +346,7 @@ def build_gki(gki: pathlib.Path, commit: str, build: str, epoch: int) -> pathlib
     subprocess.check_call(
         ['tools/bazel', 'run', '--config=release', '//common:kernel_aarch64_abi_dist'],
         cwd=gki, env=env)
-    return gki / 'out_abi' / 'kernel_aarch64' / 'dist'
+    return gki / 'out_abi' / 'kernel_aarch64_abi_dist' / 'dist'
 
 
 def partition(predicate, items):
