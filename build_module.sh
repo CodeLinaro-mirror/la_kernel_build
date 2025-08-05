@@ -320,7 +320,9 @@ for EXT_MOD in ${EXT_MODULES}; do
     fi
   done
   if [[ "$TARGET_PRODUCT" = "gen4_gvm" ||
+	  "$TARGET_PRODUCT" = "gen4_gvm_sgt" ||
 	  "$TARGET_PRODUCT" = "gen5_gvm" ||
+	  "$TARGET_PRODUCT" = "gen5_gvm_sgt" ||
 	  "$TARGET_PRODUCT" = "gen5_gvm_gy" ]]; then
      btgt="autogvm"
   elif [ "$TARGET_BOARD_PLATFORM" = "msmnile_au" ]; then
