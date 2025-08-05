@@ -12,23 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests `native_binary_with_arg`"""
+"""Tests `executable_dispatcher`"""
 
 load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_genrule")
-load("//build/kernel/kleaf/impl:native_binary_with_arg.bzl", "native_binary_with_arg")
+load("//build/kernel/kleaf/impl:executable_dispatcher.bzl", "executable_dispatcher")
 load("//build/kernel/kleaf/tests:hermetic_test.bzl", "hermetic_test")
 
 visibility("private")
 
-def native_binary_with_arg_test(
+def executable_dispatcher_test(
         name,
         src,
         args,
         alias = None):
-    """Tests `native_binary_with_arg`.
+    """Tests `executable_dispatcher`.
 
     Args:
         name: name of the test
@@ -37,7 +37,7 @@ def native_binary_with_arg_test(
         alias: If set, aliases the internal binary
     """
     if alias:
-        native_binary_with_arg(
+        executable_dispatcher(
             name = name + "_bin_real",
             src = src,
             args = args,
@@ -48,7 +48,7 @@ def native_binary_with_arg_test(
             src = name + "_bin_real",
         )
     else:
-        native_binary_with_arg(
+        executable_dispatcher(
             name = name + "_bin",
             src = src,
             args = args,

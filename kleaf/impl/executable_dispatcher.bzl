@@ -21,7 +21,7 @@ load("@rules_cc//cc:defs.bzl", "cc_binary")
 
 visibility("//build/kernel/...")
 
-def native_binary_with_arg(
+def executable_dispatcher(
         name,
         src,
         args,
@@ -70,7 +70,7 @@ def native_binary_with_arg(
 
     cc_binary(
         name = "{}/{}".format(wrapped_dir, basename),
-        srcs = [Label("arg_wrapper.cpp")],
+        srcs = [Label("executable_dispatcher.template.cpp")],
         data = [
             ":{}/kleaf_internal_do_not_use/{}".format(wrapped_dir, basename),
             ":{}/kleaf_internal_do_not_use/{}_args".format(wrapped_dir, basename),

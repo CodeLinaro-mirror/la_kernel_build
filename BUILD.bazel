@@ -19,10 +19,10 @@ load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_library.bzl", "sh_library")
 load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_tools")
 load("//build/kernel/kleaf/impl:bison_flex_wrapper.bzl", "bison_flex_wrapper")
-load("//build/kernel/kleaf/impl:native_binary_with_arg.bzl", "native_binary_with_arg")
+load("//build/kernel/kleaf/impl:executable_dispatcher.bzl", "executable_dispatcher")
 load("//build/kernel/kleaf/impl:swig_wrapper.bzl", "swig_wrapper")
 
-native_binary_with_arg(
+executable_dispatcher(
     name = "rsync",
     src = "@kleaf_host_tools//:rsync",
     args = ["--no-group"],
@@ -51,7 +51,7 @@ native_binary(
     visibility = ["//visibility:private"],
 )
 
-native_binary_with_arg(
+executable_dispatcher(
     name = "tar",
     src = ":toybox",
     args = [

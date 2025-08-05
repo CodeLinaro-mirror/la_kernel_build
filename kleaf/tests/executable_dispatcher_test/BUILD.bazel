@@ -13,26 +13,26 @@
 # limitations under the License.
 
 load("@rules_cc//cc:defs.bzl", "cc_binary")
-load(":native_binary_with_arg_test.bzl", "native_binary_with_arg_test")
+load(":executable_dispatcher_test.bzl", "executable_dispatcher_test")
 
 cc_binary(
     name = "echo",
     srcs = ["echo.c"],
 )
 
-native_binary_with_arg_test(
+executable_dispatcher_test(
     name = "echo_single",
     src = ":echo",
     args = ["1"],
 )
 
-native_binary_with_arg_test(
+executable_dispatcher_test(
     name = "echo_space_in_args",
     src = ":echo",
     args = ["an argument"],
 )
 
-native_binary_with_arg_test(
+executable_dispatcher_test(
     name = "echo_multiple",
     src = ":echo",
     args = [
@@ -41,7 +41,7 @@ native_binary_with_arg_test(
     ],
 )
 
-native_binary_with_arg_test(
+executable_dispatcher_test(
     name = "echo_selected_arg",
     src = ":echo",
     args = select({
@@ -50,13 +50,13 @@ native_binary_with_arg_test(
     }) + ["2"],
 )
 
-native_binary_with_arg_test(
+executable_dispatcher_test(
     name = "in_a_directory/echo",
     src = ":echo",
     args = ["1"],
 )
 
-native_binary_with_arg_test(
+executable_dispatcher_test(
     name = "in_a_directory/aliased",
     src = ":echo",
     alias = "in_a/different_directory/alias",
@@ -64,7 +64,7 @@ native_binary_with_arg_test(
 )
 
 test_suite(
-    name = "native_binary_with_arg_test",
+    name = "executable_dispatcher_test",
     tests = [
         ":echo_multiple",
         ":echo_selected_arg",
