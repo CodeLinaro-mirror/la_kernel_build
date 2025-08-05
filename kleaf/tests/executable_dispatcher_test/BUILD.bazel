@@ -23,19 +23,19 @@ cc_binary(
 executable_dispatcher_test(
     name = "echo_single",
     src = ":echo",
-    args = ["1"],
+    append_args = ["1"],
 )
 
 executable_dispatcher_test(
     name = "echo_space_in_args",
     src = ":echo",
-    args = ["an argument"],
+    append_args = ["an argument"],
 )
 
 executable_dispatcher_test(
     name = "echo_multiple",
     src = ":echo",
-    args = [
+    append_args = [
         "1",
         "hello, world!",
     ],
@@ -44,7 +44,7 @@ executable_dispatcher_test(
 executable_dispatcher_test(
     name = "echo_selected_arg",
     src = ":echo",
-    args = select({
+    append_args = select({
         "@platforms//cpu:mips64": ["???"],
         "//conditions:default": ["1"],
     }) + ["2"],
@@ -53,14 +53,14 @@ executable_dispatcher_test(
 executable_dispatcher_test(
     name = "in_a_directory/echo",
     src = ":echo",
-    args = ["1"],
+    append_args = ["1"],
 )
 
 executable_dispatcher_test(
     name = "in_a_directory/aliased",
     src = ":echo",
     alias = "in_a/different_directory/alias",
-    args = ["1"],
+    append_args = ["1"],
 )
 
 test_suite(

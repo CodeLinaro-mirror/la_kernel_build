@@ -25,7 +25,7 @@ load("//build/kernel/kleaf/impl:swig_wrapper.bzl", "swig_wrapper")
 executable_dispatcher(
     name = "rsync",
     src = "@kleaf_host_tools//:rsync",
-    args = ["--no-group"],
+    append_args = ["--no-group"],
     visibility = ["//visibility:private"],
 )
 
@@ -54,7 +54,7 @@ native_binary(
 executable_dispatcher(
     name = "tar",
     src = ":toybox",
-    args = [
+    append_args = [
         "--mtime=@0",
         "--owner=0",
         "--group=0",

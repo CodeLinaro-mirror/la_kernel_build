@@ -26,21 +26,21 @@ visibility("private")
 def executable_dispatcher_test(
         name,
         src,
-        args,
+        append_args,
         alias = None):
     """Tests `executable_dispatcher`.
 
     Args:
         name: name of the test
         src: a binary that prints arguments, separated by new line character
-        args: a list of arguments to be embedded
+        append_args: a list of arguments to be embedded
         alias: If set, aliases the internal binary
     """
     if alias:
         executable_dispatcher(
             name = name + "_bin_real",
             src = src,
-            args = args,
+            append_args = append_args,
         )
         native_binary(
             name = name + "_bin",
@@ -51,7 +51,7 @@ def executable_dispatcher_test(
         executable_dispatcher(
             name = name + "_bin",
             src = src,
-            args = args,
+            append_args = append_args,
         )
 
     hermetic_genrule(
@@ -68,7 +68,7 @@ def executable_dispatcher_test(
     write_file(
         name = name + "_expected",
         out = name + "_expected.txt",
-        content = args + [""],
+        content = append_args + [""],
     )
 
     diff_test(

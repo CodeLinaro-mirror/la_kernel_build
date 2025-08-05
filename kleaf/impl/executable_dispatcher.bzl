@@ -12,74 +12,141 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Like `native_binary` but invoked with a given list of arguments."""
+"""RBE-friendly native_binary() that supports embedding args."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
-load("@bazel_skylib//rules:write_file.bzl", "write_file")
-load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load(":utils.bzl", "utils")
 
 visibility("//build/kernel/...")
 
-def executable_dispatcher(
+def _write_source_file_impl(ctx):
+    out = ctx.actions.declare_file(ctx.label.name)
+    actual_executable = ctx.executable.actual_executable
+
+    # This is not a perfect translation, but it is good enough for our use cases.
+    append_args_str = json.encode(ctx.attr.append_args)
+
+    # Drop the leading [ and trailing ]
+    if not append_args_str.startswith("[") or not append_args_str.endswith("]"):
+        fail("{} is translated to {}, but a list is expected".format(
+            ctx.attr.append_args,
+            append_args_str,
+        ))
+    append_args_str = append_args_str[1:len(append_args_str) - 1]
+
+    ctx.actions.expand_template(
+        template = ctx.file.template,
+        output = out,
+        substitutions = {
+            "{actual_executable_path}": actual_executable.path,
+            "{actual_executable_short_path}": actual_executable.short_path,
+            "{append_args}": append_args_str,
+            "{out}": ctx.attr.out,
+            "{pkg_bin_dir}": utils.package_bin_dir(ctx),
+            "{pkg_short}": paths.join(
+                ctx.label.workspace_root,
+                ctx.label.package,
+            ),
+        },
+    )
+    return DefaultInfo(files = depset([out]))
+
+_write_source_file = rule(
+    implementation = _write_source_file_impl,
+    attrs = {
+        "template": attr.label(mandatory = True, allow_single_file = True),
+        "substitutions": attr.string_dict(),
+        "actual_executable": attr.label(
+            executable = True,
+            cfg = "target",
+            allow_files = True,
+        ),
+        "append_args": attr.string_list(),
+        "out": attr.string(),
+        "source_name": attr.string(),
+    },
+)
+
+def _executable_dispatcher_impl(
         name,
+        visibility,
         src,
-        args,
+        out,
+        data,
+        append_args,
         **kwargs):
-    """Like `native_binary` but invoked with a given list of arguments.
+    out = out or name
 
-    Note: Internally `arg_wrapper` is built with `cc_binary_host_musl`, and hence
-    `arg_wrapper` is controlled by --musl_tools_from_sources.
-
-    Known issues:
-    - This may not work properly if `src` is a `py_binary`.
-
-    Args:
-        name: name of the target
-        src: actual native binary
-        args: list of arguments
-        **kwargs: Additional attributes to the internal rule, e.g.
-          [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
-          See complete list
-          [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
-    """
-
-    private_kwargs = kwargs | dict(
-        visibility = ["//visibility:private"],
-    )
-
-    if "/" in name:
-        wrapped_dir = paths.join(paths.dirname(name), "wrapped")
-    else:
-        wrapped_dir = "wrapped"
-    basename = paths.basename(name)
-
-    native_binary(
-        name = "{}/kleaf_internal_do_not_use/{}".format(wrapped_dir, basename),
-        out = "{}/kleaf_internal_do_not_use/{}".format(wrapped_dir, basename),
-        src = src,
-        **private_kwargs
-    )
-
-    write_file(
-        name = "{}/kleaf_internal_do_not_use/{}_args".format(wrapped_dir, basename),
-        out = "{}/kleaf_internal_do_not_use/{}_args.txt".format(wrapped_dir, basename),
-        content = args + [""],
-        **private_kwargs
-    )
-
-    cc_binary(
-        name = "{}/{}".format(wrapped_dir, basename),
-        srcs = [Label("executable_dispatcher.template.cpp")],
-        data = [
-            ":{}/kleaf_internal_do_not_use/{}".format(wrapped_dir, basename),
-            ":{}/kleaf_internal_do_not_use/{}_args".format(wrapped_dir, basename),
-        ],
-        **private_kwargs
-    )
-
+    # Extra layer ensures that src is configurable.
     native.alias(
-        name = name,
-        actual = "{}/{}".format(wrapped_dir, basename),
+        name = name + "_actual_executable",
+        actual = src,
+        visibility = ["//visibility:private"],
         **kwargs
     )
+    _write_source_file(
+        name = name + "_source.cpp",
+        template = Label("executable_dispatcher.template.cpp"),
+        actual_executable = name + "_actual_executable",
+        out = out,
+        append_args = append_args,
+        source_name = name + "_source.cpp",
+        visibility = ["//visibility:private"],
+        **kwargs
+    )
+    cc_binary(
+        name = out,
+        srcs = [name + "_source.cpp"],
+        data = data + [
+            name + "_actual_executable",
+        ],
+        visibility = ["//visibility:private"] if name != out else visibility,
+        **kwargs
+    )
+    if name != out:
+        native.alias(
+            name = name,
+            actual = out,
+            visibility = visibility,
+            **kwargs
+        )
+
+executable_dispatcher = macro(
+    doc = "RBE-friendly native_binary() that supports embedding args.",
+    implementation = _executable_dispatcher_impl,
+    attrs = {
+        "src": attr.label(
+            doc = "The actual executable.",
+            executable = True,
+            cfg = "target",
+            allow_files = True,
+            mandatory = True,
+        ),
+        "out": attr.string(
+            doc = """Default is name.
+                Unlike skylib's native_binary(), this rule doesn't add `.exe`.
+            """,
+            configurable = False,
+        ),
+        "data": attr.label_list(allow_files = True),
+        "append_args": attr.string_list(
+            doc = """Extra arguments that are appended at the end.
+
+                For example, if you have
+
+                ```
+                executable_dispatcher(name = "foo", append_args = ["--preset"]),
+                ```
+
+                then, the following are functionally equivalent:
+
+                ```shell
+                bazel run -- //:foo --runtime-arg
+
+                foo --runtime-arg --preset
+                ```
+            """,
+        ),
+    },
+)
