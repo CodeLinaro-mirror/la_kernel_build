@@ -41,7 +41,7 @@ bzl_library(
         "abi/kernel_abi_dist.bzl",
         "abi/trim_nonlisted_kmi_utils.bzl",
         "android_filegroup.bzl",
-        "bison_wrapper.bzl",
+        "bison_flex_wrapper.bzl",
         "btf.bzl",
         "cache_dir.bzl",
         "checkpatch.bzl",

@@ -18,7 +18,7 @@ load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_library.bzl", "sh_library")
 load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_tools")
-load("//build/kernel/kleaf/impl:bison_wrapper.bzl", "bison_wrapper")
+load("//build/kernel/kleaf/impl:bison_flex_wrapper.bzl", "bison_flex_wrapper")
 load("//build/kernel/kleaf/impl:native_binary_with_arg.bzl", "native_binary_with_arg")
 load("//build/kernel/kleaf/impl:swig_wrapper.bzl", "swig_wrapper")
 
@@ -73,7 +73,7 @@ native_binary(
     visibility = ["//build/kernel/kleaf/bootstrap_hermetic_tools:__pkg__"],
 )
 
-bison_wrapper(
+bison_flex_wrapper(
     name = "bison",
     actual = "//prebuilts/build-tools:bison",
     m4 = "//prebuilts/build-tools:m4",
@@ -82,11 +82,10 @@ bison_wrapper(
     visibility = ["//build/kernel/kleaf/bootstrap_hermetic_tools:__pkg__"],
 )
 
-# Also used in bootstrap_hermetic_tools, so create a handy alias in case we
-# build flex from source in the future.
-alias(
+bison_flex_wrapper(
     name = "flex",
     actual = "//prebuilts/build-tools:flex",
+    m4 = "//prebuilts/build-tools:m4",
     visibility = ["//build/kernel/kleaf/bootstrap_hermetic_tools:__pkg__"],
 )
 
