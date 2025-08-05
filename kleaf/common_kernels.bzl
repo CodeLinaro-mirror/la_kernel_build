@@ -432,6 +432,7 @@ def common_kernel(
         page_size = page_size,
         makefile = makefile,
         defconfig = defconfig,
+        pre_defconfig_fragments = pre_defconfig_fragments,
     )
 
     native.test_suite(
@@ -451,7 +452,8 @@ def _define_common_kernels_additional_tests(
         kernel_modules_install,
         modules,
         arch,
-        page_size):
+        page_size,
+        pre_defconfig_fragments):
     fake_modules_options = Label("//build/kernel/kleaf/artifact_tests:fake_modules_options.txt")
 
     initramfs(
@@ -509,19 +511,23 @@ def _define_common_kernels_additional_tests(
         visibility = ["//visibility:private"],
     )
 
-    # Tests that, if the menuconfig command does not edit anything, the pre_defconfig_fragment
-    # should still stay the same.
-    pre_defconfig_fragments_menuconfig_test(
-        name = name + "_pre_defconfig_fragments_menuconfig_test",
-        kernel_build = name + "_test_device_kernel",
-        pre_defconfig_fragment = Label("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragment"),
-        visibility = ["//visibility:private"],
-    )
+    extra_tests = []
+
+    # Omit this test for base kernels with pre_defconfig_fragments set (e.g. TV).
+    if not pre_defconfig_fragments:
+        # Tests that, if the menuconfig command does not edit anything, the pre_defconfig_fragment
+        # should still stay the same.
+        pre_defconfig_fragments_menuconfig_test(
+            name = name + "_pre_defconfig_fragments_menuconfig_test",
+            kernel_build = name + "_test_device_kernel",
+            pre_defconfig_fragment = Label("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragment"),
+            visibility = ["//visibility:private"],
+        )
+        extra_tests.append(name + "_pre_defconfig_fragments_menuconfig_test")
 
     # Build ddk_examples to make sure our DDK examples are up-to-date. Note that these examples
     # deliberately refers to //common explicitly to provide a clear example, so this build test
     # is only included when we are building //common:kernel_aarch64.
-    extra_tests = []
     if native.package_relative_label(kernel_build_name) == native.package_relative_label("//common:kernel_aarch64"):
         extra_tests += [
             Label("//build/kernel/kleaf/tests/built_with_ddk_test"),
@@ -540,7 +546,6 @@ def _define_common_kernels_additional_tests(
             name + "_empty",
             name + "_fake",
             name + "_device_modules_test",
-            name + "_pre_defconfig_fragments_menuconfig_test",
         ] + extra_tests,
     )
 
