@@ -93,11 +93,7 @@ export UNSTRIPPED_DIR=${DIST_DIR}/unstripped
 export MODULE_UAPI_HEADERS_DIR=$(readlink -m ${COMMON_OUT_DIR}/module_uapi_headers)
 
 # Create & export bazel cache dir within build workspace
-if [ -n "$ANDROID_BUILD_TOP" ]; then
-  DEFAULT_CACHE_DIR=${ANDROID_BUILD_TOP}/bazel-cache
-else
-  DEFAULT_CACHE_DIR=${ROOT_DIR}/bazel-cache
-fi
+DEFAULT_CACHE_DIR=${ROOT_DIR}/bazel-cache
 mkdir -p ${DEFAULT_CACHE_DIR}
 export TEST_TMPDIR=${DEFAULT_CACHE_DIR}
 
@@ -372,8 +368,8 @@ for EXT_MOD in ${EXT_MODULES}; do
     fi
 
     # Run the dist command passing in the output directory from Android build system
-    ./tools/bazel --output_user_root="${DEFAULT_CACHE_DIR}" run "${build_flags[@]}" \
-      "$build_target" -- --dist_dir="${OUT_DIR}/${EXT_MOD_REL}"
+    ./tools/bazel run "${build_flags[@]}" "$build_target" \
+      -- --dist_dir="${OUT_DIR}/${EXT_MOD_REL}"
 
     # The Module.symvers file is named "<target>_<variant>_Modules.symvers, but other modules are
     # looking for just "Module.symvers". Concatenate any of them into one Module.symvers file.
