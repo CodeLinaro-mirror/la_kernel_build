@@ -42,6 +42,12 @@ constexpr std::string_view kPkgShort = "{pkg_short}";
 // Args appended to the args from command line.
 std::vector<std::string> get_append_args() { return {{append_args}}; }
 
+std::map<std::string, std::string> get_extra_env() { return {{env}}; }
+
+std::map<std::string, std::string> get_extra_env_short() {
+  return {{env_short}};
+}
+
 // Kleaf uses bzlmod everywhere.
 constexpr std::string_view kWorkspaceName = "_main";
 
@@ -143,7 +149,18 @@ void try_exec_on_runfiles(const std::filesystem::path &runfiles_dir, int argc,
     }
     return;
   }
-  do_exec(candidate_executable, argc, argv, environ);
+
+  auto extra_env = get_extra_env_short();
+  if (extra_env.empty()) {
+    do_exec(candidate_executable, argc, argv, environ);
+    exit(EX_SOFTWARE); // Should not reach here
+  }
+
+  std::map<std::string, std::string> new_env = environ;
+  for (const auto &[env_name, short_path] : extra_env) {
+    new_env[env_name] = runfiles_dir / kWorkspaceName / short_path;
+  }
+  do_exec(candidate_executable, argc, argv, new_env);
 }
 
 // Returns true if s ends with suffix.
@@ -213,5 +230,16 @@ int main(int argc, char *argv[]) {
   abs_out_package_path = remove_suffix(abs_out_package_path, "/");
   std::filesystem::path execroot =
       remove_suffix(abs_out_package_path, kPkgBinDir);
-  do_exec(execroot / kActualExePath, argc, argv, environ);
+
+  auto extra_env = get_extra_env();
+  if (extra_env.empty()) {
+    do_exec(execroot / kActualExePath, argc, argv, environ);
+    exit(EX_SOFTWARE); // Should not reach here
+  }
+
+  std::map<std::string, std::string> new_env = environ;
+  for (const auto &[env_name, path] : extra_env) {
+    new_env[env_name] = execroot / path;
+  }
+  do_exec(execroot / kActualExePath, argc, argv, new_env);
 }

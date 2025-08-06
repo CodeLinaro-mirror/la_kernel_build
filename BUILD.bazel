@@ -18,9 +18,7 @@ load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_library.bzl", "sh_library")
 load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_tools")
-load("//build/kernel/kleaf/impl:bison_flex_wrapper.bzl", "bison_flex_wrapper")
 load("//build/kernel/kleaf/impl:executable_dispatcher.bzl", "executable_dispatcher")
-load("//build/kernel/kleaf/impl:swig_wrapper.bzl", "swig_wrapper")
 
 executable_dispatcher(
     name = "rsync",
@@ -73,26 +71,32 @@ native_binary(
     visibility = ["//build/kernel/kleaf/bootstrap_hermetic_tools:__pkg__"],
 )
 
-bison_flex_wrapper(
+executable_dispatcher(
     name = "bison",
-    actual = "//prebuilts/build-tools:bison",
-    m4 = "//prebuilts/build-tools:m4",
-    pkgdata_dir = "//prebuilts/build-tools:bison.runfiles_dir",
-    pkgdata_files = "//prebuilts/build-tools:bison.runfiles",
+    src = "//prebuilts/build-tools:bison",
+    data = ["//prebuilts/build-tools:bison.runfiles"],
+    reversed_env = {
+        "//prebuilts/build-tools:m4": "M4",
+        "//prebuilts/build-tools:bison.runfiles_dir": "BISON_PKGDATADIR",
+    },
     visibility = ["//build/kernel/kleaf/bootstrap_hermetic_tools:__pkg__"],
 )
 
-bison_flex_wrapper(
+executable_dispatcher(
     name = "flex",
-    actual = "//prebuilts/build-tools:flex",
-    m4 = "//prebuilts/build-tools:m4",
+    src = "//prebuilts/build-tools:flex",
+    reversed_env = {
+        "//prebuilts/build-tools:m4": "M4",
+    },
     visibility = ["//build/kernel/kleaf/bootstrap_hermetic_tools:__pkg__"],
 )
 
-swig_wrapper(
+executable_dispatcher(
     name = "swig",
     src = "//prebuilts/kernel-build-tools:swig",
-    swig_lib = "//prebuilts/kernel-build-tools:swig_lib_dir",
+    reversed_env = {
+        "//prebuilts/kernel-build-tools:swig_lib_dir": "SWIG_LIB",
+    },
     visibility = ["//visibility:private"],
 )
 
