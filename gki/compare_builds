@@ -57,17 +57,17 @@ From a distribution
 
 At each stage, perform incidental verification of things like metadata.
 
-Every file is hashed.
+Every file is hashed (SHA256, truncated to 12 characters).
 
 We now have a collection (per distribution) of artefacts, each has:
 
-* label name
+* logical name
 * file hash
-* file name on disk
+* one or more file names
 
 And we have edges between "equivalent" artefacts.
 
-Between the two sides, files are matched by label and SHA256.
+Between the two sides, files are matched by logical name and hash.
 
 Anything on the given side with no path to the built side is considered
 to be "unverified".
@@ -132,7 +132,7 @@ def blank_kernel_module_certificate(kernel: bytearray) -> None:
 
 def hash_file(path: pathlib.Path) -> str:
     with path.open('rb') as f:
-        return hashlib.file_digest(f, 'sha256').hexdigest()
+        return hashlib.file_digest(f, 'sha256').hexdigest()[0:12]
 
 
 def get_kernel_information(which: str, kernel: bytes) -> tuple[str, str, str, str, int]:
