@@ -15,64 +15,20 @@
 """Build dtbo."""
 
 load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_toolchain")
-load(":common_providers.bzl", "KernelSerializedEnvInfo")
 load(":debug.bzl", "debug")
-load(":utils.bzl", "kernel_utils", "utils")
+load(":utils.bzl", "utils")
 
 visibility("//build/kernel/kleaf/...")
 
-def _get_deprecation_warning(ctx):
-    # Omit the warning if opts have been provided.
-    if ctx.attr.opts:
-        return ""
-    return """
-          if [[ -n ${{MKDTIMG_FLAGS}} ]] ; then
-            KLEAF_MKDTIMG_FLAGS=$(echo "${{MKDTIMG_FLAGS% }}" | sed '/^$/d' | sed 's/\\S*/  "&",/g')
-            echo "WARNING: MKDTIMG_FLAGS from build.config is DEPRECATED!." >&2
-            echo "Use dtbo_image(opts=...) instead." >&2
-            echo "opts = [\n${{KLEAF_MKDTIMG_FLAGS}}" >&2
-            echo "],\nto {dtbo_target} target." >&2
-            unset KLEAF_MKDTIMG_FLAGS
-          fi
-    """.format(dtbo_target = str(ctx.label.name))
-
-def _get_mkdtimg_opts_cmd(ctx):
-    if ctx.attr.opts:
-        return " ".join(ctx.attr.opts)
-
-    # Fallback to previous behavior, until is fully deprecated.
-    return "${MKDTIMG_FLAGS}"
-
 def _dtbo_image_impl(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
-    transitive_inputs = []
-
-    if ctx.attr.kernel_build:
-        # buildifier: disable=print
-        print("""\
-WARNING: {}: dtbo_image(kernel_build=) is deprecated. Do not set it.
-Use dtbo_image(opts=...) instead (`opts` should be the same as `MKDTIMG_FLAGS`).
-""".format(
-            ctx.label.name,
-        ))
-        command = kernel_utils.setup_serialized_env_cmd(
-            serialized_env_info = ctx.attr.kernel_build[KernelSerializedEnvInfo],
-            restore_out_dir_cmd = utils.get_check_sandbox_cmd(),
-        )
-        tools = ctx.attr.kernel_build[KernelSerializedEnvInfo].tools
-        transitive_inputs.append(ctx.attr.kernel_build[KernelSerializedEnvInfo].inputs)
-    else:  # Use only hermetic setup
-        tools = hermetic_tools.deps
-        command = hermetic_tools.setup
+    command = hermetic_tools.setup
 
     out_name = ctx.attr.out or (ctx.label.name + "/dtbo.img")
     output = ctx.actions.declare_file(out_name)
     dtbo_staging_dir = output.dirname + "/staging"
     inputs = []
-    transitive_inputs += [target.files for target in ctx.attr.srcs]
-
-    command += _get_deprecation_warning(ctx)
-    mkdtimg_opts_cmd = _get_mkdtimg_opts_cmd(ctx)
+    transitive_inputs = [target.files for target in ctx.attr.srcs]
 
     if ctx.file.config_file:
         inputs.append(ctx.file.config_file)
@@ -88,7 +44,7 @@ Use dtbo_image(opts=...) instead (`opts` should be the same as `MKDTIMG_FLAGS`).
             srcs = " ".join([f.path for f in ctx.files.srcs]),
             config = ctx.file.config_file.path,
             dtbo_staging_dir = dtbo_staging_dir,
-            mkdtimg_opts = mkdtimg_opts_cmd,
+            mkdtimg_opts = " ".join(ctx.attr.opts),
         )
     else:
         command += """
@@ -97,7 +53,7 @@ Use dtbo_image(opts=...) instead (`opts` should be the same as `MKDTIMG_FLAGS`).
         """.format(
             output = output.path,
             srcs = " ".join([f.path for f in ctx.files.srcs]),
-            mkdtimg_opts = mkdtimg_opts_cmd,
+            mkdtimg_opts = " ".join(ctx.attr.opts),
         )
 
     debug.print_scripts(ctx, command)
@@ -105,7 +61,7 @@ Use dtbo_image(opts=...) instead (`opts` should be the same as `MKDTIMG_FLAGS`).
         mnemonic = "DtboImage",
         inputs = depset(inputs, transitive = transitive_inputs),
         outputs = [output],
-        tools = tools,
+        tools = hermetic_tools.deps,
         progress_message = "Building dtbo image %{label}",
         command = command,
     )
@@ -115,9 +71,6 @@ dtbo_image = rule(
     implementation = _dtbo_image_impl,
     doc = "Build dtbo image.",
     attrs = {
-        "kernel_build": attr.label(
-            doc = "**DEPRECATED.** Set opts using the values in `MKDTIMG_FLAGS` instead.",
-        ),
         "opts": attr.string_list(
             doc = "Flags passed to `mkdtimg` tool. Successor of `MKDTIMG_FLAGS` ",
         ),
