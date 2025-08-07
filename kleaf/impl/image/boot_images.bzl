@@ -150,11 +150,6 @@ def _build_boot_or_vendor_boot(
             "vendor_ramdisk_binaries.txt",
         )
 
-    if gki_ramdisk_prebuilt_binary:
-        command += """
-            GKI_RAMDISK_PREBUILT_BINARY="{gki_ramdisk_prebuilt_binary}"
-        """.format(gki_ramdisk_prebuilt_binary = utils.optional_single_path(gki_ramdisk_prebuilt_binary.files.to_list()))
-
         # build_utils.sh uses singular VENDOR_RAMDISK_BINARY
         command += """
             VENDOR_RAMDISK_BINARY="$(cat {written})"
@@ -162,6 +157,11 @@ def _build_boot_or_vendor_boot(
             written = written_vendor_ramdisk_binaries.depset_file.path,
         )
         transitive_inputs.append(written_vendor_ramdisk_binaries.depset)
+
+    if gki_ramdisk_prebuilt_binary:
+        command += """
+            GKI_RAMDISK_PREBUILT_BINARY="{gki_ramdisk_prebuilt_binary}"
+        """.format(gki_ramdisk_prebuilt_binary = utils.optional_single_path(gki_ramdisk_prebuilt_binary.files.to_list()))
 
     if vendor_ramdisk_dev_nodes:
         vendor_ramdisk_dev_nodes_files = depset(transitive = [target.files for target in vendor_ramdisk_dev_nodes])
