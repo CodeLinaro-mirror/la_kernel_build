@@ -28,10 +28,6 @@
 # OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-# Changes from Qualcomm Technologies, Inc. are provided under the following license:
-# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
-# SPDX-License-Identifier: BSD-3-Clause-Clear
-
 ## prepare_vendor.sh prepares kernel/build's output for direct consumption in AOSP
 # - Script assumes running after lunch w/Android build environment variables available
 # - Select which kernel target+variant (defconfig) to use
@@ -95,7 +91,7 @@ function rel_path() {
   python -c "import os.path; import sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))" "$1" "$2"
 }
 
-ROOT_DIR="$("$(dirname "$(readlink -f "$0")")/../gettop.sh")"
+ROOT_DIR=$(realpath "$(dirname "$(readlink -f "$0")")"/../../..) #build/kernel/android/prepare.sh->.
 echo "  kernel platform root: $ROOT_DIR"
 
 ################################################################################
