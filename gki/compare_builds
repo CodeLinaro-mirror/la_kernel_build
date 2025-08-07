@@ -37,35 +37,36 @@ Compare two GKI distributions, a freshly-built one and a given one.
 
 # Operation
 
-From a distribution
+Per distribution:
 
-* identify binary artefacts
-  * label them
-     * module.ko
-     * boot image contained some kind of kernel
-     * kernel, possibly compressed
-     * vmlinux
-* identify compressed files
-    * decompress them to obtain the original artefact
-    * the compressed artefact is valid if the decompressed one is
-* identify archives
-  * unpack them to find further artefacts
-  * the archive is valid if its contained artefacts are valid
-* identify canonicalisable artefacts
-  * canonicalise them
-  * the non-canonical artefact is valid if the canonical one is
+* find binary artefacts
+   * boot image containing a kernel image, possibly compressed
+   * module.ko, signed
+   * kernel image, possibly compressed
+   * vmlinux
+   * system dlkm filesystem image
+* process each artefact to generate derived artefacts
+   * decompress compressed kernel image
+   * unpack file system image
+   * extract kernel from boot image, checking ramdisk is empty
+   * convert vmlinux to image
+   * strip trailing module signature
+   * blank kernel module signing certificate
+   * blank kernel image build ID
+   * optionally strip debug information
+   * optionally strip BTF information
+* each artefact -> derived artefact process creates an edge in a graph
+   * except for system dlkm image unpacking
 
-At each stage, perform incidental verification of things like metadata.
-
-Every file is hashed (SHA256, truncated to 12 characters).
+Every artefact file is hashed (SHA256, truncated to 12 characters).
 
 We now have a collection (per distribution) of artefacts, each has:
 
-* logical name
-* file hash
+* a logical name
+* a file hash
 * one or more file names
 
-And we have edges between "equivalent" artefacts.
+And we have edges from "original" to "equivalent" artefacts.
 
 Between the two sides, files are matched by logical name and hash.
 
