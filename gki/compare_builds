@@ -365,20 +365,17 @@ def report_artefacts(built_nodes, given_nodes, given_edges) -> bool:
     check = lambda n: is_good(memo, n)
     bad_nodes, good_nodes = partition(check, sorted(given_nodes.keys()))
 
-    def print_nodes(kind: str, nodes):
-        if nodes:
-            print(f'{kind} artefacts:')
-            for node in nodes:
-                files = ' '.join(sorted(map(str, given_nodes[node])))
-                print(f'  {node} ({files})')
-                for other, label in given_edges[node]:
-                    print(f'    --{label}-> {other}')
-            print()
-
-    print_nodes('verified', good_nodes)
-    print_nodes('unverified', bad_nodes)
-    print(f'{len(good_nodes)} verified, {len(bad_nodes)} unverified artefacts')
-    print()
+    if good_nodes:
+        print(f'{len(good_nodes)} verified artefacts')
+        print()
+    if bad_nodes:
+        print(f'{len(bad_nodes)} unverified artefacts:')
+        for node in bad_nodes:
+            files = ' '.join(sorted(map(str, given_nodes[node])))
+            print(f'  {node} ({files})')
+            for other, label in given_edges[node]:
+                print(f'    --{label}-> {other}')
+        print()
 
     return not bad_nodes
 
