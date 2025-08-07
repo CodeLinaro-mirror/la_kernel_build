@@ -253,7 +253,7 @@ def process_boot_image(gki: pathlib.Path, info: Info, kernel: str, boot_image: s
         logging.error(f'non-empty ramdisk {ramdisk_file} from {boot_image}')
     key1 = add_artefact(info, boot_image, boot_image_path)
     key2 = process_kernel(gki, info, kernel, kernel_file)
-    add_edge(info, key1, key2, 'extracted')
+    add_edge(info, key1, key2, 'extract')
 
 
 def process_module(info: Info, copy_args: list[str], root_path: pathlib.Path, module_name: str) -> None:
