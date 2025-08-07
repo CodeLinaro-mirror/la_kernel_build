@@ -265,7 +265,7 @@ def process_module(info: Info, copy_args: list[str], root_path: pathlib.Path, mo
     add_edge(info, key1, key2, 'objcopy')
 
 
-def process_system_dlkm(info: Info, copy_args: list[str], system_dlkm: str, unpacked: pathlib.Path) -> None:
+def process_system_dlkm(info: Info, copy_args: list[str], unpacked: pathlib.Path) -> None:
     for root, dirs, files in os.walk(unpacked):
         for name in files:
             if name.endswith('.ko'):
@@ -304,7 +304,7 @@ def process_distribution(gki: pathlib.Path, info: Info, copy_args: list[str]) ->
             unpacked = info.working_directory / (name + '.unpacked')
             unpack = _FILESYSTEMS[fs](archive, unpacked)
             subprocess.check_call(unpack, stdout=subprocess.DEVNULL)
-            process_system_dlkm(info, copy_args, name, unpacked)
+            process_system_dlkm(info, copy_args, unpacked)
 
 
 def initialise_side(side: str, distribution: pathlib.Path, temporary_path: pathlib.Path) -> Info:
