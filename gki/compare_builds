@@ -37,37 +37,38 @@ Compare two GKI distributions, a freshly-built one and a given one.
 
 # Operation
 
-From a distribution
+Per distribution:
 
-* identify binary artefacts
-  * label them
-     * module.ko
-     * boot image contained some kind of kernel
-     * kernel, possibly compressed
-     * vmlinux
-* identify compressed files
-    * decompress them to obtain the original artefact
-    * the compressed artefact is valid if the decompressed one is
-* identify archives
-  * unpack them to find further artefacts
-  * the archive is valid if its contained artefacts are valid
-* identify canonicalisable artefacts
-  * canonicalise them
-  * the non-canonical artefact is valid if the canonical one is
+* find binary artefacts
+   * boot image containing a kernel image, possibly compressed
+   * module.ko, signed
+   * kernel image, possibly compressed
+   * vmlinux
+   * system dlkm filesystem image
+* process each artefact to generate derived artefacts
+   * decompress compressed kernel image
+   * unpack file system image
+   * extract kernel from boot image, checking ramdisk is empty
+   * convert vmlinux to image
+   * strip trailing module signature
+   * blank kernel module signing certificate
+   * blank kernel image build ID
+   * optionally strip debug information
+   * optionally strip BTF information
+* each artefact -> derived artefact process creates an edge in a graph
+   * except for system dlkm image unpacking
 
-At each stage, perform incidental verification of things like metadata.
-
-Every file is hashed.
+Every artefact file is hashed (SHA256, truncated to 12 characters).
 
 We now have a collection (per distribution) of artefacts, each has:
 
-* label name
-* file hash
-* file name on disk
+* a logical name
+* a file hash
+* one or more file names
 
-And we have edges between "equivalent" artefacts.
+And we have edges from "original" to "equivalent" artefacts.
 
-Between the two sides, files are matched by label and SHA256.
+Between the two sides, files are matched by logical name and hash.
 
 Anything on the given side with no path to the built side is considered
 to be "unverified".
@@ -132,7 +133,7 @@ def blank_kernel_module_certificate(kernel: bytearray) -> None:
 
 def hash_file(path: pathlib.Path) -> str:
     with path.open('rb') as f:
-        return hashlib.file_digest(f, 'sha256').hexdigest()
+        return hashlib.file_digest(f, 'sha256').hexdigest()[0:12]
 
 
 def get_kernel_information(which: str, kernel: bytes) -> tuple[str, str, str, str, int]:
@@ -166,31 +167,31 @@ class Info(typing.NamedTuple):
     build: str
     epoch: int
     working_directory: pathlib.Path
-    nodes: dict[str, str]
-    edges: dict[str, set[str]]
+    nodes: dict[str, set[str]]
+    edges: dict[str, set[tuple[str, str]]]
 
 
-def add_artefact(info: Info, name: str, path: pathlib.Path, provenance: str) -> str:
+def add_artefact(info: Info, name: str, path: pathlib.Path) -> str:
     sha = hash_file(path)
     key = f'{name}:{sha}'
     nodes = info.nodes
     if key in nodes:
-        nodes[key] = nodes[key] + ' | ' + provenance
+        nodes[key].add(path)
     else:
-        nodes[key] = provenance
+        nodes[key] = set([path])
         info.edges[key] = set()
     return key
 
 
-def add_edge(info: Info, key1: str, key2: str) -> None:
+def add_edge(info: Info, key1: str, key2: str, label: str) -> None:
     if key1 == key2:
-        logging.warning(f'ignoring attempt to add edge loop at: {key1}')
+        logging.warning(f'ignoring attempt to add loop: {key1} --{label}-> {key2}')
         return
-    info.edges[key1].add(key2)
+    info.edges[key1].add((key2, label))
 
 
-def process_kernel(gki: pathlib.Path, info: Info, kernel: str, kernel_path: pathlib.Path, provenance: str) -> str:
-    key1 = add_artefact(info, kernel, kernel_path, provenance)
+def process_kernel(gki: pathlib.Path, info: Info, kernel: str, kernel_path: pathlib.Path) -> str:
+    key1 = add_artefact(info, kernel, kernel_path)
     _DECOMPRESSORS = {
         'Image': None,
         'Image.gz': gki / 'prebuilts' / 'build-tools' / 'path' / 'linux-x86' / 'gzip',
@@ -201,8 +202,8 @@ def process_kernel(gki: pathlib.Path, info: Info, kernel: str, kernel_path: path
         uncompressed_path = info.working_directory / (kernel + '.uncompressed')
         with uncompressed_path.open('wb') as f:
             subprocess.check_call([decompressor, '-d', '-c', '--', kernel_path], stdout=f)
-            key2 = add_artefact(info, 'Image', uncompressed_path, f'decompressed {provenance}')
-            add_edge(info, key1, key2)
+            key2 = add_artefact(info, 'Image', uncompressed_path)
+            add_edge(info, key1, key2, 'decompress')
     return key1
 
 
@@ -219,27 +220,27 @@ def canonicalise_kernel(info: Info, original: pathlib.Path, canonical: pathlib.P
 
 def process_vmlinux(info: Info, copy_args) -> None:
     vmlinux_path = info.distribution / 'vmlinux'
-    key1 = add_artefact(info, 'vmlinux', vmlinux_path, 'vmlinux')
+    key1 = add_artefact(info, 'vmlinux', vmlinux_path)
 
     recreated_kernel_path = info.working_directory / 'vmlinux.Image'
     create_kernel(vmlinux_path, recreated_kernel_path)
-    key2 = add_artefact(info, 'Image', recreated_kernel_path, 'Image from vmlinux')
-    add_edge(info, key1, key2)
+    key2 = add_artefact(info, 'Image', recreated_kernel_path)
+    add_edge(info, key1, key2, 'make image')
 
     canonical_vmlinux_path = info.working_directory / 'vmlinux.canonical'
     canonicalise_kernel(info, vmlinux_path, canonical_vmlinux_path)
-    key3 = add_artefact(info, 'vmlinux', canonical_vmlinux_path, 'canonical vmlinux')
-    add_edge(info, key1, key3)
+    key3 = add_artefact(info, 'vmlinux', canonical_vmlinux_path)
+    add_edge(info, key1, key3, 'canonicalise')
 
     canonical_kernel_path = info.working_directory / 'vmlinux.Image.canonical'
     canonicalise_kernel(info, recreated_kernel_path, canonical_kernel_path)
-    key4 = add_artefact(info, 'Image', canonical_kernel_path, 'canonical Image from vmlinux')
-    add_edge(info, key2, key4)
+    key4 = add_artefact(info, 'Image', canonical_kernel_path)
+    add_edge(info, key2, key4, 'canonicalise')
 
     copied_canonical_vmlinux_path = info.working_directory / 'vmlinux.canonical.objcopy'
     subprocess.run(['llvm-objcopy', *copy_args, canonical_vmlinux_path, copied_canonical_vmlinux_path], check=True)
-    key5 = add_artefact(info, 'vmlinux', copied_canonical_vmlinux_path, 'objcopy of canonical vmlinux')
-    add_edge(info, key3, key5)
+    key5 = add_artefact(info, 'vmlinux', copied_canonical_vmlinux_path)
+    add_edge(info, key3, key5, 'objcopy')
 
 
 def process_boot_image(gki: pathlib.Path, info: Info, kernel: str, boot_image: str, boot_image_path: pathlib.Path) -> None:
@@ -251,26 +252,26 @@ def process_boot_image(gki: pathlib.Path, info: Info, kernel: str, boot_image: s
     kernel_file =  unpacked / 'kernel'
     if os.stat(ramdisk_file).st_size > 0:
         logging.error(f'non-empty ramdisk {ramdisk_file} from {boot_image}')
-    key1 = add_artefact(info, boot_image, boot_image_path, boot_image)
-    key2 = process_kernel(gki, info, kernel, kernel_file, f'{kernel} from {boot_image}')
-    add_edge(info, key1, key2)
+    key1 = add_artefact(info, boot_image, boot_image_path)
+    key2 = process_kernel(gki, info, kernel, kernel_file)
+    add_edge(info, key1, key2, 'extract')
 
 
-def process_module(info: Info, copy_args: list[str], root_path: pathlib.Path, module_name: str, provenance: str) -> None:
+def process_module(info: Info, copy_args: list[str], root_path: pathlib.Path, module_name: str) -> None:
     module_path = root_path / module_name
-    key1 = add_artefact(info, module_name, module_path, provenance)
+    key1 = add_artefact(info, module_name, module_path)
     copied_path = root_path / (module_name + '.objcopy')
     subprocess.check_call(['llvm-objcopy', *copy_args, module_path, copied_path])
-    key2 = add_artefact(info, module_name, copied_path, 'objcopy of ' + provenance)
-    add_edge(info, key1, key2)
+    key2 = add_artefact(info, module_name, copied_path)
+    add_edge(info, key1, key2, 'objcopy')
 
 
-def process_system_dlkm(info: Info, copy_args: list[str], system_dlkm: str, unpacked: pathlib.Path) -> None:
+def process_system_dlkm(info: Info, copy_args: list[str], unpacked: pathlib.Path) -> None:
     for root, dirs, files in os.walk(unpacked):
         for name in files:
             if name.endswith('.ko'):
                 root_path = pathlib.Path(root)
-                process_module(info, copy_args, root_path, name, f'{name} from {system_dlkm}')
+                process_module(info, copy_args, root_path, name)
 
 
 def process_distribution(gki: pathlib.Path, info: Info, copy_args: list[str]) -> None:
@@ -284,7 +285,7 @@ def process_distribution(gki: pathlib.Path, info: Info, copy_args: list[str]) ->
     for kernel, boot_image in _BOOT_IMAGES.items():
         kernel_path = info.distribution / kernel
         if kernel_path.exists():
-            process_kernel(gki, info, kernel, kernel_path, kernel)
+            process_kernel(gki, info, kernel, kernel_path)
         boot_image_path = info.distribution / boot_image
         if boot_image_path.exists():
             process_boot_image(gki, info, kernel, boot_image, boot_image_path)
@@ -297,14 +298,14 @@ def process_distribution(gki: pathlib.Path, info: Info, copy_args: list[str]) ->
         if name.endswith('.ko'):
             pathlib.Path(info.working_directory / name).write_bytes(
                 pathlib.Path(info.distribution / name).read_bytes())
-            process_module(info, copy_args, info.working_directory, name, name)
+            process_module(info, copy_args, info.working_directory, name)
         elif m := re.fullmatch(r'system_dlkm.*\.(erofs|ext4)\.img', name):
             fs = m.group(1)
             archive = info.distribution / name
             unpacked = info.working_directory / (name + '.unpacked')
             unpack = _FILESYSTEMS[fs](archive, unpacked)
             subprocess.check_call(unpack, stdout=subprocess.DEVNULL)
-            process_system_dlkm(info, copy_args, name, unpacked)
+            process_system_dlkm(info, copy_args, unpacked)
 
 
 def initialise_side(side: str, distribution: pathlib.Path, temporary_path: pathlib.Path) -> Info:
@@ -354,29 +355,29 @@ def partition(predicate, items):
         result[predicate(element)].append(element)
     return result
 
-def report_artefacts(built_nodes, given_nodes, given_edges) -> bool:
+def report_artefacts(built_nodes, given_nodes, given_edges, happy: str, sad: str) -> int:
     def is_good(memo: dict[str, bool], node: str) -> bool:
         if node not in memo:
-            memo[node] = any(is_good(memo, n) for n in given_edges[node])
+            memo[node] = any(is_good(memo, n) for n, label in given_edges[node])
         return memo[node]
 
     memo = {node: True for node in built_nodes}
     check = lambda n: is_good(memo, n)
     bad_nodes, good_nodes = partition(check, sorted(given_nodes.keys()))
 
-    def print_nodes(kind: str, nodes):
-        if nodes:
-            print(f'{kind} artefacts:')
-            for node in nodes:
-                print(f' {node} {given_nodes[node]}')
-            print()
+    if good_nodes:
+        print(f'{len(good_nodes)} {happy} artefacts')
+        print()
+    if bad_nodes:
+        print(f'{len(bad_nodes)} {sad} artefacts:')
+        for node in bad_nodes:
+            files = ' '.join(sorted(map(str, given_nodes[node])))
+            print(f'  {node} ({files})')
+            for other, label in given_edges[node]:
+                print(f'    --{label}-> {other}')
+        print()
 
-    print_nodes('verified', good_nodes)
-    print_nodes('unverified', bad_nodes)
-    print(f'{len(good_nodes)} verified, {len(bad_nodes)} unverified artefacts')
-    print()
-
-    return not bad_nodes
+    return len(bad_nodes)
 
 
 def main() -> int:
@@ -421,13 +422,15 @@ def main() -> int:
             for f in futures:
                 f.result()
 
-        if report_artefacts(built.nodes, given.nodes, given.edges):
-            build_ID = hashlib.sha256(given.release.encode()).hexdigest()
-            print(f'verified build ID: {build_ID}')
-            return 0
+        problems = (report_artefacts(given.nodes, built.nodes, built.edges, 'present', 'missing') +
+                    report_artefacts(built.nodes, given.nodes, given.edges, 'verified', 'unverified'))
+        if problems > 0:
+            input(f'temporary working directory is {t}; press enter to exit')
+            return 1
 
-        input(f'temporary working directory is {t}, press enter to exit')
-        return 1
+        build_ID = hashlib.sha256(given.release.encode()).hexdigest()
+        print(f'verified build ID: {build_ID}')
+        return 0
 
 
 if __name__ == '__main__':
