@@ -90,6 +90,7 @@ def _system_dlkm_image_impl(ctx):
         """
 
     additional_inputs.extend(ctx.files.modules_list)
+    additional_inputs.extend(ctx.files.modules_load)
     additional_inputs.extend(ctx.files.modules_blocklist)
     additional_inputs.extend(ctx.files.props)
     additional_inputs.extend(ctx.files.internal_extra_archive_files)
@@ -138,6 +139,7 @@ def _system_dlkm_image_impl(ctx):
                    (
                      MODULES_LIST={modules_list}
                      MODULES_BLOCKLIST={modules_blocklist}
+                     SYSTEM_DLKM_MODULES_LOAD={modules_load_list}
                      SYSTEM_DLKM_PROPS={system_dlkm_props}
                      MODULES_STAGING_DIR={modules_staging_dir}
                      SYSTEM_DLKM_FS_TYPE={fs_type}
@@ -170,6 +172,7 @@ def _system_dlkm_image_impl(ctx):
             extra_flags_cmd = extra_flags_cmd,
             modules_staging_dir = modules_staging_dir,
             modules_list = utils.optional_single_path(ctx.files.modules_list),
+            modules_load_list = utils.optional_single_path(ctx.files.modules_load),
             modules_blocklist = utils.optional_single_path(ctx.files.modules_blocklist),
             system_dlkm_props = utils.optional_path(ctx.file.props),
             fs_type = fs_type,
@@ -266,6 +269,9 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
             An optional file
             containing the list of kernel modules which shall be copied into a
             system_dlkm partition image.
+        """),
+        "modules_load": attr.label(allow_files = True, doc = """
+            An optional file containing the list of kernel modules which shall be loaded.
         """),
         "modules_blocklist": attr.label(allow_files = True, doc = """
             An optional file containing a list of modules

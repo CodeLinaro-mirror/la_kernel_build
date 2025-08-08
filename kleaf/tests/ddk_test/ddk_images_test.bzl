@@ -15,15 +15,17 @@
 """Tests for `kernel_images` with `ddk_module`'s."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
     "//build/kernel/kleaf:kernel.bzl",
     "ddk_module",
-    "kernel_images",
+    "initramfs",
     "kernel_module_group",
     "kernel_modules_install",
 )
 load("//build/kernel/kleaf/impl:hermetic_toolchain.bzl", "hermetic_toolchain")
+load("//build/kernel/kleaf/tests:hermetic_test.bzl", "hermetic_test")
 load("//build/kernel/kleaf/tests/utils:contain_lines_test.bzl", "contain_lines_test")
 
 def _get_top_level_file_impl(ctx):
@@ -50,6 +52,7 @@ def _get_top_level_file_impl(ctx):
         inputs = ctx.files.target,
         tools = hermetic_tools.deps,
         command = command,
+        mnemonic = "KernelImageTestGetTopLevelFile",
     )
     return DefaultInfo(
         files = depset([out]),
@@ -124,16 +127,15 @@ def ddk_images_test_suite(name):
         tags = ["manual"],
     )
 
-    kernel_images(
-        name = name + "_image",
-        kernel_modules_install = name + "_modules_install",
-        build_initramfs = True,
-        tags = ["manual"],
-    )
-    # Setup END
-
     tests = []
     module_prefix = "extra/build/kernel/kleaf/tests/ddk_test/"
+
+    # Default case
+    initramfs(
+        name = name + "_image_initramfs",
+        tags = ["manual"],
+        kernel_modules_install = name + "_modules_install",
+    )
     write_file(
         name = name + "_expected",
         out = name + "_expected/modules.load",
@@ -144,14 +146,12 @@ def ddk_images_test_suite(name):
         ],
         tags = ["manual"],
     )
-
     get_top_level_file(
         name = name + "_modules_load",
         filename = "modules.load",
         target = name + "_image_initramfs",
         tags = ["manual"],
     )
-
     contain_lines_test(
         name = name + "_modules_load_test",
         expected = name + "_expected",
@@ -159,6 +159,41 @@ def ddk_images_test_suite(name):
         order = True,
     )
     tests.append(name + "_modules_load_test")
+
+    # Providing a modules.load list
+    write_file(
+        name = name + "_load_self_module_only",
+        out = name + "_single_expected/modules.load",
+        content = [
+            module_prefix + name + "_self.ko",
+        ],
+        tags = ["manual"],
+    )
+    initramfs(
+        name = name + "_image_initramfs_with_modules_load",
+        tags = ["manual"],
+        kernel_modules_install = name + "_modules_install",
+        modules_load = name + "_load_self_module_only",
+    )
+
+    get_top_level_file(
+        name = name + "_single_modules_load",
+        filename = "modules.load",
+        target = name + "_image_initramfs_with_modules_load",
+        tags = ["manual"],
+    )
+    diff_test(
+        name = name + "_single_modules_load_test",
+        file1 = name + "_single_modules_load",
+        file2 = name + "_load_self_module_only",
+        # Avoid running it without the hermetic_test wrapper
+        tags = ["manual"],
+    )
+    hermetic_test(
+        name = name + "_single_modules_load_hermetic_test",
+        actual = name + "_single_modules_load_test",
+    )
+    tests.append(name + "_single_modules_load_hermetic_test")
 
     native.test_suite(
         name = name,

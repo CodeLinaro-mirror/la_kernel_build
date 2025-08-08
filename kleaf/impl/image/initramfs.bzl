@@ -116,6 +116,7 @@ def _initramfs_impl(ctx):
             : > ${modules_root_dir}/modules.options
     """
     additional_inputs.extend(ctx.files.modules_list)
+    additional_inputs.extend(ctx.files.modules_load)
     additional_inputs.extend(ctx.files.modules_recovery_list)
     additional_inputs.extend(ctx.files.modules_charger_list)
     additional_inputs.extend(ctx.files.modules_blocklist)
@@ -133,6 +134,7 @@ def _initramfs_impl(ctx):
 
     command = """
                MODULES_LIST={modules_list}
+               MODULES_LOAD={modules_load_list}
                MODULES_RECOVERY_LIST={modules_recovery_list}
                MODULES_CHARGER_LIST={modules_charger_list}
                MODULES_BLOCKLIST={modules_blocklist}
@@ -149,7 +151,8 @@ def _initramfs_impl(ctx):
              # Build initramfs
                create_modules_staging "${{MODULES_LIST}}" {modules_staging_dir} \
                        {initramfs_staging_dir} "${{MODULES_BLOCKLIST}}" \
-                       "${{MODULES_RECOVERY_LIST:-""}}" "${{MODULES_CHARGER_LIST:-""}}" "-e"
+                       "${{MODULES_RECOVERY_LIST:-""}}" "${{MODULES_CHARGER_LIST:-""}}" "-e" \
+                       "${{MODULES_LOAD}}"
                modules_root_dir=$(readlink -e {initramfs_staging_dir}/lib/modules/*) || exit 1
                cp ${{modules_root_dir}}/modules.load {modules_load}
                {cp_vendor_boot_modules_load_cmd}
@@ -166,6 +169,7 @@ def _initramfs_impl(ctx):
                rm -rf {initramfs_staging_dir}
     """.format(
         modules_list = utils.optional_path(ctx.file.modules_list),
+        modules_load_list = utils.optional_path(ctx.file.modules_load),
         modules_recovery_list = utils.optional_path(ctx.file.modules_recovery_list),
         modules_charger_list = utils.optional_path(ctx.file.modules_charger_list),
         modules_blocklist = utils.optional_path(ctx.file.modules_blocklist),
@@ -244,6 +248,10 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
         "modules_list": attr.label(
             allow_single_file = True,
             doc = "A file containing list of modules to use for `vendor_boot.modules.load`.",
+        ),
+        "modules_load": attr.label(
+            allow_single_file = True,
+            doc = "A file containing list of modules to load.",
         ),
         "modules_recovery_list": attr.label(
             allow_single_file = True,
