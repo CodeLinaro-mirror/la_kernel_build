@@ -422,7 +422,7 @@ py_binary(
     data = ["init/init_download.py"],
     imports = ["."],
     main = "init/init_ddk.py",
-    visibility = ["//visibility:private"],
+    visibility = ["//build/kernel:__subpackages__"],
 )
 
 py_test(

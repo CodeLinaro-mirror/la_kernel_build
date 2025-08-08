@@ -113,6 +113,11 @@ def load_arguments():
 
                                Don't run two interactive shells in parellel;
                                your workspace might be wiped out.""")
+    group.add_argument("--init_ddk",
+                       # Make it an absolute path so it can be reused in
+                       # recursive calls, even after chdir.
+                       type=_make_absolute_path,
+                       help="Path to init_ddk binary")
     return parser.parse_known_args()
 
 
@@ -124,6 +129,10 @@ def _require_absolute_path(p: str) -> pathlib.Path:
     if not path.is_absolute():
         raise ValueError(f"{p} is not absolute")
     return path
+
+
+def _make_absolute_path(p: str) -> pathlib.Path:
+    return pathlib.Path(p).absolute()
 
 
 def _get_label_name(label: str):
@@ -496,6 +505,7 @@ class KleafIntegrationTestBase(unittest.TestCase):
                          for arg in arguments.bazel_wrapper_args)
         test_args.append(f"--mount-spec={_serialize_mount_spec(mount_spec)}")
         test_args.append(f"--link-spec={_serialize_link_spec(link_spec)}")
+        test_args.append(f"--init_ddk={arguments.init_ddk}")
         if arguments.interactive:
             test_args.append("--interactive")
         test_args.append(self.id().removeprefix("__main__."))
@@ -816,8 +826,7 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
         default_manifest.write_text("""<?xml version="1.0" ?><manifest />""")
 
         args = [
-            "//build/kernel:init_ddk",
-            "--",
+            str(arguments.init_ddk),
             f"--kleaf_repo={kleaf_repo}",
             f"--ddk_workspace={ddk_workspace}",
         ]
@@ -831,7 +840,7 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
             args.append(f"--build_id={build_id}")
         if sync is not None:
             args.append("--sync" if sync else "--nosync")
-        self._check_call("run", args)
+        Exec.check_call(args)
         Exec.check_call([
             sys.executable,
             str(ddk_workspace / "extra_setup.py"),

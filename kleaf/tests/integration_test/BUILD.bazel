@@ -34,6 +34,12 @@ hermetic_test_binary(
     # - The test can use `git`
     # - The bazel wrapper can use `repo` when not running on CI
     append_host_path = True,
+    args = [
+        "--init_ddk=$(rootpath //build/kernel:init_ddk)",
+    ],
+    data = [
+        "//build/kernel:init_ddk",
+    ],
     use_cc_toolchain = True,
 )
 
