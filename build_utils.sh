@@ -339,11 +339,14 @@ function build_flattened_dlkm_image() {
   # Copy modules aliases definitions
   cp $(find ${staging_dir} -name "modules.alias") ${staging_dir}/flatten/lib/modules
   # Remove existing paths leaving just basenames
-  sed -i 's/kernel[^:[:space:]]*\/\([^:[:space:]]*\.ko\)/\1/g' ${staging_dir}/flatten/lib/modules/modules.dep
+  sed -i 's/\(kernel\|extra\)[^:[:space:]]*\/\([^:[:space:]]*\.ko\)/\2/g' ${staging_dir}/flatten/lib/modules/modules.dep
   # Prefix /system/lib/modules/ for every module
   sed -i "s#\([^:[:space:]]*\.ko\)#/${image_type}/lib/modules/\1#g" ${staging_dir}/flatten/lib/modules/modules.dep
   cp $(find ${staging_dir} -name "modules.load") ${staging_dir}/flatten/lib/modules
   sed -i 's#.*/##' ${staging_dir}/flatten/lib/modules/modules.load
+  # Copy the flattened version of modules.load to the dist directory to be
+  # consistent with the non-flattened output.
+  cp ${staging_dir}/flatten/lib/modules/modules.load ${dist_dir}/${image_type}_dlkm.flatten.modules.load
 
   build_image "${staging_dir}/flatten" "${props_file}" \
   "${dist_dir}/${image_name}" /dev/null
