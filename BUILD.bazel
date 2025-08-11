@@ -14,6 +14,7 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
+load("@rules_devicetree//devicetree:toolchain.bzl", "devicetree_toolchain")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_library.bzl", "sh_library")
@@ -312,6 +313,31 @@ toolchain(
     toolchain = ":hermetic-tools",
     toolchain_type = ":hermetic_tools_toolchain_type",
     visibility = ["//visibility:private"],
+)
+
+devicetree_toolchain(
+    name = "devicetree_toolchain_impl",
+    default_dtcopts = [
+        "-Wno-unique_unit_address",
+        # Assume no KBUILD_EXTRA_WARN
+        "-Wno-unit_address_vs_reg",
+        "-Wno-avoid_unnecessary_addr_size",
+        "-Wno-alias_paths",
+        "-Wno-graph_child_address",
+        "-Wno-simple_bus_reg",
+    ],
+    dtc = ":dtc",
+    fdtoverlay = select({
+        "//build/kernel/kleaf:dtc_from_sources_is_true": "@dtc//:fdtoverlay",
+        "//conditions:default": None,
+    }),
+    preprocess = True,
+)
+
+toolchain(
+    name = "devicetree_toolchain",
+    toolchain = ":devicetree_toolchain_impl",
+    toolchain_type = "@rules_devicetree//devicetree:toolchain_type",
 )
 
 # Tools visible to all packages that uses kernel_build.
