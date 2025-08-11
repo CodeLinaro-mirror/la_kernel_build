@@ -93,6 +93,7 @@ bzl_library(
         "image/vendor_dlkm_image.bzl",
         "kernel_build.bzl",
         "kernel_build_config.bzl",
+        "kernel_build_output.bzl",
         "kernel_compile_commands.bzl",
         "kernel_config.bzl",
         "kernel_config_settings.bzl",

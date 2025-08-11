@@ -53,6 +53,7 @@ load("//build/kernel/kleaf/impl:image/vendor_boot_image.bzl", _vendor_boot_image
 load("//build/kernel/kleaf/impl:image/vendor_dlkm_image.bzl", _vendor_dlkm_image = "vendor_dlkm_image")
 load("//build/kernel/kleaf/impl:kernel_build.bzl", _kernel_build_macro = "kernel_build")
 load("//build/kernel/kleaf/impl:kernel_build_config.bzl", _kernel_build_config = "kernel_build_config")
+load("//build/kernel/kleaf/impl:kernel_build_output.bzl", _kernel_build_output = "kernel_build_output")
 load("//build/kernel/kleaf/impl:kernel_compile_commands.bzl", _kernel_compile_commands = "kernel_compile_commands")
 load("//build/kernel/kleaf/impl:kernel_dtstree.bzl", _kernel_dtstree = "kernel_dtstree")
 load("//build/kernel/kleaf/impl:kernel_filegroup.bzl", _kernel_filegroup = "kernel_filegroup")
@@ -94,6 +95,7 @@ kernel_abi_dist = _kernel_abi_dist
 kernel_abi_wrapped_dist = _kernel_abi_wrapped_dist
 kernel_build = _kernel_build_macro
 kernel_build_config = _kernel_build_config
+kernel_build_output = _kernel_build_output
 kernel_compile_commands = _kernel_compile_commands
 kernel_dtstree = _kernel_dtstree
 kernel_filegroup = _kernel_filegroup
