@@ -532,6 +532,7 @@ def _define_common_kernels_additional_tests(
         extra_tests += [
             Label("//build/kernel/kleaf/tests/built_with_ddk_test"),
             Label("//build/kernel/kleaf/tests/ddk_examples"),
+            Label("//build/kernel/kleaf/tests/ddk_test:ddk_images_test_suite"),
             Label("//build/kernel/kleaf/tests/merge_module_symvers_test"),
         ]
 
