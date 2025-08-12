@@ -112,24 +112,24 @@ register_toolchains(
 # TODO(b/276493276): Resolve the issue of these versions getting outdated.
 bazel_dep(
     name = "abseil-py",
-    version = "1.4.0",
+    version = "2.1.0",
     repo_name = "io_abseil_py",
 )
 bazel_dep(
     name = "bazel_skylib",
-    version = "1.7.1",
+    version = "1.8.1",
 )
 bazel_dep(
     name = "platforms",
-    version = "0.0.11",
+    version = "1.0.0",
 )
 bazel_dep(
     name = "rules_cc",
-    version = "0.1.0",
+    version = "0.1.4",
 )
 bazel_dep(
     name = "rules_pkg",
-    version = "1.0.1",
+    version = "1.1.0",
 )
 
 # For --config=docs
@@ -151,7 +151,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_shell",
-    version = "0.3.0",
+    version = "0.5.0",
 )
 
 local_path_override(
