@@ -2,63 +2,63 @@
 
 [TOC]
 
-### Getting started
+## Getting started
 
-[Introduction to Kleaf](docs/kleaf.md)
+### [Introduction to Kleaf](docs/kleaf.md)
 
-[Building your kernels and drivers with Bazel](docs/impl.md)
+### [Building your kernels and drivers with Bazel](docs/impl.md)
 
-[Creating distributions](docs/dist.md)
+### [Creating distributions](docs/dist.md)
 
-[Driver Development Kit (DDK)](docs/ddk/main.md)
+### [Driver Development Kit (DDK)](docs/ddk/main.md)
 
-[Cheatsheet](docs/cheatsheet.md)
+### [Cheatsheet](docs/cheatsheet.md)
 
-### Configuring your build
+## Configuring your build
 
-[`build.sh` build configs](docs/build_configs.md)
+### [`build.sh` build configs](docs/build_configs.md)
 
-[Configuring kernel\_build](docs/kernel_config.md)
+### [Configuring kernel\_build](docs/kernel_config.md)
 
-### ABI monitoring
+## ABI monitoring
 
-[Support ABI monitoring (GKI)](docs/abi.md)
+### [Support ABI monitoring (GKI)](docs/abi.md)
 
-[Support ABI monitoring (Device)](docs/abi_device.md)
+### [Support ABI monitoring (Device)](docs/abi_device.md)
 
-### Debugging and testing
+## Debugging and testing
 
-[Resolving common errors](docs/errors.md)
+### [Resolving common errors](docs/errors.md)
 
-[Kleaf testing](docs/testing.md)
+### [Kleaf testing](docs/testing.md)
 
-[Debugging Kleaf](docs/debugging.md)
+### [Debugging Kleaf](docs/debugging.md)
 
-[Visualizing dependencies](docs/dependencies.md)
+### [Visualizing dependencies](docs/dependencies.md)
 
-### Advanced topics
+## Advanced topics
 
-[Handling SCM version](docs/scmversion.md)
+### [Handling SCM version](docs/scmversion.md)
 
-[Building against downloaded prebuilts](docs/download_prebuilt.md)
+### [Building against downloaded prebuilts](docs/download_prebuilt.md)
 
-[Bzlmod support (also: setting up workspace)](docs/bzlmod.md)
+### [Bzlmod support (also: setting up workspace)](docs/bzlmod.md)
 
-[Building `compile_commands.json`](docs/compile_commands.md)
+### [Building `compile_commands.json`](docs/compile_commands.md)
 
-[Ensuring hermeticity](docs/hermeticity.md)
+### [Ensuring hermeticity](docs/hermeticity.md)
 
-[Internet Access](docs/network.md)
+### [Internet Access](docs/network.md)
 
-[Toolchain resolution](docs/toolchains.md)
+### [Toolchain resolution](docs/toolchains.md)
 
-[Checkpatch](docs/checkpatch.md)
+### [Checkpatch](docs/checkpatch.md)
 
-[Kleaf Development](docs/kleaf_development.md)
+### [Kleaf Development](docs/kleaf_development.md)
 
-[Discover newest Kleaf features in Canary](docs/canary.md)
+### [Discover newest Kleaf features in Canary](docs/canary.md)
 
-### Configurations in command line
+## Configurations in command line
 
 `--config=fast`: [Make local builds faster](docs/fast.md)
 
@@ -72,7 +72,7 @@
 
 `--config=musl`: [Use musl libc for host binaries](docs/musl.md)
 
-### Flags
+## Flags
 
 For a full list of flags, run
 
@@ -102,6 +102,6 @@ $ tools/bazel help kleaf
 Other flags for debugging and disabling integrity checks may be found in the
 [Debugging Kleaf](docs/debugging.md) page.
 
-### References
+## References
 
-[References to Bazel rules and macros for the Android Kernel](docs/api_reference.md)
+### [References to Bazel rules and macros for the Android Kernel](docs/api_reference.md)
