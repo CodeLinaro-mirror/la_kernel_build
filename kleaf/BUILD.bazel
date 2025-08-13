@@ -406,7 +406,7 @@ config_setting(
 # If true, build dtc from sources
 bool_flag(
     name = "dtc_from_sources",
-    build_setting_default = False,
+    build_setting_default = True,
     visibility = ["//visibility:private"],
 )
 
