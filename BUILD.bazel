@@ -74,7 +74,10 @@ native_binary(
 executable_dispatcher(
     name = "bison",
     src = "//prebuilts/build-tools:bison",
-    data = ["//prebuilts/build-tools:bison.runfiles"],
+    data = [
+        "//prebuilts/build-tools:bison.runfiles",
+        "//prebuilts/build-tools:m4",
+    ],
     reversed_env = {
         "//prebuilts/build-tools:m4": "M4",
         "//prebuilts/build-tools:bison.runfiles_dir": "BISON_PKGDATADIR",
@@ -85,6 +88,9 @@ executable_dispatcher(
 executable_dispatcher(
     name = "flex",
     src = "//prebuilts/build-tools:flex",
+    data = [
+        "//prebuilts/build-tools:m4",
+    ],
     reversed_env = {
         "//prebuilts/build-tools:m4": "M4",
     },
@@ -97,6 +103,8 @@ executable_dispatcher(
     reversed_env = {
         "//prebuilts/kernel-build-tools:swig_lib_dir": "SWIG_LIB",
     },
+    # content of swig_lib_dir is already in runfiles of
+    # //prebuilts/kernel-build-tools:swig.
     visibility = ["//visibility:private"],
 )
 

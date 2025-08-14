@@ -169,6 +169,11 @@ executable_dispatcher = macro(
 
                 Keys: Labels with exactly one file. Their file path becomes the
                 **value** of the environment variable.
+                Note: files of these targets are not automatically added to
+                runfiles (data). For directories mentioned in keys, add the
+                directory content (files in the directory and subdirectories)
+                to `data`. For files mentioned in keys, add the file to `data`
+                directly.
 
                 Values: Name (**key**) of the environment variable.
             """,
