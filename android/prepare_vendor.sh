@@ -557,6 +557,13 @@ if [ -n "${ANDROID_PRODUCT_OUT}" ] && [ -n "${ANDROID_BUILD_TOP}" ]; then
 
   find "${ROOT_DIR}" \( -name Android.mk -o -name Android.bp \) \
     -a -not -path "${ROOT_DIR}"/soc-repo/Android.bp -delete
+
+  if [ "${DESKTOPOS_PREBUILT}" == "1" ] \
+       && [ -d "${ANDROID_BUILD_TOP}/device/google/desktop/${TARGET_PRODUCT}/kernel-headers" ]; then
+         find "${ANDROID_BUILD_TOP}/device/google/desktop/${TARGET_PRODUCT}/kernel-headers" \
+	  -name Android.bp -delete
+  fi
+
   set +x
 
   ################################################################################
