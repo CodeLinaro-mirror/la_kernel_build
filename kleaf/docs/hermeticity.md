@@ -266,6 +266,13 @@ is not set:
 
 - `copy_file()` uses `cp`
 - `rules_python` uses `uname` during toolchain resolution
-- Host `python3` is needed to run any `py_binary` (
-  [reference](https://github.com/bazelbuild/bazel/issues/19355))
-- [workspace_status.sh](../workspace_status.sh) uses readlink and dirname.
+- [workspace_status.sh](../workspace_status.sh) uses `readlink` and `dirname`.
+- `py_binary` may use host Python 3 for bootstrapping; see below.
+
+### Host Python dependency
+
+On `android-mainline`, Kleaf sets
+`--@rules_python//python/config_settings:bootstrap_impl=script`,
+removing the dependency on the host Python 3 when running `py_binary`.
+This flag uses the default value `system_python` for `android16-6.12` and
+earlier.
