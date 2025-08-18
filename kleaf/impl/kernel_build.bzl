@@ -994,6 +994,7 @@ def _get_post_defconfig_fragments_inherited(
         Label("//build/kernel/kleaf/impl/defconfig:rust"),
         Label("//build/kernel/kleaf/impl/defconfig:rust_ashmem"),
         Label("//build/kernel/kleaf/impl/defconfig:zstd_dwarf_compression"),
+        Label("//build/kernel/kleaf/impl/defconfig:{}_livepatch".format(kernel_build_arch)),
     ]
 
     btf_debug_info_target = kernel_build_name + "_defconfig_fragment_btf_debug_info"
@@ -1090,6 +1091,7 @@ def _get_trim_post_defconfig_fragment_target(
             Label("//build/kernel/kleaf:kasan_is_true"): False,
             Label("//build/kernel/kleaf:kcsan_is_true"): False,
             Label("//build/kernel/kleaf:kgdb_is_true"): False,
+            Label("//build/kernel/kleaf:livepatch_is_true"): False,
             "//conditions:default": None,
         }),
         second_selector = kernel_build_trim_nonlisted_kmi,

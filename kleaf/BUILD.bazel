@@ -820,6 +820,19 @@ print_flags(
     ] + [":config_" + value for value in _config_values],
 )
 
+# If true, enable kernel live patching.
+bool_flag(
+    name = "livepatch",
+    build_setting_default = False,
+    visibility = ["//visibility:private"],
+)
+
+config_setting(
+    name = "livepatch_is_true",
+    flag_values = {":livepatch": "1"},
+    visibility = ["//visibility:public"],
+)
+
 # Tools visible to all packages that uses kernel_build.
 # Implementation detail of kernel_build; do not use directly.
 sh_binary(

@@ -155,11 +155,36 @@ function create_modules_order_lists() {
   rm -f ${tmp_modules_order_file}
 }
 
+
+# $1 LIST <File to be copied to staging dir>
+# $2 STAGING_DIR <staging dir>
+# $3 DESTINATION_NAME <Final base name for the file>
+# $4 WHAT_MESSAGE <Purpose of the file>
+function copy_file_to_staging() {
+  local list_file=$1
+  local dest_dir=$2
+  local final_base_name=$3
+  local what=$4
+  if [ -n "${list_file}" ]; then
+    # Need to make sure we can find the file.
+    if [[ -f "${ROOT_DIR}/${list_file}" ]]; then
+      list_file="${ROOT_DIR}/${list_file}"
+    elif [[ "${list_file}" != /* ]]; then
+      echo "ERROR: ${what} must be an absolute path or relative to ${ROOT_DIR}: ${list_file}" >&2
+      exit 1
+    elif [[ ! -f "${list_file}" ]]; then
+      echo "ERROR: Failed to find ${what}: ${modules_blocklist_file}" >&2
+      exit 1
+    fi
+    cp ${list_file} ${dest_dir}/${final_base_name}
+  fi
+}
+
 # $1 MODULES_LIST, <File contains the list of modules that should go in the ramdisk>
 # $2 MODULES_STAGING_DIR    <The directory to look for all the compiled modules>
 # $3 IMAGE_STAGING_DIR  <The destination directory in which MODULES_LIST is
 #                        expected, and it's corresponding modules.* files>
-# $4 MODULES_BLOCKLIST, <File contains the list of modules to prevent from loading>
+# $4 MODULES_BLOCKLIST <File contains the list of modules to prevent from loading>
 # $5 MODULES_RECOVERY_LIST <File contains the list of modules that should go in
 #                           the ramdisk but should only be loaded when booting
 #                           into recovery.
@@ -175,6 +200,7 @@ function create_modules_order_lists() {
 #                          be passed as an empty string to ensure that the
 #                          depmod flags are assigned correctly.>
 # $7 flags to pass to depmod
+# $8 MODULES_LOAD <File contains the list of modules to load>
 function create_modules_staging() {
   local modules_list_file=$1
   local src_dir=$(echo $2/lib/modules/*)
@@ -185,6 +211,7 @@ function create_modules_staging() {
   local modules_recovery_list_file=$5
   local modules_charger_list_file=$6
   local depmod_flags=$7
+  local modules_load_file=$8
 
   rm -rf ${dest_dir}
   mkdir -p ${dest_dir}/kernel
@@ -253,20 +280,9 @@ function create_modules_staging() {
   create_modules_order_lists "${modules_list_file:-""}" "${modules_recovery_list_file:-""}" \
 	                     "${modules_charger_list_file:-""}" ${dest_dir}/modules.order
 
-  if [ -n "${modules_blocklist_file}" ]; then
-    # Need to make sure we can find modules_blocklist_file from the staging dir
-    if [[ -f "${ROOT_DIR}/${modules_blocklist_file}" ]]; then
-      modules_blocklist_file="${ROOT_DIR}/${modules_blocklist_file}"
-    elif [[ "${modules_blocklist_file}" != /* ]]; then
-      echo "ERROR: modules blocklist must be an absolute path or relative to ${ROOT_DIR}: ${modules_blocklist_file}" >&2
-      exit 1
-    elif [[ ! -f "${modules_blocklist_file}" ]]; then
-      echo "ERROR: Failed to find modules blocklist: ${modules_blocklist_file}" >&2
-      exit 1
-    fi
+  copy_file_to_staging "${modules_blocklist_file}" "${dest_dir}" "modules.blocklist" "modules blocklist"
 
-    cp ${modules_blocklist_file} ${dest_dir}/modules.blocklist
-  fi
+  copy_file_to_staging "${modules_load_file}" "${dest_dir}" "modules.load" "modules load"
 
   TRIM_UNUSED_MODULES=1
   if [ -n "${TRIM_UNUSED_MODULES}" ]; then
@@ -313,7 +329,10 @@ function create_modules_staging() {
       else
         run_depmod ${dest_stage} "${depmod_flags}" "${version}" "${mod_order_filepath}"
       fi
-      cp ${mod_order_filepath} ${mod_load_filepath}
+      # Do not override the modules.load file when provided.
+      if [ ! -f ${mod_load_filepath} ]; then
+        cp ${mod_order_filepath} ${mod_load_filepath}
+      fi
     fi
   done
 
@@ -374,7 +393,7 @@ function build_system_dlkm() {
   # modes, so do not consider them, and pass empty strings instead.
   create_modules_staging "${SYSTEM_DLKM_MODULES_LIST:-${MODULES_LIST}}" "${MODULES_STAGING_DIR}" \
     ${SYSTEM_DLKM_STAGING_DIR} "${SYSTEM_DLKM_MODULES_BLOCKLIST:-${MODULES_BLOCKLIST}}" \
-    "" "" "-e"
+    "" "" "-e" "${SYSTEM_DLKM_MODULES_LOAD}"
 
   local system_dlkm_root_dir=$(echo ${SYSTEM_DLKM_STAGING_DIR}/lib/modules/*)
   cp ${system_dlkm_root_dir}/modules.load ${DIST_DIR}/system_dlkm.modules.load
@@ -477,7 +496,8 @@ function build_vendor_dlkm() {
   local vendor_dlkm_archive=$1
 
   create_modules_staging "${VENDOR_DLKM_MODULES_LIST}" "${MODULES_STAGING_DIR}" \
-    "${VENDOR_DLKM_STAGING_DIR}" "${VENDOR_DLKM_MODULES_BLOCKLIST}"
+    "${VENDOR_DLKM_STAGING_DIR}" "${VENDOR_DLKM_MODULES_BLOCKLIST}" "" "" "" \
+    "${VENDOR_DLKM_MODULES_LOAD}"
 
   local vendor_dlkm_modules_root_dir=$(echo ${VENDOR_DLKM_STAGING_DIR}/lib/modules/*)
   local vendor_dlkm_modules_load=${vendor_dlkm_modules_root_dir}/modules.load

@@ -339,7 +339,7 @@ Build `dtb` image.
 <pre>
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "dtbo")
 
-dtbo(<a href="#dtbo-name">name</a>, <a href="#dtbo-srcs">srcs</a>, <a href="#dtbo-config_file">config_file</a>, <a href="#dtbo-kernel_build">kernel_build</a>)
+dtbo(<a href="#dtbo-name">name</a>, <a href="#dtbo-srcs">srcs</a>, <a href="#dtbo-out">out</a>, <a href="#dtbo-config_file">config_file</a>, <a href="#dtbo-kernel_build">kernel_build</a>)
 </pre>
 
 Build dtbo.
@@ -351,6 +351,7 @@ Build dtbo.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="dtbo-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="dtbo-srcs"></a>srcs |  List of `*.dtbo` files used to package the `dtbo.img`. This corresponds to `MKDTIMG_DTBOS` in build configs; see example below.<br><br>Example: <pre><code>kernel_build(&#10;    name = "tuna_kernel",&#10;    outs = [&#10;        "path/to/foo.dtbo",&#10;        "path/to/bar.dtbo",&#10;    ],&#10;)&#10;dtbo(&#10;    name = "tuna_images",&#10;    kernel_build = ":tuna_kernel",&#10;    srcs = [&#10;        ":tuna_kernel/path/to/foo.dtbo",&#10;        ":tuna_kernel/path/to/bar.dtbo",&#10;    ],&#10;)</code></pre>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="dtbo-out"></a>out |  Name of the `dtbo` image.<br><br>Default to `<name>/dtbo.img` if not set.   | String | optional |  `""`  |
 | <a id="dtbo-config_file"></a>config_file |  A config file to create dtbo image by cfg_create command.<br><br>If set, use mkdtimg cfg_create with the given config file, instead of mkdtimg create   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="dtbo-kernel_build"></a>kernel_build |  The [`kernel_build`](#kernel_build).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
@@ -890,7 +891,7 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="system_dlkm_image-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="system_dlkm_image-deps"></a>deps |  A list of additional dependencies to build system_dlkm image.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="system_dlkm_image-base"></a>base |  The `system_dlkm_image()` corresponding to the `base_kernel` of the `kernel_build`. This is required for building a device-specific `system_dlkm` image. For example, if `base_kernel` of `kernel_build()` is `//common:kernel_aarch64`, then `base` is `//common:kernel_aarch64_system_dlkm_image`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="system_dlkm_image-base"></a>base |  The `system_dlkm_image()` corresponding to the `base_kernel` of the `kernel_build`. This is required for building a device-specific `system_dlkm` image. For example, if `base_kernel` of `kernel_build()` is `//common:kernel_aarch64`, then `base` is `//common:kernel_aarch64_system_dlkm_image`.<br><br>**Prebuilts**: For example, if `base_kernel` of `kernel_build()` is `@gki_prebuilts//kernel_aarch64`, then use `@gki_prebuilts//kernel_aarch64:kernel_aarch64_system_dlkm_staging_archive` in this attribute.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="system_dlkm_image-build_flatten"></a>build_flatten |  When True it builds system_dlkm image with no `uname -r` in the path.   | Boolean | optional |  `False`  |
 | <a id="system_dlkm_image-fs_types"></a>fs_types |  List of file systems type for `system_dlkm` images.<br><br>Supported filesystems for `system_dlkm` image are `ext4` and `erofs`. If not specified, build `system_dlkm.ext4.img` with ext4. Otherwise, build `system_dlkm.<fs>.img` for each file system type in the list.<br><br>If the name `system_dlkm.img` is needed, use a [`hermetc_genrule`](hemetic_tools.md#hermetc_genrule) to achieve this. Example:<br><br><pre><code>load("@kleaf//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_genrule")&#10;hermetic_genrule(&#10;    name = "tuna_system_dlkm_with_legacy_name",&#10;    srcs = [":tuna_system_dlkm"],&#10;    outs = ["tuna_system_dlkm_with_legacy_name/system_dlkm.img"],&#10;    cmd = """&#10;        for f in $(execpaths :tuna_system_dlkm); do&#10;            if [[ "$$(basename $$f)" == "system_dlkm.ext4.img" ]]; then&#10;                cp -aL $$f $@&#10;            fi&#10;        done&#10;    """&#10;)</code></pre>   | List of strings | optional |  `["ext4"]`  |
 | <a id="system_dlkm_image-internal_extra_archive_files"></a>internal_extra_archive_files |  **Internal only; subject to change without notice.** Extra files to be placed at the root of the archive.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
