@@ -611,3 +611,23 @@ def _common_kernel_abi_dist(
         ignore_diff = ignore_diff,
         no_ignore_diff_target = no_ignore_diff_target,
     )
+
+def _common_kernel_protected_module_names_impl(ctx):
+    module_names = sorted([
+        module_name.removesuffix(".ko")
+        for module_name in ctx.attr.module_names
+        if module_name not in ctx.attr.exclude
+    ])
+    out = ctx.actions.declare_file(ctx.attr.out)
+    ctx.actions.write(out, "\n".join(module_names) + "\n")
+    return DefaultInfo(files = depset([out]))
+
+common_kernel_protected_module_names = rule(
+    doc = "Build `protected_module_names` file for a common kernel.",
+    implementation = _common_kernel_protected_module_names_impl,
+    attrs = {
+        "out": attr.string(mandatory = True),
+        "module_names": attr.string_list(),
+        "exclude": attr.string_list(),
+    },
+)
