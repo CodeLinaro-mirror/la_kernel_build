@@ -26,17 +26,17 @@
 # OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-ROOT_DIR=$(realpath $(dirname $0)/../../..)
+ROOT_DIR=$(realpath "$(dirname "$0")"/../../..)
 
 set -e
 
 source "${ROOT_DIR}/build/_setup_env.sh"
 
-rm -rf $3
-mkdir $3
+rm -rf "$3"
+mkdir "$3"
 
 set -x
-$ROOT_DIR/build/android/merge_dtbs.py $1 $2 $3
+"$ROOT_DIR/build/android/merge_dtbs.py" "$1" "$2" "$3"
 set +x
 
 [[ -n "$(find ${3} -type f -name '*.dtb')" ]] && cat ${3}/*.dtb > ${3}/dtb.img
