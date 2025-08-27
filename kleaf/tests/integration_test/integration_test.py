@@ -598,6 +598,56 @@ class KleafIntegrationTestShard1(KleafIntegrationTestBase):
         output = subprocess.check_output([extract_ikconfig, vmlinux], text=True)
         self.assertIn("CONFIG_DEBUG_INFO_COMPRESSED_ZSTD=y", output.splitlines())
 
+    def test_release_build_not_leaking_workspace_root(self):
+        UNIQUE_STRING_TOKEN = "unique_string_token"
+        real_workspace_root = pathlib.Path(".").resolve()
+        if not arguments.mount_spec:
+            # Mount real workspace to some path that could be grepped
+            with tempfile.TemporaryDirectory() as tmp:
+                workspace_root = pathlib.Path(tmp) / UNIQUE_STRING_TOKEN
+                mount_spec = {
+                    real_workspace_root: workspace_root,
+                }
+                self._unshare_mount_run(mount_spec=mount_spec,
+                                        link_spec=LinkSpec())
+                return
+        workspace_root = arguments.mount_spec[real_workspace_root]
+        self._mount(workspace_root)
+
+        # Build release kernel in the mounted workspace directory
+        os.chdir(workspace_root)
+        build_env = dict(os.environ)
+        build_env["BUILD_NUMBER"] = "123456"
+        self._build(
+            [f"//{self._common()}:kernel_aarch64", "--config=release"],
+            env=build_env,
+        )
+
+        # Test if workspace directory has leaked into kernel binaries
+        binaries_path = f"bazel-bin/{self._common()}/kernel_aarch64"
+        grep_process = Exec.popen(
+            [
+                "grep",
+                # Pattern to grep
+                UNIQUE_STRING_TOKEN,
+                # Directory to scan
+                binaries_path,
+                # Scan directory recursively following symlinks
+                "-R",
+                # Print only list of files
+                "-l",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        stdout, stderr = grep_process.communicate()
+        # Check that grep doesn't find anything
+        self.assertEqual(stdout, '')
+        self.assertEqual(stderr, '')
+        # Grep returns exit code 1 if it doesn't find the requested pattern
+        self.assertEqual(grep_process.returncode, 1)
+
 
 class KleafIntegrationTestShard2(KleafIntegrationTestBase):
 
