@@ -60,5 +60,14 @@ failure_test(
 
 test_suite(
     name = "ddk_test",
-    tests = None,  # All tests in this package
+    # All but "ddk_images_test_suite" as it depends on GKI build.
+    tests = [
+        "ddk_headers_test_suite",
+        "ddk_module_config_test_suite",
+        "ddk_module_test_suite",
+        "ddk_submodule_test",
+        "ddk_test_submodule_cross_package_test",
+        "ddk_uapi_headers_test_suite",
+        "makefiles_test_suite",
+    ],
 )
