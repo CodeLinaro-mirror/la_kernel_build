@@ -21,7 +21,6 @@ load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_toolchain")
 def _config_test_impl(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
     script = hermetic_tools.setup + """
-        export RUNFILES_DIR=$(realpath .)
         {test_script} \\
             --actual {actual} \\
             --expects {quoted_expects}

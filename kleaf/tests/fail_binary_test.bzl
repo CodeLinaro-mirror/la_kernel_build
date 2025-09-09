@@ -20,7 +20,6 @@ load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_toolchain")
 def _fail_binary_test_impl(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
     script = hermetic_tools.setup + """
-        export RUNFILES_DIR=$(realpath .)
         {test_script} --error_message {quoted_error_message} -- {src} "$@"
     """.format(
         test_script = ctx.executable._test_script.short_path,

@@ -20,7 +20,6 @@ load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_toolchain")
 def _pre_defconfig_fragments_menuconfig_test_impl(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
     script = hermetic_tools.setup + """
-        export RUNFILES_DIR=$(realpath .)
         {test_script} \\
             --kernel_config_exec {kernel_config_exec} \\
             --pre_defconfig_fragment {pre_defconfig_fragment}

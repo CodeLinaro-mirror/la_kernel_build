@@ -20,7 +20,6 @@ load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_toolchain")
 def _ddk_menuconfig_test_impl(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
     script = hermetic_tools.setup + """
-        export RUNFILES_DIR=$(realpath .)
         {test_script} \\
             --ddk_config_exec {ddk_config_exec} \\
             --defconfig {defconfig}
