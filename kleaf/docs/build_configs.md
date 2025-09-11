@@ -102,6 +102,7 @@ _"Not supported"_ is displayed. Contact [owners](../OWNERS) if you need support.
   - [KMI\_SYMBOL\_LIST\_ADD\_ONLY](#kmi_symbol_list_add_only)
   - [KCFLAGS](#kcflags)
   - [VENDOR\_BOOTCONFIG](#vendor_bootconfig)
+  - [INITRAMFS\_VENDOR\_RAMDISK\_FRAGMENT\_NAME](#initramfs_vendor_ramdisk_fragment_name)
   - [MKDTIMG\_FLAGS](#mkdtimg_flags)
 
 ## BUILD\_CONFIG
@@ -846,11 +847,13 @@ vendor_boot_image(vendor_bootconfig = [...])
 
 See [vendor_boot_image](api_reference/kernel.md#vendor_boot_image).
 
-[documentation for all rules]: api_reference.md
+## INITRAMFS\_VENDOR\_RAMDISK\_FRAGMENT\_NAME
 
-[documentation for ABI monitoring]: abi.md
+```python
+vendor_boot_image(initramfs_vendor_ramdisk_fragment_name = ...)
+```
 
-[documentation for implementing Kleaf]: impl.md
+See [vendor_boot_image](api_reference/kernel.md#vendor_boot_image).
 
 ## MKDTIMG\_FLAGS
 
@@ -861,3 +864,7 @@ dtbo_image(opts = [...])
 See [dtbo_image](api_reference/kernel.md#dtbo_image).
 
 [documentation for all rules]: api_reference.md
+
+[documentation for ABI monitoring]: abi.md
+
+[documentation for implementing Kleaf]: impl.md
