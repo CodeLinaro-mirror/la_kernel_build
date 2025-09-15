@@ -51,6 +51,7 @@ def _build_boot_or_vendor_boot(
         kernel_vendor_cmdline = None,
         header_version = None,
         initramfs_vendor_ramdisk_fragment_name = None,
+        vendor_fstab = None,
         _search_and_cp_output):
     if not initramfs and initramfs_vendor_ramdisk_fragment_name:
         fail("{}: initramfs_vendor_ramdisk_fragment_name requires initramfs to be set.".format(
@@ -283,6 +284,20 @@ def _build_boot_or_vendor_boot(
             BOOT_IMAGE_HEADER_VERSION={header_version}
         """.format(header_version = header_version)
 
+    vendor_fstab_cmd = ""
+    if vendor_fstab:
+        vendor_fstab_cmd = """
+            VENDOR_FSTAB={vendor_fstab}
+        """.format(vendor_fstab = vendor_fstab.path)
+        inputs.append(vendor_fstab)
+    else:
+        vendor_fstab_cmd = """
+            if [ -n "${VENDOR_FSTAB}" ]; then
+                echo "WARNING: VENDOR_FSTAB is deprecated." >&2
+                echo "    Use vendor_boot_image(vendor_fstab=) instead." >&2
+            fi
+        """
+
     command += """
              # Build boot images
                (
@@ -298,6 +313,7 @@ def _build_boot_or_vendor_boot(
                  {vendor_bootconfig_command}
                  {kernel_vendor_cmdline_cmd}
                  {header_version_cmd}
+                 {vendor_fstab_cmd}
                  build_boot_images
                )
                {search_and_cp_output} --srcdir ${{DIST_DIR}} --dstdir {outdir} {outs}
@@ -318,6 +334,7 @@ def _build_boot_or_vendor_boot(
         vendor_bootconfig_command = vendor_bootconfig_command,
         kernel_vendor_cmdline_cmd = kernel_vendor_cmdline_cmd,
         header_version_cmd = header_version_cmd,
+        vendor_fstab_cmd = vendor_fstab_cmd,
     )
 
     debug.print_scripts_subrule(command)

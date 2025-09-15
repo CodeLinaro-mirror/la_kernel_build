@@ -39,6 +39,18 @@ def _vendor_boot_image_test_impl(ctx):
         unpack_bootimg = ctx.executable._unpack_bootimg.path,
         extracted = extracted.path,
     )
+
+    if ctx.attr.expected_vendor_fstab:
+        cmd += """
+            for ramdisk in {extracted}/vendor-ramdisk-by-name/*; do
+                extract_dir=${{ramdisk}}_extracted
+                mkdir -p ${{extract_dir}}
+                ramdisk=$(realpath ${{ramdisk}})
+                ( cd ${{extract_dir}} && gzip -cd ${{ramdisk}} | cpio -i )
+            done
+        """.format(
+            extracted = extracted.path,
+        )
     ctx.actions.run_shell(
         inputs = [vendor_boot_image],
         outputs = [extracted],
@@ -106,6 +118,21 @@ def _vendor_boot_image_test_impl(ctx):
             expected_vendor_ramdisk_fragment = ctx.attr.expected_vendor_ramdisk_fragment,
         )
 
+    if ctx.attr.expected_vendor_fstab:
+        direct_runfiles.append(ctx.file.expected_vendor_fstab)
+
+        # The fstab is in the default ramdisk with no name.
+        test_script += """
+            if ! diff -q {extracted}/vendor-ramdisk-by-name/ramdisk__extracted/first_stage_ramdisk/$(basename {expected_vendor_fstab}) {expected_vendor_fstab}; then
+                echo "ERROR: fstab differs" >&2
+                diff {extracted}/vendor-ramdisk-by-name/ramdisk__extracted/first_stage_ramdisk/$(basename {expected_vendor_fstab}) {expected_vendor_fstab} >&2
+                exit 1
+            fi
+        """.format(
+            extracted = extracted.short_path,
+            expected_vendor_fstab = ctx.file.expected_vendor_fstab.short_path,
+        )
+
     test_script_file = ctx.actions.declare_file("{}/test.sh".format(ctx.label.name))
     ctx.actions.write(test_script_file, test_script, is_executable = True)
     runfiles = ctx.runfiles(
@@ -142,6 +169,7 @@ vendor_boot_image_test = rule(
         ),
         "expected_header_version": attr.int(),
         "expected_vendor_ramdisk_fragment": attr.string(),
+        "expected_vendor_fstab": attr.label(allow_single_file = True),
     },
     test = True,
     toolchains = [hermetic_toolchain.type],

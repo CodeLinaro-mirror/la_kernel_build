@@ -102,6 +102,7 @@ _"Not supported"_ is displayed. Contact [owners](../OWNERS) if you need support.
   - [KMI\_SYMBOL\_LIST\_ADD\_ONLY](#kmi_symbol_list_add_only)
   - [KCFLAGS](#kcflags)
   - [VENDOR\_BOOTCONFIG](#vendor_bootconfig)
+  - [VENDOR\_FSTAB](#vendor_fstab)
   - [INITRAMFS\_VENDOR\_RAMDISK\_FRAGMENT\_NAME](#initramfs_vendor_ramdisk_fragment_name)
   - [MKDTIMG\_FLAGS](#mkdtimg_flags)
 
@@ -843,6 +844,14 @@ See [kernel_build.kcflags](api_reference/kernel.md#kernel_build-kcflags).
 
 ```python
 vendor_boot_image(vendor_bootconfig = [...])
+```
+
+See [vendor_boot_image](api_reference/kernel.md#vendor_boot_image).
+
+## VENDOR\_FSTAB
+
+```python
+vendor_boot_image(vendor_fstab = [...])
 ```
 
 See [vendor_boot_image](api_reference/kernel.md#vendor_boot_image).

@@ -59,6 +59,7 @@ def _vendor_boot_image_impl(ctx):
         vendor_bootconfig_file = vendor_bootconfig_file,
         kernel_vendor_cmdline = ctx.attr.kernel_vendor_cmdline,
         header_version = ctx.attr.header_version,
+        vendor_fstab = ctx.file.vendor_fstab,
     )
 
 vendor_boot_image = rule(
@@ -170,6 +171,10 @@ vendor_boot_image = rule(
             # It is intentional that 0 is not in the list. When specified explicitly,
             # the user can only provide these values. If unset, the value is 0.
             values = [3, 4],
+        ),
+        "vendor_fstab": attr.label(
+            doc = "Vendor fstab to be included in the vendor ramdisk",
+            allow_single_file = True,
         ),
     },
     subrules = [build_boot_or_vendor_boot],
