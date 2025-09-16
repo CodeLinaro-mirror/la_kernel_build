@@ -36,13 +36,9 @@ hermetic_test_binary(
     append_host_path = True,
     args = [
         "--init_ddk=$(rootpath //build/kernel:init_ddk)",
-        "--bazel_wrapper=$(rootpath //build/kernel/kleaf:wrapper)",
-        "--integration_test_bin=$(rootpath :integration_test_internal)",
     ],
     data = [
-        ":integration_test_internal",
         "//build/kernel:init_ddk",
-        "//build/kernel/kleaf:wrapper",
     ],
     use_cc_toolchain = True,
 )
@@ -52,6 +48,7 @@ py_binary(
     srcs = ["integration_test.py"],
     main = "integration_test.py",
     deps = [
+        "//build/kernel/kleaf:wrapper",
         "//build/kernel/kleaf/analysis:inputs",
         "@io_abseil_py//absl/testing:absltest",
         "@io_abseil_py//absl/testing:xml_reporter",

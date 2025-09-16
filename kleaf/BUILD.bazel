@@ -874,15 +874,14 @@ test_suite(
 
 # Declare py_library for Bazel wrapper for testing purposes.
 
-py_binary(
+py_library(
     name = "wrapper",
     srcs = [
         "bazel.py",
         "kleaf_help.py",
     ],
     imports = ["."],
-    main = "bazel.py",
-    visibility = ["//build/kernel/kleaf/tests:__subpackages__"],
+    visibility = ["//build/kernel:__subpackages__"],
     deps = [
         "//build/kernel/kleaf/impl:default_host_tools",
     ],
