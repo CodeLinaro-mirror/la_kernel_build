@@ -145,6 +145,8 @@ case "${KERNEL_TARGET}" in
     ;;
 esac
 
+export KERNEL_TARGET
+
 ################################################################################
 # Configure LTO
 if [ -n "$LTO" ]; then
