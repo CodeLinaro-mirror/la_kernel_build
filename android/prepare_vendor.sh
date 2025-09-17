@@ -139,6 +139,9 @@ case "${KERNEL_TARGET}" in
   taro)
     KERNEL_TARGET="waipio"
     ;;
+  chora)
+    KERNEL_TARGET="canoe"
+    ;;
 esac
 
 ################################################################################
@@ -239,7 +242,8 @@ if [ "${RECOMPILE_KERNEL}" == "1" ]; then
   # shellcheck disable=SC2086
   "${ROOT_DIR}/build_with_bazel.py" \
     -t "$KERNEL_TARGET" "$KERNEL_VARIANT" $LTO_KBUILD_ARG $EXTRA_KBUILD_ARGS \
-    --out_dir "${ANDROID_KP_OUT_DIR}"
+    --out_dir "${ANDROID_KP_OUT_DIR}" \
+    --target_build_variant "${TARGET_BUILD_VARIANT}"
 
   COPY_NEEDED=1
 fi

@@ -1,5 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2020, The Linux Foundation. All rights reserved.
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -324,13 +325,17 @@ for EXT_MOD in ${EXT_MODULES}; do
     fi
   done
   if [[ "$TARGET_PRODUCT" = "gen4_gvm" ||
+	  "$TARGET_PRODUCT" = "gen4_gvm_sgt" ||
 	  "$TARGET_PRODUCT" = "gen5_gvm" ||
+	  "$TARGET_PRODUCT" = "gen5_gvm_sgt" ||
 	  "$TARGET_PRODUCT" = "gen5_gvm_gy" ]]; then
      btgt="autogvm"
   elif [ "$TARGET_BOARD_PLATFORM" = "msmnile_au" ]; then
      btgt="gen3auto"
   elif [ "$TARGET_BOARD_PLATFORM" = "sm6150" ]; then
      btgt="sdmsteppeauto"
+  elif [ "$TARGET_BOARD_PLATFORM" = "chora" ]; then
+     btgt="canoe"
   else
      btgt="$TARGET_BOARD_PLATFORM"
   fi
