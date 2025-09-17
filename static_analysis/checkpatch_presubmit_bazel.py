@@ -34,7 +34,6 @@ from typing import Any
 _LOG_LEVEL = logging.INFO
 # _LOG_LEVEL = logging.DEBUG
 
-_BAZEL = pathlib.Path("tools/bazel")
 _SILENT_ARGS = [
     "--ui_event_filters=-info",
     "--noshow_progress",
@@ -62,6 +61,9 @@ def load_arguments() -> dict[str, Any]:
         "--bid",
         help="Build ID. If specified, it is used to skip the check on post-submit.",
     )
+    parser.add_argument("--bazel_wrapper",
+                        type=pathlib.Path,
+                        help="Path to Kleaf's Bazel wrapper")
     return parser.parse_known_args()
 
 
@@ -77,7 +79,8 @@ def _log_command(args):
     logging.debug("Running command line: %s", " ".join(quoted))
 
 
-def _find_checkpatch_targets(path: pathlib.Path) -> list[str]:
+def _find_checkpatch_targets(bazel_wrapper: pathlib.Path, path: pathlib.Path) \
+        -> list[str]:
     if str(path).startswith(_PATH_PREFIX_DENY_LIST):
         logging.info("Skipped //%s path in deny list", path)
         return []
@@ -87,7 +90,7 @@ def _find_checkpatch_targets(path: pathlib.Path) -> list[str]:
         logging.info("//%s is not a package; no BUILD file is found", path)
         return []
 
-    args = [_BAZEL, "query"]
+    args = [str(bazel_wrapper.absolute()), "query"]
     args += _SILENT_ARGS
     args.append(f'kind("^checkpatch rule$", //{path}:all)')
     _log_command(args)
@@ -95,18 +98,20 @@ def _find_checkpatch_targets(path: pathlib.Path) -> list[str]:
         args,
         text=True,
         cwd=_resolve_against_workspace_root("."),
+        env=_env_for_recursive_bazel_calls(),
     ).splitlines()
     return [line.strip() for line in lines if line.strip()]
 
 
 def _run_checkpatch(
+    bazel_wrapper: pathlib.Path,
     target: str,
     git_sha1: str,
     log: pathlib.Path,
     checkpatch_args: list[str],
     silent: bool = False,
 ) -> int:
-    args = [_BAZEL, "run", "--show_result=0"]
+    args = [str(bazel_wrapper.absolute()), "run", "--show_result=0"]
     args += _SILENT_ARGS
     args += [target, "--"]
     args += checkpatch_args
@@ -119,13 +124,24 @@ def _run_checkpatch(
         cwd=_resolve_against_workspace_root("."),
         stdout=subprocess.DEVNULL if silent else None,
         stderr=subprocess.STDOUT if silent else None,
+        env=_env_for_recursive_bazel_calls(),
     ).returncode
+
+
+def _env_for_recursive_bazel_calls() -> dict[str, str]:
+    env = os.environ.copy()
+    # Set PYTHONSAFEPATH to empty string:
+    # - so that rules_python stage1 script won't override it with 1, and
+    #   import-ing a module from py_binary.deps works.
+    env["PYTHONSAFEPATH"] = ""
+    return env
 
 
 def main(
         checkpatch_args: list[str],
         dist_dir: pathlib.Path,
         bid: str | None,
+        bazel_wrapper: pathlib.Path,
 ) -> int:
     if bid:
         # Skip checkpatch for postsubmit (b/35390488).
@@ -149,7 +165,7 @@ def main(
             logging.error("Multiple git sha1 found in %s for %s",
                           applied_prop, path)
             return 1
-        path_targets = _find_checkpatch_targets(path)
+        path_targets = _find_checkpatch_targets(bazel_wrapper, path)
         if not path_targets:
             logging.info(
                 "Skipping %s because no checkpatch() target is found.", path)
@@ -166,12 +182,14 @@ def main(
     for path_targets, git_sha1 in targets:
         for target in path_targets:
             return_codes.append(_run_checkpatch(
+                bazel_wrapper=bazel_wrapper,
                 target=target,
                 git_sha1=git_sha1,
                 log=checkpatch_log,
                 checkpatch_args=checkpatch_args,
             ))
             _run_checkpatch(
+                bazel_wrapper=bazel_wrapper,
                 target=target,
                 git_sha1=git_sha1,
                 log=checkpatch_full_log,
