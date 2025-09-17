@@ -7,6 +7,8 @@ DDK provides the following rules and macros to define DDK modules.
 * [`ddk_module`](#ddk_module) defines the kernel module build.
 * [`ddk_submodule`](#ddk_submodule) may be used along with `ddk_module` if there
   are multiple module output files (`*.ko`) within the same `ddk_module`.
+* [`ddk_config`](config.md) defines a common set of Kconfig/defconfig for
+  a collection of `ddk_module`s.
 
 ## ddk\_headers
 

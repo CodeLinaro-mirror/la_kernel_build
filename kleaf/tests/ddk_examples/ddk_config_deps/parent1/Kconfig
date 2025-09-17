@@ -1,0 +1,3 @@
+config PARENT1
+	tristate "Parent 1"
+	default m

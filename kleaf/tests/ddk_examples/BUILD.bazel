@@ -9,6 +9,7 @@ build_test(
         # keep sorted
         "//build/kernel/kleaf/tests/ddk_examples/conditional_defines:foo",
         "//build/kernel/kleaf/tests/ddk_examples/conditional_dependency/child",
+        "//build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/children",
         "//build/kernel/kleaf/tests/ddk_examples/ddk_library:mymod",
         "//build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_object:mymod",
         "//build/kernel/kleaf/tests/ddk_examples/exported_includes/child",

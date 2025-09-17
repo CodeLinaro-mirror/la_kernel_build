@@ -211,7 +211,7 @@ following. Earlier items have higher priority.
     [Depsets](https://bazel.build/extending/depsets)).
 *   `DEFCONFIG` of the `kernel_build`.
 
-## Example
+## Example: use distributed kconfig/defconfig in ddk_module
 
 ```text
 # tuna/Kconfig.ext: Kconfig of the kernel_build
@@ -321,3 +321,25 @@ ddk_module(
 // You may check configs declared in kernel_build
 #endif
 ```
+
+## ddk_config(deps=) attribute
+
+When a `ddk_module` has `config` attribute set, it must use the configuration
+from the `ddk_config` target as-is. This means:
+
+*   The `ddk_module` target must not specify `defconfig` or `kconfig`
+*   Every transitive module dependency in `ddk_module(deps=)` must satisfy one
+    of the following:
+    *   The dependent `ddk_module` or `ddk_headers` does not specify
+        `defconfig`/`defconfigs` or `kconfig`/`kconfigs`.
+    *   The dependent `ddk_module` or `ddk_headers` is already a dependency
+        of the `ddk_config` target.
+
+If you are refactoring towards `ddk_config` for your existing build rules, this
+likely means you should specify `ddk_config(deps=)` to be a **superset** of
+dependencies of the `ddk_module`s using this `ddk_config`.
+
+# Example: use ddk_config for a collection of modules
+
+For a concrete example, see
+[ddk_config_deps](../../tests/ddk_examples/ddk_config_deps/README.md).
