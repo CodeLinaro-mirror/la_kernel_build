@@ -56,7 +56,8 @@ import xml.dom.minidom
 from typing import Any, Callable, Iterable, TextIO
 
 from absl.testing import absltest
-from build.kernel.kleaf.analysis.inputs import analyze_inputs
+from build.kernel.kleaf.analysis.inputs import \
+    analyze_inputs, BazelCommandExecutor
 
 # See local.bazelrc
 _LOCAL = ["--//build/kernel/kleaf:config_local"]
@@ -268,7 +269,7 @@ class Exec(object):
             args, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs).stdout
 
 
-class KleafIntegrationTestBase(unittest.TestCase):
+class KleafIntegrationTestBase(unittest.TestCase, BazelCommandExecutor):
 
     def _build_subprocess_args(
         self,
@@ -306,6 +307,8 @@ class KleafIntegrationTestBase(unittest.TestCase):
         """Returns output of a bazel command."""
         subprocess_args, kwargs = self._build_subprocess_args(*args, **kwargs)
         return Exec.check_output(subprocess_args, **kwargs)
+
+    check_output = _check_output
 
     def _check_errors(self, *args, **kwargs) -> str:
         """Returns errors of a bazel command."""
@@ -997,7 +1000,7 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
             f"+ build/kernel/kleaf/analysis/inputs.py 'mnemonic(\"KernelModule.*\", {vd_modules[0]})'"
         )
         input_to_module = analyze_inputs(
-            bazel=arguments.bazel_wrapper,
+            bazel_command_executor=self,
             aquery_args=[f'mnemonic("KernelModule.*", {vd_modules[0]})'] +
             _FASTEST).keys()
         self.assertFalse([
