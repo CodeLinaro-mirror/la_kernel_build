@@ -39,7 +39,7 @@ load(
 
 visibility("//build/kernel/kleaf/...")
 
-_EMPTY_SELECT = select({
+EMPTY_SELECT = select({
     "//conditions:default": None,
 })
 
@@ -402,7 +402,7 @@ def _transform_kernel_build_outs(name, what, outs):
         return outs
     elif type(outs) == type({}):
         return select(outs)
-    elif type(outs) == type(_EMPTY_SELECT):
+    elif type(outs) == type(EMPTY_SELECT):
         return outs
     else:
         fail("{}: Invalid type for {}: {}".format(name, what, type(outs)))
