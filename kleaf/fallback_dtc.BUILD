@@ -5,3 +5,9 @@ fail_rule(
     message = "dtc sources are not found. Do you have external/dtc checked out?",
     visibility = ["//visibility:public"],
 )
+
+fail_rule(
+    name = "fdtoverlay",
+    message = "dtc sources are not found. Do you have external/dtc checked out?",
+    visibility = ["//visibility:public"],
+)
