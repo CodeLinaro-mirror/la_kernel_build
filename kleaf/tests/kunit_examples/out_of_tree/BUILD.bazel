@@ -17,6 +17,7 @@ load(
     "ddk_module",
     "kunit_test",
 )
+load("@rules_devicetree//devicetree:dtbo.bzl", "dtbo")
 
 ddk_module(
     name = "x86_64_kunit_example_module",
@@ -32,4 +33,20 @@ kunit_test(
     test_name = "ddk-example",
     visibility = ["//build/kernel/kleaf/tests/kunit_examples:__pkg__"],
     deps = ["@kleaf//common:kunit_parser"],
+)
+
+dtbo(
+    name = "x86_64_foo_dt",
+    srcs = ["x86_64_foo_dt.dtso"],
+)
+
+ddk_module(
+    name = "x86_64_kunit_example_module_with_dtbo",
+    srcs = [
+        "mod.c",
+        ":x86_64_foo_dt",
+    ],
+    out = "x86_64_kunit_example_module_with_dtbo.ko",
+    kernel_build = "@kleaf//common:kernel_x86_64",
+    visibility = ["//build/kernel/kleaf/tests/kunit_examples:__pkg__"],
 )
