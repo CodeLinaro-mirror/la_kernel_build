@@ -19,5 +19,6 @@ kunit_test(
     modules = ["@kleaf//common:kernel_x86_64/lib/kunit/kunit-example-test.ko"],
     tags = ["external"],
     test_name = "example",
+    visibility = ["//build/kernel/kleaf/tests/kunit_examples:__pkg__"],
     deps = ["@kleaf//common:kunit_parser"],
 )

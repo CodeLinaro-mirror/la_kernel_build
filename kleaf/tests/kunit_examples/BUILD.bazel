@@ -1,0 +1,9 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+
+build_test(
+    name = "kunit_examples",
+    targets = [
+        "//build/kernel/kleaf/tests/kunit_examples/in_tree:x86_64_kunit_example_test",
+        "//build/kernel/kleaf/tests/kunit_examples/out_of_tree:x86_64_kunit_example_test",
+    ],
+)

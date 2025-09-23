@@ -30,5 +30,6 @@ kunit_test(
     modules = [":x86_64_kunit_example_module"],
     tags = ["external"],
     test_name = "ddk-example",
+    visibility = ["//build/kernel/kleaf/tests/kunit_examples:__pkg__"],
     deps = ["@kleaf//common:kunit_parser"],
 )
