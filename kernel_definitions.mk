@@ -147,12 +147,8 @@ else
 TARGET_USES_UNCOMPRESSED_KERNEL ?= $(shell grep "CONFIG_BUILD_ARM64_UNCOMPRESSED_KERNEL=y" $(TARGET_KERNEL_SOURCE)/arch/$(KERNEL_ARCH)/configs/$(KERNEL_DEFCONFIG))
 endif
 
-_x := $(shell mkdir -p $(KERNEL_OUT) && find -L $(TARGET_KERNEL_SOURCE) -type f | xargs ls -al | sort | grep -v $(TARGET_KERNEL_SOURCE)/arch/$(KERNEL_ARCH)/configs/$(KERNEL_DEFCONFIG) > $(KERNEL_OUT)/list_of_files.tmp && diff $(KERNEL_OUT)/list_of_files.tmp $(KERNEL_OUT)/list_of_files || cp $(KERNEL_OUT)/list_of_files.tmp $(KERNEL_OUT)/list_of_files 2>&1 > /dev/null)
-
 # Generate the defconfig file from the fragments
-$(KERNEL_OUT)/$(KERNEL_DEFCONFIG): $(KERNEL_OUT)/list_of_files
-	ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) KERN_OUT=$(KERNEL_OUT) $(TARGET_KERNEL_MAKE_ENV) MAKE_PATH=$(MAKE_PATH) TARGET_BUILD_VARIANT=${TARGET_BUILD_VARIANT} $(TARGET_KERNEL_SOURCE)/scripts/gki/generate_defconfig.sh $(KERNEL_DEFCONFIG)
-	cp $(TARGET_KERNEL_SOURCE)/arch/$(KERNEL_ARCH)/configs/$(KERNEL_DEFCONFIG) $(KERNEL_OUT)/$(KERNEL_DEFCONFIG)
+_x := $(shell ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) KERN_OUT=$(KERNEL_OUT) $(TARGET_KERNEL_MAKE_ENV) MAKE_PATH=$(MAKE_PATH) TARGET_BUILD_VARIANT=${TARGET_BUILD_VARIANT} $(TARGET_KERNEL_SOURCE)/scripts/gki/generate_defconfig.sh $(KERNEL_DEFCONFIG))
 
 ifeq ($(TARGET_USES_UNCOMPRESSED_KERNEL),)
 ifeq ($(KERNEL_ARCH),arm64)
@@ -291,9 +287,12 @@ endef
 # this will ensure in subsequent builds, i.e. no-op incremental builds, modules depends on $(KERNEL_USR) \
 # will not get recompiled.
 
-$(KERNEL_HEADERS_INSTALL): $(DTC) $(UFDT_APPLY_OVERLAY)
+$(KERNEL_HEADERS_INSTALL): $(DTC) $(UFDT_APPLY_OVERLAY) | $(KERNEL_OUT)
 	$(call build-kernel,$(KERNEL_DEFCONFIG),$(KERNEL_OUT),$(KERNEL_MODULES_OUT),$(KERNEL_HEADERS_INSTALL),1,$(TARGET_PREBUILT_INT_KERNEL))
 	touch $(KERNEL_USR_TS)
+
+$(KERNEL_OUT):
+	mkdir -p $(KERNEL_OUT)
 
 $(GKI_KERNEL_OUT):
 	mkdir -p $(GKI_KERNEL_OUT)
@@ -304,10 +303,9 @@ $(KERNEL_USR): | $(KERNEL_HEADERS_INSTALL)
 	ln -s kernel/$(TARGET_KERNEL) $(KERNEL_SYMLINK); \
 	fi
 
-$(TARGET_PREBUILT_KERNEL): $(KERNEL_OUT)/list_of_files $(DTC) $(KERNEL_USR) $(KERNEL_OUT)/$(KERNEL_DEFCONFIG)
+$(TARGET_PREBUILT_KERNEL): $(KERNEL_OUT) $(DTC) $(KERNEL_USR)
 	echo "Building the requested kernel.."; \
 	$(call build-kernel,$(KERNEL_DEFCONFIG),$(KERNEL_OUT),$(KERNEL_MODULES_OUT),$(KERNEL_HEADERS_INSTALL),0,$(TARGET_PREBUILT_INT_KERNEL))
-	touch $(TARGET_PREBUILT_KERNEL)
 
 $(GKI_TARGET_PREBUILT_KERNEL): $(DTC) $(UFDT_APPLY_OVERLAY) $(GKI_KERNEL_OUT)
 	echo "Building GKI kernel.."; \
@@ -319,7 +317,6 @@ $(INSTALLED_KERNEL_TARGET): $(TARGET_PREBUILT_KERNEL) $(GKI_TARGET_PREBUILT_KERN
 		cp $(GKI_TARGET_PREBUILT_KERNEL) $(PRODUCT_OUT)/kernel-gki; \
 	fi
 	touch $(KERNEL_USR) -r $(KERNEL_USR_TS)
-	touch $(TARGET_PREBUILT_KERNEL) -r $(KERNEL_OUT)
 
 # RTIC DTS to DTB (if MPGen enabled;
 # and make sure we don't break the build if rtic_mp.dts missing)
