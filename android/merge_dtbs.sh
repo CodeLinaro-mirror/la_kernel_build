@@ -33,8 +33,8 @@ set -e
 
 source "${ROOT_DIR}/build/_setup_env.sh"
 
-rm -rf $3
-mkdir $3
+rm -rf "$3"
+mkdir "$3"
 
 set -x
 $ROOT_DIR/build/android/merge_dtbs.py --base $1 --techpack $2 --out $3
