@@ -33,6 +33,7 @@
 # is used.
 
 # https://github.com/bazelbuild/bazel/issues/4867
+# --quiet is too quiet that we can't use it.
 ^Starting local Bazel server and connecting to it...$
 ^Extracting Bazel installation...$
 
@@ -40,5 +41,26 @@
 ^WARNING: ABI DIFFERENCES HAVE BEEN DETECTED!$
 ^WARNING: Use '.*' to see and fail on ABI difference.$
 
+# Allow certain WARNING logs from Bazel
+^WARNING: Build options? .* (has|have) changed, discarding analysis cache.*$
+
+# Allow certain INFO logs from Bazel
+^INFO: Invocation ID: [-0-9a-z]+$
+^INFO: Analyzed target .*$
+^INFO: Analyzed .* targets .*$
+^INFO: Found \d+ (test )?targets?\.\.\.$
+^INFO: Elapsed time: .*, Critical Path: .*$
+^INFO: \d+ process(es)?:.*$
+^INFO: Build completed successfully, \d+ total actions?$
+^INFO: Running command line: .*$
+^Executed \d+ out of \d+ tests?: \d+ tests? pass(es)?.$
+^There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.$
+
 # Allow empty lines
 ^$
+
+# Known violations - remove when bug is fixed
+
+# b/445483449
+^INFO: From \[stg\] Extracting ABI.*$
+^warning: DIE 0x[0-9a-f]+ attribute 0x[0-9a-f]+ format 0x[0-9a-f]+ value [-0-9a-f]+ might actually be [-0-9a-f]+$
