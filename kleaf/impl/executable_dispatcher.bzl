@@ -20,9 +20,24 @@ load(":utils.bzl", "utils")
 
 visibility("//build/kernel/...")
 
+def _get_single_executable(ctx, target):
+    if target[DefaultInfo].files_to_run.executable:
+        return target[DefaultInfo].files_to_run.executable
+
+    # Hack for python_runtime_files()
+    label = ctx.label.same_package_label(ctx.attr.name)
+    files_list = target.files.to_list()
+    if len(files_list) != 1:
+        fail("{}: {} does not contain a single file: {}".format(
+            label,
+            target.label,
+            files_list,
+        ))
+    return files_list[0]
+
 def _write_source_file_impl(ctx):
     out = ctx.actions.declare_file(ctx.label.name)
-    actual_executable = ctx.executable.actual_executable
+    actual_executable = _get_single_executable(ctx, ctx.attr.actual_executable)
 
     # This is not a perfect translation, but it is good enough for our use cases.
     append_args_str = json.encode(ctx.attr.append_args)
@@ -68,7 +83,6 @@ _write_source_file = rule(
         "template": attr.label(mandatory = True, allow_single_file = True),
         "substitutions": attr.string_dict(),
         "actual_executable": attr.label(
-            executable = True,
             cfg = "target",
             allow_files = True,
         ),
@@ -133,7 +147,6 @@ executable_dispatcher = macro(
     attrs = {
         "src": attr.label(
             doc = "The actual executable.",
-            executable = True,
             cfg = "target",
             allow_files = True,
             mandatory = True,
