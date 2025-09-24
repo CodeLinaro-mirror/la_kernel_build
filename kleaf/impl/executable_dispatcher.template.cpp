@@ -216,9 +216,10 @@ int main(int argc, char *argv[]) {
   try_exec_on_runfiles(candidate_runfiles_dir, argc, argv, environ);
 
   // Case 3: Assume that <executable_path> is already in a runfiles directory.
-  auto my_short = std::filesystem::path(kPkgShort) / kOut;
+  auto workspace_short =
+      std::filesystem::path(kWorkspaceName) / kPkgShort / kOut;
   auto candidate_runfiles_dir_result =
-      try_remove_suffix(my_path.string(), my_short.string());
+      try_remove_suffix(my_path.string(), "/" + workspace_short.string());
   if (candidate_runfiles_dir_result.has_value() &&
       ends_with(*candidate_runfiles_dir_result, ".runfiles")) {
     try_exec_on_runfiles(*candidate_runfiles_dir_result, argc, argv, environ);
