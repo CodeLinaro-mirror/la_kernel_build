@@ -36,6 +36,7 @@ _SOURCE_SUFFIXES = (
     ".S",
     ".o_shipped",
     ".cmd_shipped",
+    ".dtbo",
 )
 
 # Example:
@@ -594,6 +595,8 @@ def _handle_src(
 
     if src.suffix == ".cmd_shipped":
         abs_out = src.with_suffix(".cmd")
+    elif src.suffix == ".dtbo":
+        abs_out = src.with_suffix(".dtbo.o")
     else:
         abs_out = src.with_suffix(".o")
 

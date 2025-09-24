@@ -56,6 +56,7 @@ DDK_MODULE_SRCS_ALLOWED_EXTENSIONS = [
     ".S",
     ".c",
     ".cmd_shipped",
+    ".dtbo",
     ".h",
     ".o_shipped",
     ".rs",
