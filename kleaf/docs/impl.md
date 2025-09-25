@@ -70,10 +70,12 @@ The `makefile` attribute should point to the `Makefile` under the kernel source
 tree. Usually, this is `//common:Makefile`.
 
 The `make_goals` attribute should be the list of GNUMake goals you are building.
-Usually, this contains `["modules"]`.
+Usually, this contains `["modules"]`. Do not include `dtbs`; see
+[Building devicetree](devicetree.md).
 
 The `outs` attribute of the target should align with the `FILES` variable in
-build.config. This is sometimes an empty list.
+build.config. This is sometimes an empty list. For DTB files, see
+[Building devicetree](devicetree.md).
 
 The `module_outs` attribute of the target includes the list of in-tree drivers
 that you are building.
@@ -154,6 +156,8 @@ Add the following to the `srcs` attribute of the `pkg_files` target:
   This copies all external kernel modules to the distribution directory.
 * The name of all image targets you have created in Step 4. This copies
   all partition images to the distribution directory.
+* Necessary `dtb_image` and/or `dtbo_image` for distribution. See
+  [Building devicetree](devicetree.md).
 * GKI artifacts, including:
   * `//common:kernel_aarch64`
   * `//common:kernel_aarch64_additional_artifacts`
