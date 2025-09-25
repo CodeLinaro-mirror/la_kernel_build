@@ -50,45 +50,9 @@ kernel_build(
 )
 ```
 
-## Building kernel modules and DTB files
+## Building kernel modules
 
-### Step 0: (Optional) Create a skeleton `BUILD.bazel` file
-
-This step automates most of the following steps for you.
-
-First, install
-[Buildozer](https://github.com/bazelbuild/buildtools/tree/master/buildozer).
-Make sure that it is available in `$PATH`, or under `$GOPATH/bin`, or under
-`$HOME/go/bin`. See the script below for details on how `buildozer` is searched
-for.
-
-Next, execute `build_config_to_bazel.py` script. Set `BUILD_CONFIG` accordingly
-if you don't have a top level `build.config` file. Example:
-
-```shell
-$ BUILD_CONFIG=common-modules/virtual-device/build.config.virtual_device.x86_64 \
-    build/kernel/kleaf/build_config_to_bazel.py
-```
-
-Sample output:
-
-```text
-fixed /home/elsk/android/kernel/common-modules/virtual-device/BUILD.bazel
-```
-
-Then, examine the modified file(s), indicated in the command output.
-There may be several `FIXME` comments that requires human intervention.
-Go through the steps below to fix them accordingly.
-
-**NOTE**: Human intervention is still required for the generated file.
-
-**NOTE**: The script may modify multiple files. All of them should be examined.
-
-**NOTE**: The file is generated based on a number of heuristics. Even if some
-attributes aren't commented with `FIXME`, they may not be 100% correct. Go
-through the steps below to fix the file to suit your needs.
-
-### Step 1: (Optional) Define a target to build in-tree drivers and DTB files {#step-1}
+### Step 1: (Optional) Define a target to build in-tree drivers {#step-1}
 
 If you have a separate kernel tree to build in-tree drivers, define
 a `kernel_build` target to build these modules. The name of the `kernel_build`
@@ -102,12 +66,14 @@ If you are building a custom kernel, you may reuse the existing `kernel_build`
 target, and keep kernel images in `outs`. If you are building against GKI, set
 the `base_kernel` attribute accordingly (e.g. to `//common:kernel_aarch64`).
 
-The `build_config` attribute of the target should point to the
-main `build.config` file. To use `build.config` files generated on the fly, you
-may use the `kernel_build_config` rule. See example for Pixel 2021 below.
+The `makefile` attribute should point to the `Makefile` under the kernel source
+tree. Usually, this is `//common:Makefile`.
+
+The `make_goals` attribute should be the list of GNUMake goals you are building.
+Usually, this contains `["modules"]`.
 
 The `outs` attribute of the target should align with the `FILES` variable in
-build.config. This may include DTB files.
+build.config. This is sometimes an empty list.
 
 The `module_outs` attribute of the target includes the list of in-tree drivers
 that you are building.
@@ -125,45 +91,11 @@ For other build configurations defined in the `build.config` file, see
 
 Example for Pixel 2021 (see the `kernel_build` target named `slider`):
 
-[https://android.googlesource.com/kernel/google-modules/raviole-device/+/refs/heads/android13-gs-raviole-5.15/BUILD.bazel](https://android.googlesource.com/kernel/google-modules/raviole-device/+/refs/heads/android13-gs-raviole-5.15/BUILD.bazel)
+[https://android.googlesource.com/kernel/google-modules/raviole-device/+/refs/heads/android-gs-raviole-mainline/BUILD.bazel](https://android.googlesource.com/kernel/google-modules/raviole-device/+/refs/heads/android-gs-raviole-mainline/BUILD.bazel)
 
 ### Step 2: Define targets to build external kernel modules
 
-Define `kernel_module` targets to build external kernel modules. You should
-create a `kernel_module` target for each item in `EXT_MODULES` variable
-in `build.config`.
-
-The `kernel_build` attribute should be the target to the `kernel_build` you have
-previously created in step 1, or  `//common:kernel_aarch64` if you did not do
-step 1.
-
-The `outs` attribute should be set to a list of `*.ko` files built by this
-external module.
-
-* Hint: You may leave the list empty and build the target. If the list is not
-  up to date, modify the list according to the error message.
-
-Be sure to set visibility accordingly, so that these targets are visible to
-the `kernel_modules_install` target that will be created in step 3.
-
-If the module depends on other modules, set `kernel_module_deps` accordingly.
-See the `bms` and `power/reset` module below for an example.
-
-If the module depends on headers in other locations, add headers to a filegroup,
-then add the headers to `srcs`. See the `bms` and `power/reset` module below for
-an example.
-
-Minimal example for the `edgetpu` driver of Pixel 2021:
-
-[https://android.googlesource.com/kernel/google-modules/edgetpu/+/refs/heads/android-gs-raviole-mainline/drivers/edgetpu/BUILD.bazel](https://android.googlesource.com/kernel/google-modules/edgetpu/+/refs/heads/android-gs-raviole-mainline/drivers/edgetpu/BUILD.bazel)
-
-Example for the `bms` driver of Pixel 2021:
-
-[https://android.googlesource.com/kernel/google-modules/bms/+/refs/heads/android-gs-raviole-mainline/BUILD.bazel](https://android.googlesource.com/kernel/google-modules/bms/+/refs/heads/android-gs-raviole-mainline/BUILD.bazel)
-
-Example for the `power/reset` driver of Pixel 2021:
-
-[https://android.googlesource.com/kernel/google-modules/power/reset/+/refs/heads/android-gs-raviole-mainline/BUILD.bazel](https://android.googlesource.com/kernel/google-modules/power/reset/+/refs/heads/android-gs-raviole-mainline/BUILD.bazel)
+See [ddk/main.md](ddk/main.md) for details.
 
 ### Step 3: Define a target to run `depmod`
 
@@ -179,22 +111,21 @@ See Step 2 to determine the `kernel_build` attribute of the target.
 Example for Pixel 2021 (see the `kernel_modules_install` target
 named `slider_modules_install`):
 
-[https://android.googlesource.com/kernel/google-modules/raviole-device/+/refs/heads/android13-gs-raviole-5.15/BUILD.bazel](https://android.googlesource.com/kernel/google-modules/raviole-device/+/refs/heads/android13-gs-raviole-5.15/BUILD.bazel)
+[https://android.googlesource.com/kernel/google-modules/raviole-device/+/refs/heads/android-gs-raviole-mainline/BUILD.bazel](https://android.googlesource.com/kernel/google-modules/raviole-device/+/refs/heads/android-gs-raviole-mainline/BUILD.bazel)
 
-### Step 4: (Optional) Define a target to build all boot images
+### Step 4: (Optional) Define targets for boot images
 
-The `kernel_images` macro produces partition images that are ready to be flashed
-and tested immediately on your device. It can build the `initramfs`
-image, `boot` image, `vendor_boot` image, `vendor_dlkm` image, `system_dlkm` image, etc.
+Define `initramfs`, `vendor_boot_image`, `vendor_dlkm_image`,
+`system_dlkm_image` etc.
 
-The name of the target is usually the name of your device with `_images`
-appended to it, e.g. `tuna_images`.
+The name of the target is usually the name of your device with the type
+of the image appended to it, e.g. `tuna_initramfs`.
 
 If you do not need to build any partition images, skip this step.
 
-Example for Pixel 2021 (see the `kernel_images` target named `slider_images`):
+Example for Pixel 2021 (see `slider_initramfs` and `slider_vendor_dlkm_image`):
 
-[https://android.googlesource.com/kernel/google-modules/raviole-device/+/refs/heads/android13-gs-raviole-5.15/BUILD.bazel](https://android.googlesource.com/kernel/google-modules/raviole-device/+/refs/heads/android13-gs-raviole-5.15/BUILD.bazel)
+[https://android.googlesource.com/kernel/google-modules/raviole-device/+/refs/heads/android-gs-raviole-mainline/BUILD.bazel](https://android.googlesource.com/kernel/google-modules/raviole-device/+/refs/heads/android-gs-raviole-mainline/BUILD.bazel)
 
 ### Step 5: Define targets for distribution {#step-5}
 
@@ -218,10 +149,10 @@ Add the following to the `srcs` attribute of the `pkg_files` target:
   and `module_outs` to the distribution directory.
   * This usually includes DTB files and in-tree kernel modules.
 * The name of the `kernel_modules_install` target you have created in Step 3.
-  You may skip the `kernel_modules` targets created in Step 2, because
-  the `kernel_modules_install` target includes all `kernel_modules` targets.
+  You may skip the `ddk_modules` targets created in Step 2, because
+  the `kernel_modules_install` target includes all `ddk_modules` targets.
   This copies all external kernel modules to the distribution directory.
-* The name of the `kernel_images` target you have created in Step 4. This copies
+* The name of all image targets you have created in Step 4. This copies
   all partition images to the distribution directory.
 * GKI artifacts, including:
   * `//common:kernel_aarch64`

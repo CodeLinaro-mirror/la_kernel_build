@@ -96,14 +96,14 @@ kernel_build(
 )
 ```
 
-The `kernel_module()` macro defines a kernel module target. Example:
+The `ddk_module()` macro defines a external kernel module target. Example:
 
 ```
-load("//build/kernel/kleaf:kernel.bzl", "kernel_module")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_module")
 
-kernel_module(
+ddk_module(
     name = "nfc",
-    srcs = glob(["**"]),
+    srcs = ["nfc.c"],
     outs = [
         "nfc.ko",
     ],
