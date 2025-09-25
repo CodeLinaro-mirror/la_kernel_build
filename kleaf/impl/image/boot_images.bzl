@@ -34,6 +34,7 @@ def _build_boot_or_vendor_boot(
         outs,
         mkbootimg,
         build_boot,
+        kernel_binary,
         vendor_boot_name,
         vendor_ramdisk_binaries,
         vendor_ramdisk_dev_nodes,
@@ -71,6 +72,9 @@ def _build_boot_or_vendor_boot(
     )
     modules_staging_dir = outdir + "/staging"
     mkbootimg_staging_dir = modules_staging_dir + "/mkbootimg_staging"
+
+    if kernel_binary and not build_boot:
+        fail("kernel_binary requires build_boot set to True")
 
     # Initialized conditionally below.
     initramfs_staging_archive = None
@@ -124,6 +128,12 @@ def _build_boot_or_vendor_boot(
 
     if build_boot:
         boot_flag_cmd = "BUILD_BOOT_IMG=1"
+        if kernel_binary:
+            kernel_binary_file = utils.single_file(kernel_binary.files.to_list())
+            boot_flag_cmd += """
+                KERNEL_BINARY_PATH={}
+            """.format(kernel_binary_file.path)
+            inputs.append(kernel_binary_file)
     else:
         boot_flag_cmd = "BUILD_BOOT_IMG="
 
@@ -246,6 +256,8 @@ def _build_boot_or_vendor_boot(
             fail("avb_sign_boot_img is true, but one of [avb_boot_partition_size, avb_boot_key," +
                  " avb_boot_algorithm, avb_boot_partition_name] is not specified.")
 
+        avb_boot_key_file = utils.single_file(avb_boot_key.files.to_list())
+
         boot_flag_cmd += """
             AVB_SIGN_BOOT_IMG=1
             AVB_BOOT_PARTITION_SIZE={avb_boot_partition_size}
@@ -254,10 +266,11 @@ def _build_boot_or_vendor_boot(
             AVB_BOOT_PARTITION_NAME={avb_boot_partition_name}
         """.format(
             avb_boot_partition_size = avb_boot_partition_size,
-            avb_boot_key = utils.optional_single_path(avb_boot_key.files.to_list()),
+            avb_boot_key = avb_boot_key_file.path,
             avb_boot_algorithm = avb_boot_algorithm,
             avb_boot_partition_name = avb_boot_partition_name,
         )
+        inputs.append(avb_boot_key_file)
 
     ramdisk_options = image_utils.ramdisk_options(
         ramdisk_compression = ramdisk_compression,
@@ -382,6 +395,7 @@ def _boot_images_impl(ctx):
         outs = ctx.attr.outs,
         mkbootimg = ctx.attr.mkbootimg[DefaultInfo].files_to_run,
         build_boot = ctx.attr.build_boot,
+        kernel_binary = None,
         vendor_boot_name = ctx.attr.vendor_boot_name,
         vendor_ramdisk_binaries = ctx.attr.vendor_ramdisk_binaries,
         vendor_ramdisk_dev_nodes = ctx.attr.vendor_ramdisk_dev_nodes,
@@ -454,7 +468,7 @@ Execute `build_boot_images` in `build_utils.sh`.""",
             allow_single_file = True,
         ),
         # Note: The actual values comes from:
-        # https://cs.android.com/android/platform/superproject/+/master:external/avb/avbtool.py
+        # https://cs.android.com/android/kernel/superproject/+/common-android-mainline:external/avb/avbtool.py
         "avb_boot_algorithm": attr.string(
             doc = """ `avb_boot_key` algorithm
             used e.g. SHA256_RSA2048. Used when `avb_sign_boot_img` is True.""",

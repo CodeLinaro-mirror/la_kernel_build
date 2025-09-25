@@ -26,6 +26,39 @@ Like filegroup, but applies transitions to Android.
 | <a id="android_filegroup-cpu"></a>cpu |  Architecture.   | String | optional |  `"arm64"`  |
 
 
+<a id="boot_image"></a>
+
+## boot_image
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "boot_image")
+
+boot_image(<a href="#boot_image-name">name</a>, <a href="#boot_image-deps">deps</a>, <a href="#boot_image-outs">outs</a>, <a href="#boot_image-avb_boot_algorithm">avb_boot_algorithm</a>, <a href="#boot_image-avb_boot_key">avb_boot_key</a>, <a href="#boot_image-avb_boot_partition_name">avb_boot_partition_name</a>,
+           <a href="#boot_image-avb_boot_partition_size">avb_boot_partition_size</a>, <a href="#boot_image-avb_sign_boot_img">avb_sign_boot_img</a>, <a href="#boot_image-header_version">header_version</a>, <a href="#boot_image-kernel_binary">kernel_binary</a>, <a href="#boot_image-kernel_build">kernel_build</a>,
+           <a href="#boot_image-mkbootimg">mkbootimg</a>)
+</pre>
+
+Build `boot` image.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="boot_image-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="boot_image-deps"></a>deps |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="boot_image-outs"></a>outs |  A list of output files that will be installed to `DIST_DIR` when `build_boot_images` in `build/kernel/build_utils.sh` is executed.<br><br>Unlike `kernel_images`, you must specify the list explicitly.   | List of strings | optional |  `[]`  |
+| <a id="boot_image-avb_boot_algorithm"></a>avb_boot_algorithm |  `avb_boot_key` algorithm used e.g. SHA256_RSA2048.<br><br>Must be set when `avb_sign_boot_img` is True.   | String | optional |  `""`  |
+| <a id="boot_image-avb_boot_key"></a>avb_boot_key |  Key used for signing.<br><br>Must be set when `avb_sign_boot_img` is True.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="boot_image-avb_boot_partition_name"></a>avb_boot_partition_name |  Name of the boot partition.<br><br>Must be set when `avb_sign_boot_img` is True.   | String | optional |  `""`  |
+| <a id="boot_image-avb_boot_partition_size"></a>avb_boot_partition_size |  Size of the boot partition in bytes.<br><br>Must be set when `avb_sign_boot_img` is True.   | Integer | optional |  `0`  |
+| <a id="boot_image-avb_sign_boot_img"></a>avb_sign_boot_img |  If set to `True` signs the boot image using the avb_boot_key.<br><br>The kernel prebuilt tool `avbtool` is used for signing.   | Boolean | optional |  `False`  |
+| <a id="boot_image-header_version"></a>header_version |  Boot image header version.<br><br>If unspecified, falls back to the value of BOOT_IMAGE_HEADER_VERSION in build configs. If BOOT_IMAGE_HEADER_VERSION is not set, defaults to 3.   | Integer | optional |  `0`  |
+| <a id="boot_image-kernel_binary"></a>kernel_binary |  The kernel binary to use, e.g. Image.lz4.<br><br>This can be extracted from the [`kernel_build()`](#kernel_build) with a [`kernel_build_output()`](#kernel_build_output) rule.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="boot_image-kernel_build"></a>kernel_build |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="boot_image-mkbootimg"></a>mkbootimg |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@kleaf//tools/mkbootimg"`  |
+
+
 <a id="checkpatch"></a>
 
 ## checkpatch
