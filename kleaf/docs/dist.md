@@ -11,7 +11,7 @@ To create a distribution for a single `kernel_module` or `ddk_module`,
 define a separate `pkg_install` rule that contains just the target:
 
 ```py
-kernel_module(
+ddk_module(
     name = "foo",
     # ...
 )
@@ -38,13 +38,13 @@ reason, you may define a small macro that glues the three targets together:
 
 ```py
 # NOTE: This is discouraged.
-# kernel_module_dist.bzl
+# ddk_module_dist.bzl
 
-def kernel_module_dist(
+def ddk_module_dist(
     name,
     **kwargs
 ):
-    kernel_module(
+    ddk_module(
         name = name,
         **kwargs
     )
@@ -68,9 +68,9 @@ def kernel_module_dist(
 ```py
 # BUILD.bazel
 
-load(":kernel_module_dist.bzl", "kernel_module_dist")
+load(":ddk_module_dist.bzl", "ddk_module_dist")
 
-kernel_module_dist(
+ddk_module_dist(
     name = foo,
     # ...
 )
