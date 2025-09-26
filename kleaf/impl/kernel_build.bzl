@@ -468,7 +468,10 @@ def kernel_build(
         system_trusted_key: A label referring to a trusted system key.
 
           This is to allow for dynamic setting of `CONFIG_SYSTEM_TRUSTED_KEY` from Bazel.
-        dtstree: Device tree support.
+        dtstree: **Deprecated**; use `rules_devicetree` instead of building devicetree
+            in `kernel_build`. See [Building devicetree](../devicetree.md).
+
+            Legacy devicetree support.
         modules_prepare_force_generate_headers: For 6.12 and earlier: If `True` it forces generation
             of additional headers as part of modules_prepare. This is replaced by
             `generated_headers_for_module` on `base_kernel` for 6.13 and later.
