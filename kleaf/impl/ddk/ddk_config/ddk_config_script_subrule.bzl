@@ -51,7 +51,7 @@ def _ddk_config_script_subrule_impl(
     script += """
         # TODO(b/254348147): Support ncurses for hermetic tools
         export HOSTCFLAGS="${{HOSTCFLAGS}} --sysroot="
-        export HOSTLDFLAGS="${{HOSTLDFLAGS}} --sysroot="
+        export HOSTLDFLAGS="${{HOSTLDFLAGS//-z nodefaultlib/}} --sysroot="
 
         usage() {{
             echo "usage: tools/bazel run {label} -- [--stdout] [-f|--file FILE] [<menucommand>]" >&2
