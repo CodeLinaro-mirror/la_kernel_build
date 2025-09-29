@@ -105,6 +105,8 @@ _"Not supported"_ is displayed. Contact [owners](../OWNERS) if you need support.
   - [VENDOR\_FSTAB](#vendor_fstab)
   - [INITRAMFS\_VENDOR\_RAMDISK\_FRAGMENT\_NAME](#initramfs_vendor_ramdisk_fragment_name)
   - [MKDTIMG\_FLAGS](#mkdtimg_flags)
+  - [DTC\_INCLUDE](#dtc_include)
+  - [DTC\_FLAGS](#dtc_flags)
 
 ## BUILD\_CONFIG
 
@@ -871,6 +873,23 @@ dtbo_image(opts = [...])
 ```
 
 See [dtbo_image](api_reference/kernel.md#dtbo_image).
+
+## DTC_INCLUDE
+
+```python
+devicetree_library(includes = [...])
+```
+
+See [Building devicetree](devicetree.md).
+
+## DTC_FLAGS
+
+```python
+dtb(dtcopts = [...])
+dtbo(dtcopts = [...])
+```
+
+See [Building devicetree](devicetree.md).
 
 [documentation for all rules]: api_reference.md
 
