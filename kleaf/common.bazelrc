@@ -40,6 +40,18 @@ common --noincompatible_enable_proto_toolchain_resolution
 # not short_paths.
 common --legacy_external_runfiles
 
+# Enable 2-stage bootstrapping for rules_python. This drops dependency on
+# host Python 3, improving hermeticity.
+# HACK: We use canonical repo name here so that the root module doesn't have to
+#   explicitly depend on rules_python (for DDKv2 style workspace setup).
+#   This only works when we have explicit
+#   local_path_override(module_name = "rules_python"), and --config=no_internet
+#   is a sufficient (though not necessary) condition of local_path_override.
+#   If we are fetching rules_python from the Internet, bootstrap_impl=script
+#   may not work without the ANDROID: specific hacks, so it is reasonable to
+#   disable it.
+common:no_internet --@@rules_python+//python/config_settings:bootstrap_impl=script
+
 # Always dump full test results
 test --test_output=errors --test_summary=terse
 
