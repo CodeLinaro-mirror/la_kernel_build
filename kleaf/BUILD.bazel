@@ -623,6 +623,19 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
+# Autoload build.config.constants for kernel_build().
+# always: Always load and check.
+# if_unset: load only when kernel_build(build_config=) is not set.
+string_flag(
+    name = "autoload_build_config_constants",
+    build_setting_default = "if_unset",
+    values = [
+        "always",
+        "if_unset",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 # The values of --config, as passed by command line and bazelrc files.
 _config_values = (
     "local",
