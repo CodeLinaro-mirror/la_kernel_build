@@ -8,6 +8,8 @@ def _impl(repository_ctx):
         raw_content = repository_ctx.read(src)
         for line in raw_content.splitlines():
             key, value = line.split("=", 1)
+            if value.startswith('"') and value.endswith('"'):
+                value = value[1:-1]
             repository_content += '{} = "{}"\n'.format(key.strip(), value.strip())
             all_vars[key.strip()] = value.strip()
 
@@ -62,7 +64,7 @@ load("@kernel_toolchain_info//:dict.bzl", "CLANG_VERSION")
     attrs = {
         "srcs": attr.label_list(
             mandatory = True,
-            doc = "Configuration files storing 'key=value' pairs.",
+            doc = """Configuration files storing `key=value` or `key="value"` pairs.""",
         ),
         "additional_values": attr.string_dict(
             doc = "Additional values in `dict.bzl`",
