@@ -39,6 +39,8 @@ from itertools import product, combinations_with_replacement, chain
 import logging
 import argparse
 
+KERNEL_TARGET = os.environ.get('KERNEL_TARGET')
+
 def split_array(array, cells):
 	"""
 	Helper function for parsing fdtget output
@@ -303,10 +305,13 @@ class InnerMergedDeviceTree(DeviceTreeInfo):
 		if len(self.techpacks) == 0:
 			cmd = ['cp', self.base, out_file]
 		else:
-			if ext == '.dtb':
-				cmd = ['fdtoverlay']
-			else:
+			if KERNEL_TARGET == "autogvm":
 				cmd = ['fdtoverlaymerge']
+			else:
+				if ext == '.dtb':
+					cmd = ['fdtoverlay']
+				else:
+					cmd = ['fdtoverlaymerge']
 			cmd.extend(['-i', self.base])
 			cmd.extend([tp.filename for tp in self.techpacks])
 			cmd.extend(['-o', out_file])
