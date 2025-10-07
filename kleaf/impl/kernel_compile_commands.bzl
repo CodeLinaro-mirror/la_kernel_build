@@ -145,8 +145,8 @@ def _kernel_compile_commands_impl(ctx):
         for extra_file in ${extra_files}
         do
             sed -i'' \\
-                -e "s:\\${COMMON_OUT_DIR}}:${out_directory}:g" \\
-                -e "s:\\${ROOT_DIR}}:${BUILD_WORKSPACE_DIRECTORY}:g" \\
+                -e "s:\\${COMMON_OUT_DIR}:${out_directory}:g" \\
+                -e "s:\\${ROOT_DIR}:${BUILD_WORKSPACE_DIRECTORY}:g" \\
                 ${extra_file}
         done
     """
