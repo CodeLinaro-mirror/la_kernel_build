@@ -572,6 +572,13 @@ def _define_common_kernels_additional_tests(
                 Label("//build/kernel/kleaf/tests/ddk_examples:pkvm_module_test"),
             )
 
+    # Build kunit_examples to make sure our KUnit examples are up-to-date. Similarly, these
+    # are only inluded for //common:kernel_x86_64 target.
+    if native.package_relative_label(kernel_build_name) == native.package_relative_label("//common:kernel_x86_64"):
+        extra_tests.append(
+            Label("//build/kernel/kleaf/tests/kunit_examples"),
+        )
+
     native.test_suite(
         name = name,
         tests = [
