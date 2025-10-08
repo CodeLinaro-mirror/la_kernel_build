@@ -28,7 +28,7 @@ test:ants --build_metadata=run_type=critical
 
 # Prevent timeout errors.
 test:ants --grpc_keepalive_time=30s
-test:ants --experimental_build_event_upload_max_retries=100
+test:ants --build_event_upload_max_retries=100
 
 
 # Show URI to test results
