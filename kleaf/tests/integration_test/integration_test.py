@@ -58,8 +58,6 @@ from typing import Any, Callable, Iterable, TextIO
 from absl.testing import absltest
 from build.kernel.kleaf.analysis.inputs import analyze_inputs
 
-_BAZEL = pathlib.Path("tools/bazel")
-
 # See local.bazelrc
 _LOCAL = ["--//build/kernel/kleaf:config_local"]
 
@@ -113,11 +111,17 @@ def load_arguments():
 
                                Don't run two interactive shells in parellel;
                                your workspace might be wiped out.""")
+    # Make these absolute paths so they can be reused in recursive calls,
+    # even after chdir.
     group.add_argument("--init_ddk",
-                       # Make it an absolute path so it can be reused in
-                       # recursive calls, even after chdir.
                        type=_make_absolute_path,
                        help="Path to init_ddk binary")
+    group.add_argument("--bazel_wrapper",
+                       type=_make_absolute_path,
+                       help="Path to Kleaf's Bazel wrapper")
+    group.add_argument("--integration_test_bin",
+                       type=_make_absolute_path,
+                       help="Path to this test binary")
     return parser.parse_known_args()
 
 
@@ -205,42 +209,60 @@ class RepoProject:
 class Exec(object):
 
     @staticmethod
-    def check_call(args: list[str], **kwargs) -> None:
+    def _inject_kwargs(text = True, env = None, **kwargs) -> dict[str, Any]:
+        """Injects some common kwargs to subprocess functions."""
+        if env is None:
+            env = dict(os.environ)
+
+        # Set PYTHONSAFEPATH to empty string:
+        # - so that repo won't fail with
+        #   ModuleNotFoundError: No module named 'color'
+        # - so that rules_python stage1 script won't override it with 1, and
+        #   import-ing a module from py_binary.deps works.
+        env["PYTHONSAFEPATH"] = ""
+
+        return kwargs | {
+            "text": text,
+            "env": env,
+        }
+
+    @classmethod
+    def check_call(cls, args: list[str], **kwargs) -> None:
         """Executes a shell command."""
-        kwargs.setdefault("text", True)
+        kwargs = cls._inject_kwargs(**kwargs)
         sys.stderr.write(f"+ {' '.join(args)}\n")
         subprocess.check_call(args, **kwargs)
 
-    @staticmethod
-    def call(args: list[str], **kwargs) -> None:
+    @classmethod
+    def call(cls, args: list[str], **kwargs) -> None:
         """Executes a shell command."""
-        kwargs.setdefault("text", True)
+        kwargs = cls._inject_kwargs(**kwargs)
         sys.stderr.write(f"+ {' '.join(args)}\n")
         subprocess.call(args, **kwargs)
 
-    @staticmethod
-    def check_output(args: list[str], **kwargs) -> str:
+    @classmethod
+    def check_output(cls, args: list[str], **kwargs) -> str:
         """Returns output of a shell command"""
-        kwargs.setdefault("text", True)
+        kwargs = cls._inject_kwargs(**kwargs)
         sys.stderr.write(f"+ {' '.join(args)}\n")
         return subprocess.check_output(args, **kwargs)
 
-    @staticmethod
-    def popen(args: list[str], **kwargs) -> subprocess.Popen:
+    @classmethod
+    def popen(cls, args: list[str], **kwargs) -> subprocess.Popen:
         """Executes a shell command.
 
         Returns:
             the Popen object
         """
-        kwargs.setdefault("text", True)
+        kwargs = cls._inject_kwargs(**kwargs)
         sys.stderr.write(f"+ {' '.join(args)}\n")
         popen = subprocess.Popen(args, **kwargs)
         return popen
 
-    @staticmethod
-    def check_errors(args: list[str], **kwargs) -> str:
+    @classmethod
+    def check_errors(cls, args: list[str], **kwargs) -> str:
         """Returns errors of a shell command"""
-        kwargs.setdefault("text", True)
+        kwargs = cls._inject_kwargs(**kwargs)
         sys.stderr.write(f"+ {' '.join(args)}\n")
         return subprocess.run(
             args, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs).stdout
@@ -258,7 +280,7 @@ class KleafIntegrationTestBase(unittest.TestCase):
         **kwargs,
     ) -> tuple[list[str], dict[str, Any]]:
         """Builds subprocess arguments."""
-        subprocess_args = [str(_BAZEL)]
+        subprocess_args = [str(arguments.bazel_wrapper)]
         subprocess_args.extend(startup_options)
         if use_bazelrc:
             subprocess_args.append(f"--bazelrc={self._bazel_rc.name}")
@@ -303,8 +325,6 @@ class KleafIntegrationTestBase(unittest.TestCase):
         sys.stderr.write(
             f"BUILD_WORKSPACE_DIRECTORY={os.environ['BUILD_WORKSPACE_DIRECTORY']}\n"
         )
-
-        self.assertTrue(_BAZEL.is_file())
 
         self._bazel_rc = tempfile.NamedTemporaryFile()
         self.addCleanup(self._bazel_rc.close)
@@ -499,13 +519,16 @@ class KleafIntegrationTestBase(unittest.TestCase):
 
         args.extend([shutil.which("bash"), "-c"])
 
-        test_args = [sys.executable, __file__]
+        test_args = [str(arguments.integration_test_bin)]
         test_args.extend(f"--bazel-arg={arg}" for arg in arguments.bazel_args)
         test_args.extend(f"--bazel-wrapper-arg={arg}"
                          for arg in arguments.bazel_wrapper_args)
         test_args.append(f"--mount-spec={_serialize_mount_spec(mount_spec)}")
         test_args.append(f"--link-spec={_serialize_link_spec(link_spec)}")
         test_args.append(f"--init_ddk={arguments.init_ddk}")
+        test_args.append(f"--bazel_wrapper={arguments.bazel_wrapper}")
+        test_args.append(
+            f"--integration_test_bin={arguments.integration_test_bin}")
         if arguments.interactive:
             test_args.append("--interactive")
         test_args.append(self.id().removeprefix("__main__."))
@@ -974,6 +997,7 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
             f"+ build/kernel/kleaf/analysis/inputs.py 'mnemonic(\"KernelModule.*\", {vd_modules[0]})'"
         )
         input_to_module = analyze_inputs(
+            bazel=arguments.bazel_wrapper,
             aquery_args=[f'mnemonic("KernelModule.*", {vd_modules[0]})'] +
             _FASTEST).keys()
         self.assertFalse([
@@ -1261,18 +1285,12 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
     def _env_without_build_number():
         env = dict(os.environ)
         env.pop("BUILD_NUMBER", None)
-        # Fix this error to execute `repo` properly:
-        #  ModuleNotFoundError: No module named 'color'
-        env.pop("PYTHONSAFEPATH", None)
         return env
 
     @staticmethod
     def _env_with_build_number(build_number):
         env = dict(os.environ)
         env["BUILD_NUMBER"] = str(build_number)
-        # Fix this error to execute `repo` properly:
-        #  ModuleNotFoundError: No module named 'color'
-        env.pop("PYTHONSAFEPATH", None)
         return env
 
     def test_mainline_no_stamp(self):
