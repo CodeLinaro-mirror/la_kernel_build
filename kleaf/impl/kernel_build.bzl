@@ -81,7 +81,12 @@ load(":kgdb.bzl", "kgdb")
 load(":kmi_symbol_list.bzl", _kmi_symbol_list = "kmi_symbol_list")
 load(":modules_prepare.bzl", "modules_prepare")
 load(":raw_kmi_symbol_list.bzl", "raw_kmi_symbol_list")
-load(":utils.bzl", "kernel_utils", "utils")
+load(
+    ":utils.bzl",
+    "EMPTY_SELECT",
+    "kernel_utils",
+    "utils",
+)
 
 visibility("//build/kernel/kleaf/...")
 
@@ -303,8 +308,7 @@ def kernel_build(
 
           Note: in-tree modules should be specified in `module_outs` instead.
 
-          This attribute must be either a `dict` or a `list`. If it is a `list`, for each item
-          in `out`:
+          This attribute must be a `list`. For each item:
 
           - If `out` does not contain a slash, the build rule
             automatically finds a file with name `out` in the kernel
@@ -322,8 +326,8 @@ def kernel_build(
             ```
             The bulid system copies `${OUT_DIR}/[<optional subdirectory>/]vmlinux`
             to `kernel_aarch64/vmlinux`.
-            If `generate_out_targets` is True, the label `kernel_aarch64/vmlinux` resolves to the
-            file.
+            If `generate_out_targets` is not False, the label `kernel_aarch64/vmlinux` resolves to
+            the file.
 
           - If `out` contains a slash, the build rule locates the file in the
             kernel build output directory `${OUT_DIR}` with path `out`
@@ -342,7 +346,7 @@ def kernel_build(
             to:
               - `kernel_aarch64/arch/arm64/boot/vmlinux`
               - `kernel_aarch64/vmlinux`
-            If `generate_out_targets` is True, they are also the labels to the output files,
+            If `generate_out_targets` is not False, they are also the labels to the output files,
             respectively.
 
             See `search_and_cp_output.py` for details.
@@ -359,17 +363,23 @@ def kernel_build(
 
         implicit_outs: Like `outs`, but not copied to the distribution directory.
 
-            If `generate_out_targets`, labels are created for each item in `implicit_outs` as in
-            `outs`.
+            If `generate_out_targets` is True or `implicit_outs` is not a select() expression,
+            labels are created for each item in `implicit_outs` as in `outs`.
 
         module_implicit_outs: like `module_outs`, but not copied to the distribution directory.
 
-            If `generate_out_targets`, labels are created for each item in `module_implicit_outs`
-            as in `outs`.
+            If `generate_out_targets` is True or `module_implicit_outs` is not a select() expression,
+            labels are created for each item in `module_implicit_outs` as in `outs`.
 
         generate_out_targets: [Nonconfigurable](https://bazel.build/docs/configurable-attributes).
-            Default is True. If True, generate labels for `outs`, `module_outs`, `implicit_outs` and
-            `module_implicit_outs`.
+            Default is `None`. If `None`, for each of the attributes `outs`, `module_outs`,
+            `implicit_outs` and `module_implicit_outs`, generate labels for each item in the
+            attribute if it is not a `select()` expression.
+
+            If True, generate labels for `outs`, `module_outs`, `implicit_outs`
+            and `module_implicit_outs`.
+
+            If False, don't generate labels for these attributes.
 
             This cannot be set to `True` if any of `outs`, `module_outs`, `implicit_outs`
             or `module_implicit_outs` is a `select()` expression.
@@ -840,9 +850,6 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
     # key = attribute name, value = a list of labels for that attribute
     real_outs = {}
 
-    if generate_out_targets == None:
-        generate_out_targets = True
-
     for out_name, out_attr_val in (
         ("outs", outs),
         ("module_outs", module_outs),
@@ -850,7 +857,9 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         ("module_implicit_outs", module_implicit_outs),
         # internal_outs are opaque to the user, hence we don't create a alias (filegroup) for them.
     ):
-        if not generate_out_targets:
+        if generate_out_targets == False:
+            continue
+        if generate_out_targets == None and type(out_attr_val) == type(EMPTY_SELECT):
             continue
         if out_attr_val == None:
             continue
