@@ -624,11 +624,11 @@ bool_flag(
 )
 
 # Autoload build.config.constants for kernel_build().
-# always: Always load and check.
+# always (default): Always load and check.
 # if_unset: load only when kernel_build(build_config=) is not set.
 string_flag(
     name = "autoload_build_config_constants",
-    build_setting_default = "if_unset",
+    build_setting_default = "always",
     values = [
         "always",
         "if_unset",
