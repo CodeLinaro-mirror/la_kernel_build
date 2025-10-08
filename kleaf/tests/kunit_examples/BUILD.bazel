@@ -5,5 +5,6 @@ build_test(
     targets = [
         "//build/kernel/kleaf/tests/kunit_examples/in_tree:x86_64_kunit_example_test",
         "//build/kernel/kleaf/tests/kunit_examples/out_of_tree:x86_64_kunit_example_test",
+        "//build/kernel/kleaf/tests/kunit_examples/out_of_tree:x86_64_kunit_example_module_with_dtbo",
     ],
 )
