@@ -60,6 +60,9 @@ def kernel_dtstree(
         [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
         See complete list
         [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
+
+    Deprecated:
+        Use `rules_devicetree` instead. See [Building devicetree](../devicetree.md).
     """
     if srcs == None:
         srcs = native.glob(

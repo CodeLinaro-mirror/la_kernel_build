@@ -8,6 +8,8 @@
 
 ### [Building your kernels and drivers with Bazel](docs/impl.md)
 
+### [Building devicetree](docs/devicetree.md)
+
 ### [Creating distributions](docs/dist.md)
 
 ### [Driver Development Kit (DDK)](docs/ddk/main.md)
