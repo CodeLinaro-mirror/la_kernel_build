@@ -1029,7 +1029,7 @@ def _get_config_script_impl(
     # TODO(b/254348147): Support ncurses for hermetic tools
     script += """
         export HOSTCFLAGS="${HOSTCFLAGS} --sysroot="
-        export HOSTLDFLAGS="${HOSTLDFLAGS} --sysroot="
+        export HOSTLDFLAGS="${HOSTLDFLAGS//-z nodefaultlib/} --sysroot="
     """
     script += kernel_utils.set_src_arch_cmd()
     script += """
