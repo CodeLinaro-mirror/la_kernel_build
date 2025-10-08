@@ -14,6 +14,7 @@
 
 """Functions that are useful in the common kernel package (usually `//common`)."""
 
+load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("@rules_pkg//pkg:install.bzl", "pkg_install")
 load("@rules_pkg//pkg:mappings.bzl", "pkg_files", "strip_prefix")
@@ -35,6 +36,7 @@ load(
     ":kernel.bzl",
     "kernel_abi",
     "kernel_build",
+    "kernel_build_output",
     "kernel_modules_install",
     "kernel_unstripped_modules_archive",
     "system_dlkm_image",
@@ -69,6 +71,7 @@ def common_kernel(
         kmi_symbol_list_strict_mode = None,
         kmi_symbol_list_add_only = None,
         module_implicit_outs = None,
+        modules_superset = None,
         protected_module_names_list = None,
         gki_system_dlkm_modules = None,
         make_goals = None,
@@ -139,6 +142,10 @@ def common_kernel(
         trim_nonlisted_kmi: See [kernel_build.trim_nonlisted_kmi](kernel.md#kernel_build-trim_nonlisted_kmi)
         kmi_symbol_list_strict_mode: See [kernel_build.kmi_symbol_list_strict_mode](kernel.md#kernel_build-kmi_symbol_list_strict_mode)
         module_implicit_outs: See [kernel_build.module_implicit_outs](kernel.md#kernel_build-module_implicit_outs)
+        modules_superset: nonconfigurable. The superset of modules targets to create. This should
+            contain all modules in each branch in the select() of module_implicit_outs.
+
+            The first module must not be in any conditional branch.
         kmi_symbol_list_add_only: See [kernel_abi.kmi_symbol_list_add_only](kernel.md#kernel_abi-kmi_symbol_list_add_only)
         protected_module_names_list: See [kernel_config.protected_module_names_list](kernel.md#kernel_config-protected_module_names_list)
         make_goals: See [kernel_build.make_goals](kernel.md#kernel_build-make_goals)
@@ -228,7 +235,30 @@ def common_kernel(
         kcflags = kcflags,
         clang_autofdo_profile = clang_autofdo_profile,
         generated_headers_for_module = generated_headers_for_module,
+        generate_out_targets = not modules_superset,
     )
+
+    if not modules_superset:
+        # buildifier: disable=print
+        print("""\
+WARNING: common_kernels(modules_superset=) is not set for {}.
+    This will not be supported in the future.
+""".format(native.package_relative_label(name)))
+
+    # If modules_superset is set, generate_out_targets is False so we need
+    # to define module targets ourselves.
+    for module_name in modules_superset:
+        kernel_build_output(
+            name = name + "/" + module_name,
+            out = module_name,
+            kernel_build = name,
+        )
+
+        if paths.basename(module_name) != module_name:
+            native.alias(
+                name = name + "/" + paths.basename(module_name),
+                actual = name + "/" + module_name,
+            )
 
     kernel_abi(
         name = name + "_abi",
@@ -317,7 +347,7 @@ def common_kernel(
         name = name + "_modules",
         srcs = [
             "{}/{}".format(name, module)
-            for module in (module_implicit_outs or [])
+            for module in (modules_superset or [])
         ],
     )
 
@@ -427,7 +457,7 @@ def common_kernel(
         name = name + "_additional_tests",
         kernel_build_name = name,
         kernel_modules_install = name + "_modules_install",
-        modules = (module_implicit_outs or []),
+        modules = (modules_superset or []),
         arch = arch,
         page_size = page_size,
         makefile = makefile,
