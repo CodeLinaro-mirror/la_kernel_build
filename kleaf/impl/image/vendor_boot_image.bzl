@@ -39,6 +39,7 @@ def _vendor_boot_image_impl(ctx):
         bin_dir = ctx.bin_dir,
         kernel_build = ctx.attr.kernel_build,
         initramfs = ctx.attr.initramfs,
+        initramfs_vendor_ramdisk_fragment_name = ctx.attr.initramfs_vendor_ramdisk_fragment_name,
         deps = ctx.attr.deps,
         outs = outs,
         mkbootimg = ctx.attr.mkbootimg[DefaultInfo].files_to_run,
@@ -72,6 +73,11 @@ vendor_boot_image = rule(
         "initramfs": attr.label(
             doc = "The [`initramfs`](#initramfs).",
             providers = [InitramfsInfo],
+        ),
+        "initramfs_vendor_ramdisk_fragment_name": attr.string(
+            doc = """If `initramfs` is specified, then build the .ko and depmod files as
+                a standalone vendor ramdisk fragment named as the given string.
+            """,
         ),
         "dtb_image": attr.label(
             doc = """A dtb.img to packaged.

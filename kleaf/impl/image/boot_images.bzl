@@ -16,6 +16,7 @@ Rules for building boot images.
 """
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_skylib//lib:shell.bzl", "shell")
 load(":common_providers.bzl", "KernelBuildInfo", "KernelSerializedEnvInfo")
 load(":debug.bzl", "debug")
 load(":image/image_utils.bzl", "image_utils")
@@ -49,7 +50,13 @@ def _build_boot_or_vendor_boot(
         vendor_bootconfig_file = None,
         kernel_vendor_cmdline = None,
         header_version = None,
+        initramfs_vendor_ramdisk_fragment_name = None,
         _search_and_cp_output):
+    if not initramfs and initramfs_vendor_ramdisk_fragment_name:
+        fail("{}: initramfs_vendor_ramdisk_fragment_name requires initramfs to be set.".format(
+            subrule_ctx.label,
+        ))
+
     ## Declare implicit outputs of the command
     ## This is like subrule_ctx.actions.declare_directory(subrule_ctx.label.name) without actually declaring it.
     outdir_short = paths.join(
@@ -200,6 +207,21 @@ def _build_boot_or_vendor_boot(
                BUILD_INITRAMFS=
                INITRAMFS_STAGING_DIR=
         """
+
+    if not initramfs_vendor_ramdisk_fragment_name:
+        set_initramfs_var_cmd += """
+            if [ -n "${INITRAMFS_VENDOR_RAMDISK_FRAGMENT_NAME}" ]; then
+                echo "WARNING: INITRAMFS_VENDOR_RAMDISK_FRAGMENT_NAME is deprecated." >&2
+                echo "    Use vendor_boot_image(initramfs_vendor_ramdisk_fragment_name=) instead." >&2
+            fi
+        """
+    else:
+        set_initramfs_var_cmd += """
+            INITRAMFS_VENDOR_RAMDISK_FRAGMENT_NAME={quoted_initramfs_vendor_ramdisk_fragment_name}
+        """.format(
+            quoted_initramfs_vendor_ramdisk_fragment_name = shell.quote(initramfs_vendor_ramdisk_fragment_name),
+        )
+
     boot_flag_cmd += """
         DTB_IMAGE={dtb_image}
     """.format(
