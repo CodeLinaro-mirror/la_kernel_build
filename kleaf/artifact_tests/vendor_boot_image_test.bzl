@@ -95,15 +95,15 @@ def _vendor_boot_image_test_impl(ctx):
             extracted = extracted.short_path,
         )
 
-    if ctx.attr.expect_vendor_ramdisk_fragment:
+    if ctx.attr.expected_vendor_ramdisk_fragment:
         test_script += """
-            if [ ! -f "{extracted}/vendor-ramdisk-by-name/{expect_vendor_ramdisk_fragment}" ]; then
-                echo "ERROR: {extracted}/vendor-ramdisk-by-name/{expect_vendor_ramdisk_fragment} is expected but does not exist." >&2
+            if [ ! -f "{extracted}/vendor-ramdisk-by-name/{expected_vendor_ramdisk_fragment}" ]; then
+                echo "ERROR: {extracted}/vendor-ramdisk-by-name/{expected_vendor_ramdisk_fragment} is expected but does not exist." >&2
                 exit 1
             fi
         """.format(
             extracted = extracted.short_path,
-            expect_vendor_ramdisk_fragment = ctx.attr.expect_vendor_ramdisk_fragment,
+            expected_vendor_ramdisk_fragment = ctx.attr.expected_vendor_ramdisk_fragment,
         )
 
     test_script_file = ctx.actions.declare_file("{}/test.sh".format(ctx.label.name))
@@ -141,7 +141,7 @@ vendor_boot_image_test = rule(
             doc = "The expected kernel_vendor_cmdline in the image.",
         ),
         "expected_header_version": attr.int(),
-        "expect_vendor_ramdisk_fragment": attr.string(),
+        "expected_vendor_ramdisk_fragment": attr.string(),
     },
     test = True,
     toolchains = [hermetic_toolchain.type],
