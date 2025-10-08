@@ -1,0 +1,21 @@
+load(
+    "@kleaf//build/kernel/kleaf:kernel.bzl",
+    "ddk_module",
+)
+
+ddk_module(
+    name = "parent_without_config",
+    srcs = ["parent_without_config.c"],
+    out = "parent_without_config.ko",
+    hdrs = ["parent_without_config.h"],
+    includes = ["."],
+    kernel_build = "@kleaf//common:kernel_aarch64",
+
+    # This module does not set kconfig, defconfig, or config.
+
+    # Adjust visibility of the module accordingly. See
+    # https://bazel.build/concepts/visibility#target-visibility
+    visibility = [
+        "//build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/children:__subpackages__",
+    ],
+)

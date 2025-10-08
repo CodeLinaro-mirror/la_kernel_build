@@ -1,0 +1,22 @@
+load(
+    "@kleaf//build/kernel/kleaf:kernel.bzl",
+    "ddk_module",
+)
+
+ddk_module(
+    name = "parent2",
+    srcs = ["parent2.c"],
+    out = "parent2.ko",
+    hdrs = ["parent2.h"],
+    includes = ["."],
+
+    # Parent2's Kconfig file
+    kconfig = "Kconfig",
+    kernel_build = "@kleaf//common:kernel_aarch64",
+
+    # Adjust visibility of the module accordingly. See
+    # https://bazel.build/concepts/visibility#target-visibility
+    visibility = [
+        "//build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/children:__subpackages__",
+    ],
+)

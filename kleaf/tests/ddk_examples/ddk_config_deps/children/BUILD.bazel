@@ -1,0 +1,62 @@
+load(
+    "@kleaf//build/kernel/kleaf:kernel.bzl",
+    "ddk_config",
+    "ddk_module",
+    "kernel_module_group",
+)
+
+ddk_config(
+    name = "child_config",
+    kconfigs = ["Kconfig"],
+    kernel_build = "@kleaf//common:kernel_aarch64",
+    deps = [
+        # Superset of all dependencies of child1/chidl2 that has
+        # config/kconfig/defconfig.
+        "//build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/parent1",
+        "//build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/parent2",
+
+        # It is recommended to add parent_without_config here.
+        #   Technically, parent_without_config and its dependencies doesn't have
+        #   config/kconfig/defconfig, so it may be excluded as illustrated here.
+        #   In practice, it is recommended to still include it anyways in case
+        #   that this module changes its implementation to include new configs
+        #   later.
+        #
+        # "//build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/parent_without_config",
+    ],
+)
+
+ddk_module(
+    name = "child1",
+    srcs = ["child1.c"],
+    out = "child1.ko",
+    config = ":child_config",
+    kernel_build = "@kleaf//common:kernel_aarch64",
+    deps = [
+        "//build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/parent1",
+        "//build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/parent_without_config",
+    ],
+)
+
+ddk_module(
+    name = "child2",
+    srcs = ["child2.c"],
+    out = "child2.ko",
+    config = ":child_config",
+    kernel_build = "@kleaf//common:kernel_aarch64",
+    deps = [
+        "//build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/parent2",
+        "//build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/parent_without_config",
+    ],
+)
+
+kernel_module_group(
+    name = "children",
+    srcs = [
+        ":child1",
+        ":child2",
+    ],
+    # Adjust visibility of the module accordingly. See
+    # https://bazel.build/concepts/visibility#target-visibility
+    visibility = ["//build/kernel/kleaf/tests/ddk_examples:__subpackages__"],
+)

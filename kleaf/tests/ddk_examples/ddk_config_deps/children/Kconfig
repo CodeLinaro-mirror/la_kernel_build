@@ -1,0 +1,9 @@
+config CHILD1
+	tristate "Child 1"
+	default m
+	depends on PARENT1
+
+config CHILD2
+	tristate "Child 2"
+	default m
+	depends on PARENT2
