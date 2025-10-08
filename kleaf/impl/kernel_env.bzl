@@ -293,7 +293,8 @@ def _kernel_env_impl(ctx):
         build_utils_sh = ctx.file._build_utils_sh.path,
     )
 
-    if ctx.attr.build_config and ctx.attr.build_config.files:
+    has_build_config = ctx.attr.build_config and ctx.attr.build_config.files
+    if has_build_config:
         command += """
             export BUILD_CONFIG={build_config}
         """.format(
@@ -304,11 +305,30 @@ def _kernel_env_impl(ctx):
             export KLEAF_INTERNAL_NO_BUILD_CONFIG=1
         """
 
-        # Set branch specific constants.
+    # Set branch specific constants.
+    autoload_build_config_constants = ctx.attr._autoload_build_config_constants[BuildSettingInfo].value
+    if (autoload_build_config_constants == "always" or
+        (autoload_build_config_constants == "if_unset" and not has_build_config)):
         for key, value in VARS.items():
             command += """
                 export {quoted_key}={quoted_value}
             """.format(
+                quoted_key = shell.quote(key),
+                quoted_value = shell.quote(value),
+            )
+
+    # Check branch specific constants.
+    check_constants_cmd = ""
+    if autoload_build_config_constants == "always":
+        for key, value in VARS.items():
+            check_constants_cmd += """
+                if [ ${{{key}}} != {quoted_value} ]; then
+                    echo "ERROR: "{quoted_key}" is ${{{key}}} but should be "{quoted_value}"." >&2
+                    echo "    Overriding branch-specific constants in build configs is not allowed." >&2
+                    exit 1
+                fi
+            """.format(
+                key = key,
                 quoted_key = shell.quote(key),
                 quoted_value = shell.quote(value),
             )
@@ -325,6 +345,7 @@ def _kernel_env_impl(ctx):
           {set_arch_cmd}
           source {setup_env}
           {check_arch_cmd}
+          {check_constants_cmd}
         # Variables from resolved toolchain
           {toolchains_setup_env_var_cmd}
           {set_clang_autofdo_profile_cmd}
@@ -382,6 +403,7 @@ def _kernel_env_impl(ctx):
         set_arch_cmd = _get_set_arch_cmd(ctx),
         setup_env = setup_env.path,
         check_arch_cmd = _get_check_arch_cmd(ctx),
+        check_constants_cmd = check_constants_cmd,
         toolchains_setup_env_var_cmd = toolchains.kernel_setup_env_var_cmd,
         set_clang_autofdo_profile_cmd = set_clang_autofdo_profile_cmd,
         make_goals_deprecation_warning = make_goals_deprecation_warning,
@@ -494,6 +516,7 @@ def _get_env_setup_cmds(ctx):
 
     kleaf_repo_workspace_root = Label(":kernel_env.bzl").workspace_root
 
+    # buildifier: disable=external-path
     pre_env += """
         # KLEAF_REPO_WORKSPACE_ROOT: workspace_root of the Kleaf repository. See Label.workspace_root.
         # This should be:
@@ -747,6 +770,9 @@ kernel_env = rule(
             default = "//build/kernel/kleaf/impl:cache_dir_config_tags",
             executable = True,
             cfg = "exec",
+        ),
+        "_autoload_build_config_constants": attr.label(
+            default = "//build/kernel/kleaf:autoload_build_config_constants",
         ),
     } | _kernel_env_additional_attrs(),
     toolchains = [hermetic_toolchain.type],
