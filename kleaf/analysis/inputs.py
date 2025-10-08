@@ -45,7 +45,24 @@ class ArtifactPath(object):
     is_tree_artifact: bool
 
 
-def analyze_inputs(bazel: pathlib.Path, aquery_args: list[str]):
+class BazelCommandExecutor(object):
+    """Executes bazel commands."""
+
+    def __init__(self, bazel: pathlib.Path):
+        self.bazel = bazel
+
+    def check_output(self, command: str, command_args: list[str]) -> str:
+        """Executes a bazel command and returns its output."""
+        return subprocess.check_output(
+            [str(self.bazel), command] + command_args, text=True)
+
+
+DEFAULT_BAZEL_COMMAND_EXECUTOR = BazelCommandExecutor(
+    bazel=pathlib.Path("tools/bazel"))
+
+
+def analyze_inputs(aquery_args: list[str],
+                   bazel_command_executor = DEFAULT_BAZEL_COMMAND_EXECUTOR):
     """Main entry point to the program.
 
     Args:
@@ -53,13 +70,10 @@ def analyze_inputs(bazel: pathlib.Path, aquery_args: list[str]):
     Returns:
         A dictionary, where keys are file paths, and values are hashes.
     """
-    text_result = subprocess.check_output(
+    text_result = bazel_command_executor.check_output("aquery",
         [
-            str(bazel),
-            "aquery",
             "--output=jsonproto"
         ] + aquery_args,
-        text=True,
     )
     json_result = json.loads(text_result)
 
@@ -77,7 +91,7 @@ def analyze_inputs(bazel: pathlib.Path, aquery_args: list[str]):
                               artifacts=artifacts,
                               path_fragments=path_fragments)
 
-    inputs = resolve_inputs(bazel, inputs)
+    inputs = resolve_inputs(inputs, bazel_command_executor)
 
     return hash_all(inputs)
 
@@ -277,7 +291,8 @@ def walk_files(path: pathlib.Path):
     return ret
 
 
-def resolve_inputs(bazel: pathlib.Path, inputs: set[ArtifactPath]) \
+def resolve_inputs(inputs: set[ArtifactPath],
+                   bazel_command_executor: BazelCommandExecutor) \
         -> set[ArtifactPath]:
     """Resolves paths returned by bazel aquery.
 
@@ -290,14 +305,12 @@ def resolve_inputs(bazel: pathlib.Path, inputs: set[ArtifactPath]) \
 
     Args:
         inputs: set of inputs returned by `bazel aquery`
-        actions: list of actions
-        targets: global dict of targets
 
     Returns:
         set of resolved inputs
     """
     resolved_inputs: set[ArtifactPath] = set()
-    output_base = get_output_base(bazel)
+    output_base = get_output_base(bazel_command_executor)
     for input in inputs:
         if input.path.is_relative_to("external"):
             if (output_base / input.path).exists() and \
@@ -317,7 +330,8 @@ def resolve_inputs(bazel: pathlib.Path, inputs: set[ArtifactPath]) \
     return resolved_inputs
 
 
-def get_output_base(bazel: pathlib.Path) -> pathlib.Path:
+def get_output_base(bazel_command_executor: BazelCommandExecutor) \
+        -> pathlib.Path:
     """Returns the output base.
 
     Returns:
@@ -325,7 +339,7 @@ def get_output_base(bazel: pathlib.Path) -> pathlib.Path:
         root of the repository).
     """
     return pathlib.Path(
-        subprocess.check_output([str(bazel), "info", "output_base"], text=True).strip())
+        bazel_command_executor.check_output("info", ["output_base"]).strip())
 
 
 def split_existing_files(files: set[pathlib.Path]):
@@ -351,9 +365,6 @@ def split_existing_files(files: set[pathlib.Path]):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("--bazel", type=pathlib.Path,
-                        default=pathlib.Path("tools/bazel"),
-                        help="Path to bazel binary.")
     parser.add_argument("aquery_args", nargs="+",
                         help="Args to `bazel aquery`.")
     args = parser.parse_args()
