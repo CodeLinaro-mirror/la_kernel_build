@@ -421,7 +421,7 @@ Execute `build_boot_images` in `build_utils.sh`.""",
             allow_empty = False,
         ),
         "mkbootimg": attr.label(
-            default = "//tools/mkbootimg",
+            default = "//prebuilts/kernel-build-tools:mkbootimg",
             executable = True,
             cfg = "exec",
         ),
