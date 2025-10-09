@@ -171,7 +171,7 @@ def get_build_kernel_version(data):
   elif branch == "aosp_kernel-common-android-mainline-riscv64":
     return "mainline-riscv64"
   else:
-    pattern = "android(\d\d)?-(?P<version>\d+\.\d+|\w\+)(-stable)?(-\d{4}-\d{2})?$"
+    pattern = r"android(\d\d)?-(?P<version>\d+\.\d+|\w\+)(-stable)?(-\d{4}-\d{2})?$"
     result = re.search(pattern, branch)
     if not result:
       raise Exception("Could not determine kernel version in branch " + branch)
@@ -196,7 +196,7 @@ def get_android_version(branch):
 
   Note: It does not handle aosp_kernel-common-android-mainline case.
   """
-  pattern = "android(?P<android_version>\d\d)-(\d+\.\d+|\w\+)(-lts)?(-\d{4}-\d{2})?$"
+  pattern = r"android(?P<android_version>\d\d)-(\d+\.\d+|\w\+)(-lts)?(-\d{4}-\d{2})?$"
   result = re.search(pattern, branch)
   if not result:
     raise Exception("Could not determine android version in branch " + branch)
@@ -258,7 +258,7 @@ def get_binary_kernel_release(path):
 def get_binary_kernel_version(path):
   """Returns a tuple of strings of the x.y.z (LTS) version and the SHA."""
   version = extract_version_from_kernel(path)
-  pattern = "(?P<release>(?P<version>[0-9]+[.][0-9]+[.][0-9]+)(-rc\d+)?(-\w+(-\d+)?)?-\d+-g(?P<sha>\w+)-ab\d+)"
+  pattern = r"(?P<release>(?P<version>[0-9]+[.][0-9]+[.][0-9]+)(-rc\d+)?(-\w+(-\d+)?)?-\d+-g(?P<sha>\w+)-ab\d+)"
   result = re.search(pattern, version)
 
   if not result:
@@ -267,8 +267,8 @@ def get_binary_kernel_version(path):
 
 def get_binary_u_boot_version(path):
   """Returns a tuple of strings of the YYYY.MM(-rcXX) version and the SHA."""
-  rawdata = subprocess.check_output(["grep", "-a", "U-Boot\s[0-9]*.[0-9]*-.*", path])
-  pattern = b"U-Boot (?P<release>(?P<version>[0-9]+[.][0-9]+)(-rc\d+)?(-\d+)?-g(?P<sha>\w+)(-dirty)?(-ab[0-9]+)?) .*"
+  rawdata = subprocess.check_output(["grep", "-a", r"U-Boot\s[0-9]*.[0-9]*-.*", path])
+  pattern = r"U-Boot (?P<release>(?P<version>[0-9]+[.][0-9]+)(-rc\d+)?(-\d+)?-g(?P<sha>\w+)(-dirty)?(-ab[0-9]+)?) .*"
   result = re.search(pattern, rawdata)
   if not result:
     raise Exception("Could not determine version in U-Boot binary " + path)
@@ -330,8 +330,6 @@ def download_kernel(target, version, output_dir, fetch_system_dlkm=False):
   build_uses_bzImage = target in X86_64_TARGETS or target in X86_TARGETS
   files = ["bzImage"] if build_uses_bzImage else ["Image"]
   files.append("System.map")
-  # vmlinux is needed by the platfrom build to dump BTF info for BPF programs
-  files.append("vmlinux")
 
   if fetch_system_dlkm:
     # Fetch GKI modules tarball with signed modules
