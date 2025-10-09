@@ -776,6 +776,29 @@ In `foo_dist`, specifying `foo_modules_install` in `data` won't include
 | <a id="kernel_modules_install-kernel_modules"></a>kernel_modules |  A list of labels referring to `kernel_module`s to install.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 
 
+<a id="kernel_sbom"></a>
+
+## kernel_sbom
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_sbom")
+
+kernel_sbom(<a href="#kernel_sbom-name">name</a>, <a href="#kernel_sbom-srcs">srcs</a>, <a href="#kernel_sbom-out">out</a>, <a href="#kernel_sbom-kernel_build">kernel_build</a>)
+</pre>
+
+Generate an SPDX SBOM for kernels.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="kernel_sbom-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="kernel_sbom-srcs"></a>srcs |  List of [kernel_build](#kernel_build) and [kernel_module](#kernel_module) targets   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
+| <a id="kernel_sbom-out"></a>out |  The output SPDX JSON file name.   | String | optional |  `"kernel_sbom.spdx.json"`  |
+| <a id="kernel_sbom-kernel_build"></a>kernel_build |  **DEPRECATED**; use `srcs` instead. The [`kernel_build()`](#kernel_build) target.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+
+
 <a id="kernel_unstripped_modules_archive"></a>
 
 ## kernel_unstripped_modules_archive
