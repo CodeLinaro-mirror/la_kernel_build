@@ -676,6 +676,8 @@ class KleafIntegrationTestShard2(KleafIntegrationTestBase):
             for line in f.read().splitlines():
                 if line.startswith("CLANG_VERSION="):
                     clang_version = line.strip().split("=", 2)[1]
+                    if clang_version.startswith('"') and clang_version.endswith('"'):
+                        clang_version = clang_version[1:-1]
         self.assertIsNotNone(clang_version)
         clang_dir = f"prebuilts/clang/host/linux-x86/clang-{clang_version}"
         clang_dir = os.path.realpath(clang_dir)
