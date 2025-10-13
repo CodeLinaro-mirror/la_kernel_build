@@ -35,7 +35,21 @@ def _dtb_image_impl(ctx):
     ]
 
 dtb_image = rule(
-    doc = "Build `dtb` image.",
+    doc = """Concatenate multiple DT blobs `*.dtb` to be included in the
+        `boot` or `vendor_boot` image.
+
+        Use it in
+        [`vendor_boot_image(dtb_image=)`](#vendor_boot_image-dtb_image) to
+        include it in the `vendor_boot` image.
+
+        **Note**: This is not the standard dtb partition image in Android. To build the `dtb`
+        partition image with `dt_table_entry` table header, use (`dtbo_image`)[#dtbo_image] instead
+        (even though the name says `dtbo_image`).
+
+        See
+        [DTB images](https://source.android.com/docs/core/architecture/bootloader/dtb-images)
+        for details.
+    """,
     implementation = _dtb_image_impl,
     attrs = {
         "srcs": attr.label_list(

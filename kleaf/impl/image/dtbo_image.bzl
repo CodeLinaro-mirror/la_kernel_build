@@ -69,7 +69,15 @@ def _dtbo_image_impl(ctx):
 
 dtbo_image = rule(
     implementation = _dtbo_image_impl,
-    doc = "Build dtbo image.",
+    doc = """Build `dtb` or `dtbo` partition image.
+
+        The partition image contains a `dt_table_entry` table header, as specified in
+        [DTB and DTBO partitions](https://source.android.com/docs/core/architecture/dto/partitions).
+
+        **Note**: Despite the name, this can be used to build the `dtb` **partition** image.
+        However, it is not for concatenated DT blobs (`*.dtb`) embedded in the `boot` or
+        `vendor_boot` image. Use [`dtb_image`](#dtb_image) for that purpose.
+    """,
     attrs = {
         "opts": attr.string_list(
             doc = "Flags passed to `mkdtimg` tool. Successor of `MKDTIMG_FLAGS` ",

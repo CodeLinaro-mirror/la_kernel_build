@@ -81,10 +81,16 @@ vendor_boot_image = rule(
             """,
         ),
         "dtb_image": attr.label(
-            doc = """A dtb.img to packaged.
+            doc = """A file containing concatenated DT blobs.
+
                 If this is set, then *.dtb from `kernel_build` are ignored.
 
-                See [`dtb_image`](#dtb_image).""",
+                You may use [`dtb_image`](#dtb_image) rule to concatenate the DT blobs (*.dtb)
+                files, and specify the `dtb_image` target here.
+
+                See [DTB images](https://source.android.com/docs/core/architecture/bootloader/dtb-images)
+                for details.
+            """,
             allow_single_file = True,
         ),
         "deps": attr.label_list(
