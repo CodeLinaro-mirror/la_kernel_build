@@ -30,6 +30,12 @@ kleaf_local_repository = use_repo_rule(
 )
 
 new_kleaf_local_repository(
+    name = "avb_test",
+    build_file = "build/kernel/kleaf/avb_test.BUILD",
+    path = "external/avb/test",
+)
+
+new_kleaf_local_repository(
     name = "libcap",
     build_file = "build/kernel/kleaf/libcap.BUILD",
     path = "external/libcap",
