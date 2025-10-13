@@ -120,9 +120,9 @@ def kernel_images(
           `System.map` in `outs` (which is included if you use `DEFAULT_GKI_OUTS` or
           `X86_64_OUTS` from `common_kernels.bzl`).
         kernel_build: A `kernel_build` rule. Must specify if `build_boot`.
-        mkbootimg: Path to the mkbootimg.py script which builds boot.img.
+        mkbootimg: Path to the mkbootimg tool which builds boot.img.
           Only used if `build_boot`. If `None`,
-          default to `//tools/mkbootimg`.
+          default to `//prebuilts/kernel-build-tools:mkbootimg`.
           NOTE: This overrides `MKBOOTIMG_PATH`.
         deps: Additional dependencies to build images.
 

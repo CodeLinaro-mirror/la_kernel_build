@@ -152,10 +152,10 @@ gki_artifacts = rule(
             doc = "The [`kernel_build`](kernel.md#kernel_build) that provides all `Image` and `Image.*`.",
         ),
         "mkbootimg": attr.label(
-            default = "//tools/mkbootimg",
+            default = "//prebuilts/kernel-build-tools:mkbootimg",
             executable = True,
             cfg = "exec",
-            doc = "path to the `mkbootimg.py` script; `MKBOOTIMG_PATH`.",
+            doc = "path to the `mkbootimg` tool; `MKBOOTIMG_PATH`.",
         ),
         "boot_img_sizes": attr.string_dict(
             doc = """A dictionary, with key is the compression algorithm, and value

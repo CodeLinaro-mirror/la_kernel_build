@@ -106,12 +106,10 @@ vendor_boot_image = rule(
             allow_empty = False,
         ),
         "mkbootimg": attr.label(
-            default = "//tools/mkbootimg",
+            default = "//prebuilts/kernel-build-tools:mkbootimg",
             executable = True,
             cfg = "exec",
-            doc = """mkbootimg.py script which builds boot.img.
-                Only used if `build_boot`. If `None`,
-                default to `//tools/mkbootimg:mkbootimg.py`.
+            doc = """mkbootimg tool which builds boot.img.
                 NOTE: This overrides `MKBOOTIMG_PATH`.
             """,
         ),
