@@ -75,6 +75,18 @@ Example for Pixel 2021 (see the `dtc_includes` target):
 Kleaf provides the `dtb_image` and `dtbo_image` rules to build these images so
 the devicetrees can be used on an Android device.
 
+To concatenate multiple DT blobs to embed it in a `boot` or `vendor_boot`
+partition, use the [`dtb_image`](api_reference/kernel.md#dtb_image) rule. The `dtb_image` rule
+**does not build the `dtb` partition image**. Then, you may specify the `dtb_image()` target in the
+`vendor_boot(dtb_image=)` attribute. See
+[DTB images](https://source.android.com/docs/core/architecture/bootloader/dtb-images)
+for details.
+
+To build the `dtb` or `dtbo` partition image with the `dt_table_entry` table header, use the
+[`dtbo_image`](api_reference/kernel.md#dtbo_image) rule. See
+[DTB and DTBO partitions](https://source.android.com/docs/core/architecture/dto/partitions)
+for details.
+
 The `srcs` attributes of the two targets should contain the `*.dtb` and `*.dtbo`
 files you declare in the previous step.
 

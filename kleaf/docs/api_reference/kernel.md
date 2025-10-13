@@ -321,7 +321,20 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "dtb_image")
 dtb_image(<a href="#dtb_image-name">name</a>, <a href="#dtb_image-srcs">srcs</a>, <a href="#dtb_image-out">out</a>)
 </pre>
 
-Build `dtb` image.
+Concatenate multiple DT blobs `*.dtb` to be included in the
+`boot` or `vendor_boot` image.
+
+Use it in
+[`vendor_boot_image(dtb_image=)`](#vendor_boot_image-dtb_image) to
+include it in the `vendor_boot` image.
+
+**Note**: This is not the standard dtb partition image in Android. To build the `dtb`
+partition image with `dt_table_entry` table header, use (`dtbo_image`)[#dtbo_image] instead
+(even though the name says `dtbo_image`).
+
+See
+[DTB images](https://source.android.com/docs/core/architecture/bootloader/dtb-images)
+for details.
 
 **ATTRIBUTES**
 
@@ -343,7 +356,14 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "dtbo_image")
 dtbo_image(<a href="#dtbo_image-name">name</a>, <a href="#dtbo_image-srcs">srcs</a>, <a href="#dtbo_image-out">out</a>, <a href="#dtbo_image-config_file">config_file</a>, <a href="#dtbo_image-opts">opts</a>)
 </pre>
 
-Build dtbo image.
+Build `dtb` or `dtbo` partition image.
+
+The partition image contains a `dt_table_entry` table header, as specified in
+[DTB and DTBO partitions](https://source.android.com/docs/core/architecture/dto/partitions).
+
+**Note**: Despite the name, this can be used to build the `dtb` **partition** image.
+However, it is not for concatenated DT blobs (`*.dtb`) embedded in the `boot` or
+`vendor_boot` image. Use [`dtb_image`](#dtb_image) for that purpose.
 
 **ATTRIBUTES**
 
@@ -956,7 +976,7 @@ Build `vendor_boot` or `vendor_kernel_boot` image.
 | <a id="vendor_boot_image-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="vendor_boot_image-deps"></a>deps |  Additional dependencies to build boot images.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="vendor_boot_image-outs"></a>outs |  A list of output files that will be installed to `DIST_DIR` when `build_boot_images` in `build/kernel/build_utils.sh` is executed.<br><br>Unlike `kernel_images`, you must specify the list explicitly.   | List of strings | optional |  `[]`  |
-| <a id="vendor_boot_image-dtb_image"></a>dtb_image |  A dtb.img to packaged. If this is set, then *.dtb from `kernel_build` are ignored.<br><br>See [`dtb_image`](#dtb_image).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="vendor_boot_image-dtb_image"></a>dtb_image |  A file containing concatenated DT blobs.<br><br>If this is set, then *.dtb from `kernel_build` are ignored.<br><br>You may use [`dtb_image`](#dtb_image) rule to concatenate the DT blobs (*.dtb) files, and specify the `dtb_image` target here.<br><br>See [DTB images](https://source.android.com/docs/core/architecture/bootloader/dtb-images) for details.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="vendor_boot_image-header_version"></a>header_version |  Boot image header version.<br><br>If unspecified, falls back to the value of BOOT_IMAGE_HEADER_VERSION in build configs. If BOOT_IMAGE_HEADER_VERSION is not set, defaults to 3.   | Integer | optional |  `0`  |
 | <a id="vendor_boot_image-initramfs"></a>initramfs |  The [`initramfs`](#initramfs).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="vendor_boot_image-initramfs_vendor_ramdisk_fragment_name"></a>initramfs_vendor_ramdisk_fragment_name |  If `initramfs` is specified, then build the .ko and depmod files as a standalone vendor ramdisk fragment named as the given string.   | String | optional |  `""`  |
