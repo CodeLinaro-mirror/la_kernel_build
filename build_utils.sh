@@ -636,10 +636,10 @@ EOF
 
 function check_mkbootimg_path() {
   if [ -z "${MKBOOTIMG_PATH}" ]; then
-    MKBOOTIMG_PATH="tools/mkbootimg/mkbootimg.py"
+    MKBOOTIMG_PATH="prebuilts/kernel-build-tools/linux_musl-x86/bin/mkbootimg"
   fi
   if [ ! -f "${MKBOOTIMG_PATH}" ]; then
-    echo "ERROR: mkbootimg.py script not found. MKBOOTIMG_PATH = ${MKBOOTIMG_PATH}" >&2
+    echo "ERROR: mkbootimg tool not found. MKBOOTIMG_PATH = ${MKBOOTIMG_PATH}" >&2
     exit 1
   fi
 }
