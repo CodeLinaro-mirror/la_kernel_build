@@ -187,7 +187,7 @@ For example:
             cfg = "exec",
         ),
         "_gcov": attr.label(default = "//build/kernel/kleaf:gcov"),
-        "_testkey": attr.label(default = "//tools/mkbootimg:gki/testdata/testkey_rsa4096.pem", allow_single_file = True),
+        "_testkey": attr.label(default = "@avb_test//:data/testkey_rsa4096.pem", allow_single_file = True),
     },
     toolchains = [hermetic_toolchain.type],
 )

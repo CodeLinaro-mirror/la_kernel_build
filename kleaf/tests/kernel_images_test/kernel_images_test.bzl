@@ -215,7 +215,7 @@ def initramfs_test(name):
         unpack_ramdisk = False,
         avb_sign_boot_img = True,
         avb_boot_partition_size = 512,
-        avb_boot_key = "//tools/mkbootimg:gki/testdata/testkey_rsa4096.pem",
+        avb_boot_key = "@avb_test//:data/testkey_rsa4096.pem",
         avb_boot_algorithm = "SHA256_RSA4096",
         avb_boot_partition_name = "boot",
         tags = ["manual"],
