@@ -245,7 +245,7 @@ def process_vmlinux(info: Info, copy_args) -> None:
 
 def process_boot_image(gki: pathlib.Path, info: Info, kernel: str, boot_image: str, boot_image_path: pathlib.Path) -> None:
     unpacked = info.working_directory / (boot_image + '.unpacked')
-    subprocess.check_call([gki / 'tools' / 'mkbootimg' / 'unpack_bootimg.py',
+    subprocess.check_call([gki / 'prebuilts' / 'kernel-build-tools' / 'linux_musl-x86' / 'bin' / 'unpack_bootimg',
                            '--boot_img', boot_image_path, '--format', 'info', '--out', unpacked],
                           stdout=subprocess.DEVNULL)
     ramdisk_file = unpacked / 'ramdisk'
