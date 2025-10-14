@@ -386,7 +386,7 @@ for details.
 <pre>
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "dtbo_image")
 
-dtbo_image(<a href="#dtbo_image-name">name</a>, <a href="#dtbo_image-srcs">srcs</a>, <a href="#dtbo_image-out">out</a>, <a href="#dtbo_image-config_file">config_file</a>, <a href="#dtbo_image-opts">opts</a>)
+dtbo_image(<a href="#dtbo_image-name">name</a>, <a href="#dtbo_image-srcs">srcs</a>, <a href="#dtbo_image-out">out</a>, <a href="#dtbo_image-config_file">config_file</a>, <a href="#dtbo_image-opts">opts</a>, <a href="#dtbo_image-tool">tool</a>)
 </pre>
 
 Build `dtb` or `dtbo` partition image.
@@ -408,6 +408,7 @@ However, it is not for concatenated DT blobs (`*.dtb`) embedded in the `boot` or
 | <a id="dtbo_image-out"></a>out |  Name of the `dtbo` image.<br><br>Default to `<name>/dtbo.img` if not set.   | String | optional |  `""`  |
 | <a id="dtbo_image-config_file"></a>config_file |  A config file to create dtbo image by cfg_create command.<br><br>If set, use mkdtimg cfg_create with the given config file, instead of mkdtimg create   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="dtbo_image-opts"></a>opts |  Flags passed to `mkdtimg` tool. Successor of `MKDTIMG_FLAGS`   | List of strings | optional |  `[]`  |
+| <a id="dtbo_image-tool"></a>tool |  Name of the tool called to generate the dtbo image.<br><br>Supported tools are `mkdtimg` and `mkdtboimg`. Default to `mkdtimg` if not set.   | String | optional |  `"mkdtimg"`  |
 
 
 <a id="extract_symbols"></a>
