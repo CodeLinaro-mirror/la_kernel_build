@@ -763,11 +763,19 @@ function build_boot_images() {
   fi
 
   if [ -n "${BUILD_BOOT_IMG}" ]; then
-    if [ ! -f "${DIST_DIR}/$KERNEL_BINARY" ]; then
-      echo "ERROR: kernel binary(KERNEL_BINARY = $KERNEL_BINARY) not present in ${DIST_DIR}" >&2
-      exit 1
+    if [ -n "${KERNEL_BINARY_PATH}" ]; then
+      if [ ! -f "${KERNEL_BINARY_PATH}" ]; then
+        echo "ERROR: kernel binary(KERNEL_BINARY_PATH = $KERNEL_BINARY_PATH) not found" >&2
+        exit 1
+      fi
+      MKBOOTIMG_ARGS+=("--kernel" "${KERNEL_BINARY_PATH}")
+    else
+      if [ ! -f "${DIST_DIR}/$KERNEL_BINARY" ]; then
+        echo "ERROR: kernel binary(KERNEL_BINARY = $KERNEL_BINARY) not present in ${DIST_DIR}" >&2
+        exit 1
+      fi
+      MKBOOTIMG_ARGS+=("--kernel" "${DIST_DIR}/${KERNEL_BINARY}")
     fi
-    MKBOOTIMG_ARGS+=("--kernel" "${DIST_DIR}/${KERNEL_BINARY}")
   fi
 
   if [ "${BOOT_IMAGE_HEADER_VERSION}" -ge "4" ]; then

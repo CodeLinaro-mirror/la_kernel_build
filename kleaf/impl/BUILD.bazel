@@ -79,6 +79,7 @@ bzl_library(
         "file_selector.bzl",
         "gcov_utils.bzl",
         "gki_artifacts.bzl",
+        "image/boot_image.bzl",
         "image/boot_images.bzl",
         "image/dtb_image.bzl",
         "image/dtbo_image.bzl",

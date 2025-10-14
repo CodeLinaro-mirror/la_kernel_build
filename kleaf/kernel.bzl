@@ -43,6 +43,7 @@ load("//build/kernel/kleaf/impl:ddk/ddk_prebuilt_object.bzl", _ddk_prebuilt_obje
 load("//build/kernel/kleaf/impl:ddk/ddk_submodule.bzl", _ddk_submodule = "ddk_submodule")
 load("//build/kernel/kleaf/impl:ddk/ddk_uapi_headers.bzl", _ddk_uapi_headers = "ddk_uapi_headers")
 load("//build/kernel/kleaf/impl:gki_artifacts.bzl", _gki_artifacts = "gki_artifacts", _gki_artifacts_prebuilts = "gki_artifacts_prebuilts")
+load("//build/kernel/kleaf/impl:image/boot_image.bzl", _boot_image = "boot_image")
 load("//build/kernel/kleaf/impl:image/dtb_image.bzl", _dtb_image = "dtb_image")
 load("//build/kernel/kleaf/impl:image/dtbo_image.bzl", _dtbo_image = "dtbo_image")
 load("//build/kernel/kleaf/impl:image/initramfs.bzl", _initramfs = "initramfs")
@@ -111,6 +112,7 @@ merge_module_symvers = _merge_module_symvers
 merged_kernel_uapi_headers = _merged_kernel_uapi_headers
 modinfo_summary_report = _modinfo_summary_report
 super_image = _super_image
+boot_image = _boot_image
 system_dlkm_image = _system_dlkm_image
 unsparsed_image = _unsparsed_image
 vendor_boot_image = _vendor_boot_image
