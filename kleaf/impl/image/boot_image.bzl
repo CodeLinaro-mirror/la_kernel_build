@@ -66,7 +66,7 @@ boot_image = rule(
             allow_empty = False,
         ),
         "mkbootimg": attr.label(
-            default = "//tools/mkbootimg",
+            default = "//prebuilts/kernel-build-tools:mkbootimg",
             executable = True,
             cfg = "exec",
         ),
