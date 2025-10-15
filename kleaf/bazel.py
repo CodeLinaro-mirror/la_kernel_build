@@ -1018,9 +1018,12 @@ async def run(command, env, epilog_coroutine, output_mutator):
         case _: raise MultipleBazelWrapperException(exceptions)
 
 def _bazel_wrapper_main():
-    # <kleaf_repo_dir>/build/kernel/kleaf/bazel.py
-    kleaf_repo_dir = (
-        pathlib.Path(__file__).resolve().parent.parent.parent.parent)
+    if "KLEAF_REPO_DIR_OVERRIDE" in os.environ:
+        kleaf_repo_dir = pathlib.Path(os.environ["KLEAF_REPO_DIR_OVERRIDE"])
+    else:
+        # <kleaf_repo_dir>/build/kernel/kleaf/bazel.py
+        kleaf_repo_dir = (
+            pathlib.Path(__file__).resolve().parent.parent.parent.parent)
     return BazelWrapper(kleaf_repo_dir=kleaf_repo_dir,
                         bazel_args=sys.argv[1:],
                         env=os.environ).run()
