@@ -166,6 +166,7 @@ _TOOLS = [
     "//prebuilts/kernel-build-tools:img2simg",
     "//prebuilts/kernel-build-tools:lpmake",
     "//prebuilts/kernel-build-tools:mkbootfs",
+    "//prebuilts/kernel-build-tools:mkdtboimg",
     "//prebuilts/kernel-build-tools:mkdtimg",
     "//prebuilts/kernel-build-tools:mke2fs",
     "//prebuilts/kernel-build-tools:mkfs.erofs",

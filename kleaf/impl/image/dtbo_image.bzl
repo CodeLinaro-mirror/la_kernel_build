@@ -29,6 +29,7 @@ def _dtbo_image_impl(ctx):
     dtbo_staging_dir = output.dirname + "/staging"
     inputs = []
     transitive_inputs = [target.files for target in ctx.attr.srcs]
+    dtbo_tool = ctx.attr.tool
 
     if ctx.file.config_file:
         inputs.append(ctx.file.config_file)
@@ -37,7 +38,7 @@ def _dtbo_image_impl(ctx):
                   cp {srcs} {dtbo_staging_dir}
 
                 # make dtbo
-                  mkdtimg cfg_create {output} {config} {mkdtimg_opts} -d {dtbo_staging_dir}
+                  {dtbo_tool} cfg_create {output} {config} {mkdtimg_opts} -d {dtbo_staging_dir}
                   rm -rf {dtbo_staging_dir}
         """.format(
             output = output.path,
@@ -45,15 +46,17 @@ def _dtbo_image_impl(ctx):
             config = ctx.file.config_file.path,
             dtbo_staging_dir = dtbo_staging_dir,
             mkdtimg_opts = " ".join(ctx.attr.opts),
+            dtbo_tool = dtbo_tool,
         )
     else:
         command += """
                 # make dtbo
-                  mkdtimg create {output} {mkdtimg_opts} {srcs}
+                  {dtbo_tool} create {output} {mkdtimg_opts} {srcs}
         """.format(
             output = output.path,
             srcs = " ".join([f.path for f in ctx.files.srcs]),
             mkdtimg_opts = " ".join(ctx.attr.opts),
+            dtbo_tool = dtbo_tool,
         )
 
     debug.print_scripts(ctx, command)
@@ -122,6 +125,17 @@ dtbo_image = rule(
 
             Default to `<name>/dtbo.img` if not set.
         """,
+        ),
+        "tool": attr.string(
+            default = "mkdtimg",
+            doc = """Name of the tool called to generate the dtbo image.
+
+            Supported tools are `mkdtimg` and `mkdtboimg`. Default to `mkdtimg`
+            if not set.  """,
+            values = [
+                "mkdtimg",
+                "mkdtboimg",
+            ],
         ),
     },
     subrules = [
