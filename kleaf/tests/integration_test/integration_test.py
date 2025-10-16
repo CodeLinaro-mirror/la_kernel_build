@@ -271,6 +271,12 @@ class Exec(object):
 
 class KleafIntegrationTestBase(unittest.TestCase, BazelCommandExecutor):
 
+    def _get_kleaf_repo_dir_override(self, cwd: pathlib.Path):
+        # Mimic bazel.sh behavior
+        bazel_sh = (cwd / "tools" / "bazel").resolve()
+        # <kleaf_repo_dir>/build/kernel/kleaf/bazel.sh
+        return str(bazel_sh.parent.parent.parent.parent)
+
     def _build_subprocess_args(
         self,
         command: str,
@@ -290,6 +296,11 @@ class KleafIntegrationTestBase(unittest.TestCase, BazelCommandExecutor):
         if use_wrapper_args:
             subprocess_args.extend(arguments.bazel_wrapper_args)
         subprocess_args.extend(command_args)
+
+        kwargs["env"] = kwargs.get("env", os.environ) | {
+            "KLEAF_REPO_DIR_OVERRIDE": self._get_kleaf_repo_dir_override(
+                pathlib.Path(kwargs.get("cwd", os.getcwd())))
+        }
 
         # kwargs has known arguments filtered out.
         return subprocess_args, kwargs
