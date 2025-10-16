@@ -122,7 +122,7 @@ def kernel_images(
         kernel_build: A `kernel_build` rule. Must specify if `build_boot`.
         mkbootimg: Path to the mkbootimg tool which builds boot.img.
           Only used if `build_boot`. If `None`,
-          default to `//prebuilts/kernel-build-tools:mkbootimg`.
+          default to `//build/kernel:mkbootimg`.
           NOTE: This overrides `MKBOOTIMG_PATH`.
         deps: Additional dependencies to build images.
 

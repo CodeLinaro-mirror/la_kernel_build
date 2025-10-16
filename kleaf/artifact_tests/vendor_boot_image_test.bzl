@@ -150,7 +150,7 @@ vendor_boot_image_test = rule(
     implementation = _vendor_boot_image_test_impl,
     attrs = {
         "_unpack_bootimg": attr.label(
-            default = "//prebuilts/kernel-build-tools:unpack_bootimg",
+            default = "//build/kernel:unpack_bootimg",
             cfg = "exec",
             executable = True,
         ),
