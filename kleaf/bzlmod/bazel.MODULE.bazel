@@ -103,6 +103,22 @@ new_kleaf_local_repository(
     ],
 )
 
+# GBL deps, all should have mandatory=False
+
+# Hack for b/328465178
+new_kleaf_local_repository(
+    name = "rules_rust_tinyjson",
+    build_file = "external/bazelbuild-rules_rust/util/process_wrapper/BUILD.tinyjson.bazel",
+    mandatory = False,
+    path = "external/rust/android-crates-io/crates/tinyjson",
+)
+
+internal_deps = use_extension("@rules_rust//rust/private:internal_extensions.bzl", "i")
+
+override_repo(internal_deps, "rules_rust_tinyjson")
+
+# END GBL deps.
+
 kernel_toolchain_ext = use_extension("//build/kernel/kleaf:kernel_toolchain_ext.bzl", "kernel_toolchain_ext")
 use_repo(kernel_toolchain_ext, "kernel_toolchain_info")
 use_repo(kernel_toolchain_ext, "kleaf_clang_toolchain")
@@ -159,6 +175,10 @@ bazel_dep(
 bazel_dep(
     name = "rules_shell",
     version = "0.5.0",
+)
+bazel_dep(
+    name = "rules_rust",
+    version = "0.60.0",
 )
 
 # For --config=docs
@@ -222,4 +242,9 @@ local_path_override(
 local_path_override(
     module_name = "rules_shell",
     path = "external/bazelbuild-rules_shell",
+)
+
+local_path_override(
+    module_name = "rules_rust",
+    path = "external/bazelbuild-rules_rust",
 )
