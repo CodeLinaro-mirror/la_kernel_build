@@ -29,7 +29,7 @@ def contains_mark_test(name, kernel_module, depmod = None):
 
     # Default to
     if depmod == None:
-        depmod = "//prebuilts/kernel-build-tools:depmod"
+        depmod = "//build/kernel:depmod"
 
     args = [
         "--kernel_module",

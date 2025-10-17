@@ -123,7 +123,7 @@ alias(
         "//build/kernel/kleaf:depmod_from_sources_is_true": "@kmod//:depmod",
         "//conditions:default": "//prebuilts/kernel-build-tools:depmod",
     }),
-    visibility = ["//visibility:private"],
+    visibility = ["//build/kernel:__subpackages__"],
 )
 
 alias(
@@ -133,6 +133,18 @@ alias(
         "//conditions:default": "//prebuilts/kernel-build-tools:dtc",
     }),
     visibility = ["//visibility:private"],
+)
+
+alias(
+    name = "mkbootimg",
+    actual = "//prebuilts/kernel-build-tools:mkbootimg",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "unpack_bootimg",
+    actual = "//prebuilts/kernel-build-tools:unpack_bootimg",
+    visibility = ["//visibility:public"],
 )
 
 # List of tools where label names are used as the tool names

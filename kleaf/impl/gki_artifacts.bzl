@@ -152,7 +152,7 @@ gki_artifacts = rule(
             doc = "The [`kernel_build`](kernel.md#kernel_build) that provides all `Image` and `Image.*`.",
         ),
         "mkbootimg": attr.label(
-            default = "//prebuilts/kernel-build-tools:mkbootimg",
+            default = "//build/kernel:mkbootimg",
             executable = True,
             cfg = "exec",
             doc = "path to the `mkbootimg` tool; `MKBOOTIMG_PATH`.",
