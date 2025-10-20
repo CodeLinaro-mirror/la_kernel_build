@@ -22,7 +22,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
-from typing import BinaryIO, Generator, Tuple, Optional
+from typing import BinaryIO, Generator, TextIO, Tuple, Optional
 
 from impl.default_host_tools import DEFAULT_HOST_TOOLS
 from kleaf_help import KleafHelpPrinter, FLAGS_BAZEL_RC
@@ -576,18 +576,12 @@ class BazelWrapper(KleafHelpPrinter):
             """))
             fake_module_dir = self.kleaf_repo_dir / "build/kernel/kleaf/bzlmod/fake_modules"
             for override_module_path in fake_module_dir.glob("*/"):
-                override_module = override_module_path.name
-                if override_module_path.is_relative_to(self.workspace_dir):
-                    override_module_path = (pathlib.Path("%workspace%") /
-                        override_module_path.relative_to(self.workspace_dir))
-                # dittosuite is a special dependency that is not available in
-                # any registry, hence for docs generation keep it's override.
-                docs_override = override_module_path if override_module == "dittosuite" else ""
-                f.write(textwrap.dedent(f"""\
-                    common --override_module={override_module}={override_module_path}
-                    common:docs --override_module={override_module}={docs_override}
-                    common:ditto --override_module={override_module}=
-                """))
+                self._override_module(override_module_path, f)
+
+            dev_fake_module_dir = self.kleaf_repo_dir / "build/kernel/kleaf/bzlmod/dev_fake_modules"
+            if self._kleaf_repository_is_top_workspace():
+                for override_module_path in dev_fake_module_dir.glob("*/"):
+                    self._override_module(override_module_path, f)
 
         self.transformed_startup_options += self._transform_bazelrc_files([
             cache_dir_bazelrc,
@@ -621,6 +615,20 @@ class BazelWrapper(KleafHelpPrinter):
 
             self.kleaf_repo_dir / "build/kernel/kleaf/common.bazelrc",
         ])
+
+    def _override_module(self, override_module_path: pathlib.Path, bazelrc: TextIO):
+        override_module = override_module_path.name
+        if override_module_path.is_relative_to(self.workspace_dir):
+            override_module_path = (pathlib.Path("%workspace%") /
+                override_module_path.relative_to(self.workspace_dir))
+        # dittosuite is a special dependency that is not available in
+        # any registry, hence for docs generation keep it's override.
+        docs_override = override_module_path if override_module == "dittosuite" else ""
+        bazelrc.write(textwrap.dedent(f"""\
+            common --override_module={override_module}={override_module_path}
+            common:docs --override_module={override_module}={docs_override}
+            common:ditto --override_module={override_module}=
+        """))
 
     def _build_final_args(self) -> list[str]:
         """Builds the final arguments for the subprocess."""
