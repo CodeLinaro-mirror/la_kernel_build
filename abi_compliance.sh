@@ -20,7 +20,7 @@
 # code if ABI report file is missing or when it is not empty.
 
 # Example:
-#   tools/bazel //common:kernel_aarch64_abi_dist
+#   tools/bazel run //common:kernel_aarch64_abi_dist
 #   build/kernel/abi_compliance.sh out_abi/kernel_aarch64/dist
 
 exit_code=0
