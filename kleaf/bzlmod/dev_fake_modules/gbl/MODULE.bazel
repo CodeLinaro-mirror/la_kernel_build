@@ -1,0 +1,3 @@
+"""Fake GBL module."""
+
+module(name = "gbl")
