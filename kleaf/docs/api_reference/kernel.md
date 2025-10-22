@@ -339,7 +339,7 @@ Build `dtb` image.
 <pre>
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "dtbo")
 
-dtbo(<a href="#dtbo-name">name</a>, <a href="#dtbo-srcs">srcs</a>, <a href="#dtbo-out">out</a>, <a href="#dtbo-config_file">config_file</a>, <a href="#dtbo-kernel_build">kernel_build</a>)
+dtbo(<a href="#dtbo-name">name</a>, <a href="#dtbo-srcs">srcs</a>, <a href="#dtbo-out">out</a>, <a href="#dtbo-config_file">config_file</a>, <a href="#dtbo-kernel_build">kernel_build</a>, <a href="#dtbo-tool">tool</a>)
 </pre>
 
 Build dtbo.
@@ -352,8 +352,9 @@ Build dtbo.
 | <a id="dtbo-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="dtbo-srcs"></a>srcs |  List of `*.dtbo` files used to package the `dtbo.img`. This corresponds to `MKDTIMG_DTBOS` in build configs; see example below.<br><br>Example: <pre><code>kernel_build(&#10;    name = "tuna_kernel",&#10;    outs = [&#10;        "path/to/foo.dtbo",&#10;        "path/to/bar.dtbo",&#10;    ],&#10;)&#10;dtbo(&#10;    name = "tuna_images",&#10;    kernel_build = ":tuna_kernel",&#10;    srcs = [&#10;        ":tuna_kernel/path/to/foo.dtbo",&#10;        ":tuna_kernel/path/to/bar.dtbo",&#10;    ],&#10;)</code></pre>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="dtbo-out"></a>out |  Name of the `dtbo` image.<br><br>Default to `<name>/dtbo.img` if not set.   | String | optional |  `""`  |
-| <a id="dtbo-config_file"></a>config_file |  A config file to create dtbo image by cfg_create command.<br><br>If set, use mkdtimg cfg_create with the given config file, instead of mkdtimg create   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="dtbo-config_file"></a>config_file |  A config file to create dtbo image by cfg_create command.<br><br>If set, use mkdtboimg cfg_create with the given config file, instead of mkdtimg create   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="dtbo-kernel_build"></a>kernel_build |  The [`kernel_build`](#kernel_build).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="dtbo-tool"></a>tool |  Name of the tool called to generate the dtbo image.<br><br>Supported tools are `mkdtimg` and `mkdtboimg`. Default to `mkdtimg` if not set.   | String | optional |  `"mkdtimg"`  |
 
 
 <a id="extract_symbols"></a>
