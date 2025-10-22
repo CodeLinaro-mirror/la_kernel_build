@@ -9,3 +9,4 @@ common:gbl -c opt
 common:gbl --override_module=gbl=%workspace%/bootable/libbootloader/gbl
 common:gbl --override_module=apple_support=%workspace%/bootable/libbootloader/gbl/fake_modules/apple_support
 common:gbl --override_module=googletest=%workspace%/external/googletest
+common:gbl --override_module=rules_rust_bindgen=%workspace%/external/bazelbuild-rules_rust/extensions/bindgen
