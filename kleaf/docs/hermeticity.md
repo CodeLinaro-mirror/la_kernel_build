@@ -238,10 +238,8 @@ For bootstraping, some scripts still uses `/bin/bash`. This
 includes:
 
 * `tools/bazel` that points to `build/kernel/kleaf/bazel.sh`
-* `build/kernel/kleaf/workspace_status.sh`, which uses `git` from the
+* `build/kernel/kleaf/workspace_status*.sh`, which uses `git` from the
   host machine.
-  * The script may also use `printf` etc. from the host machine if
-    `--nokleaf_localversion`. See `scripts/setlocalversion`.
 
 `build/kernel/kleaf/bazel.sh` uses `readlink` from host for bootstrapping to
 determine its own path.
