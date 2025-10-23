@@ -102,15 +102,17 @@ def get_localversion_from_git(project: pathlib.Path) -> PathCollectible | None:
     # Note: To ensure hermeticity as much as possible, only get git from
     # host, then clear PATH.
     script = """
-        GIT=$(command -v git)
+        GIT="$(command -v git)"
+        GIT_OLD_PATH="$PATH"
         PATH=
-        if head=$($GIT rev-parse --verify --short=12 HEAD 2>/dev/null); then
+        if head=$(PATH=$GIT_OLD_PATH $GIT rev-parse --verify --short=12 HEAD 2>/dev/null); then
             echo -n -g"$head"
         fi
-        if {
+        if (
+            export PATH=$GIT_OLD_PATH
             $GIT --no-optional-locks status -uno --porcelain 2>/dev/null ||
             $GIT diff-index --name-only HEAD
-        } | read placeholder; then
+        ) | read placeholder; then
             echo -n -dirty
         fi
     """
