@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import argparse
 import collections
 import dataclasses
 import json
@@ -452,4 +453,15 @@ if __name__ == '__main__':
     logging.basicConfig(stream=sys.stderr,
                         level=logging.WARNING,
                         format="%(levelname)s: %(message)s")
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--git",
+                        choices=["always", "detect", "never"],
+                        default="always",
+                        help="""Whether to execute `git`.
+                            always: assume git exists on the host machine.
+                            detect: detect if git exists on the host machine.
+                            never: do not execute git.
+                        """)
+
     sys.exit(Stamp().main())

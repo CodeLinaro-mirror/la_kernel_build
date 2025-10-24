@@ -545,6 +545,8 @@ class BazelWrapper(KleafHelpPrinter):
         with open(stamp_extra_bazelrc, "w") as f:
             workspace_status_common_sh = self._kleaf_repo_rel() / \
                 "build/kernel/kleaf/workspace_status_common.sh"
+            workspace_status_ci_sh = self._kleaf_repo_rel() / \
+                "build/kernel/kleaf/workspace_status_ci.sh"
             workspace_status_sh = self._kleaf_repo_rel() / \
                 "build/kernel/kleaf/workspace_status.sh"
             f.write(textwrap.dedent(f"""\
@@ -552,6 +554,8 @@ class BazelWrapper(KleafHelpPrinter):
                 build --workspace_status_command={shlex.quote(str(workspace_status_common_sh))}
                 # With --config=stamp, embed scmversion.
                 build:stamp --workspace_status_command={shlex.quote(str(workspace_status_sh))}
+                # With --config=android_ci, embed scmversion, assuming git may not be present.
+                build:android_ci --workspace_status_command={shlex.quote(str(workspace_status_ci_sh))}
             """))
         self.transformed_startup_options += self._transform_bazelrc_files([
             stamp_extra_bazelrc,
