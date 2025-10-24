@@ -456,11 +456,10 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--git",
-                        choices=["always", "detect", "never"],
+                        choices=["always", "never"],
                         default="always",
                         help="""Whether to execute `git`.
                             always: assume git exists on the host machine.
-                            detect: detect if git exists on the host machine.
                             never: do not execute git.
                         """)
 
