@@ -17,7 +17,10 @@
 common:android_ci --noshow_progress
 
 # Embed scmversion
-build:android_ci --config=stamp
+# Don't directly use --config=stamp here to avoid conflicting --workspace_status_command
+build:android_ci --//build/kernel/kleaf:config_stamp
 
 # Upload test results
 test:android_ci --config=ants
+
+# See bazel.py for generated options
