@@ -142,14 +142,16 @@ def list_projects() -> list[pathlib.Path]:
     Returns:
         a list of Git projects relative to CWD.
     """
-    repo_root_s, repo_manifest = os.environ.get("KLEAF_REPO_MANIFEST", ":").split(":")
+    repo_root_s, repo_manifest = os.environ.get(
+        "KLEAF_REPO_MANIFEST", ":").split(":")
     if repo_root_s:
         repo_root = pathlib.Path(repo_root_s)
     else:
         repo_root = _find_repo(pathlib.Path(".").resolve())
 
     if not repo_root:
-        logging.warning("Unable to determine repo root. Please specify --repo_manifest.")
+        logging.warning(
+            "Unable to determine repo root. Please specify --repo_manifest.")
         return []
 
     if repo_manifest:
@@ -373,8 +375,8 @@ class Stamp(object):
                 # For --nosource_date_epoch_fix, keep the external/ path so the
                 # hack in build_utils.sh works
                 if "KLEAF_OUTPUT_BASE" not in os.environ and \
-                    len(project.parts) >= 2 and project.parts[1] == "kleaf":
-                        return (project,)
+                        len(project.parts) >= 2 and project.parts[1] == "kleaf":
+                    return (project,)
 
                 # These Git projects aren't available in the execroot because
                 # `//external` is not a valid package under the root repository,
