@@ -18,6 +18,7 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "bool_setting")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load(":cc.bzl", "readelf_tool")
 load(":kernel_platform_toolchain.bzl", "kernel_platform_toolchain")
 load(":kernel_toolchains.bzl", "kernel_toolchains")
 load(
@@ -43,6 +44,7 @@ bzl_library(
         "android_filegroup.bzl",
         "btf.bzl",
         "cache_dir.bzl",
+        "cc.bzl",
         "checkpatch.bzl",
         "common_providers.bzl",
         "common_settings.bzl",
@@ -141,6 +143,7 @@ bzl_library(
         "//build/kernel/kleaf:directory_with_structure_def",
         "//build/kernel/kleaf:update_source_file_def",
         "//build/kernel/kleaf/impl/testing:bzl_definitions",
+        "//prebuilts/clang/host/linux-x86/kleaf:action_names",
         "@bazel_skylib//lib:collections",
         "@bazel_skylib//lib:paths",
         "@bazel_skylib//lib:sets",
@@ -479,6 +482,11 @@ platform(
 )
 
 # LINT.ThenChange(/kleaf/platforms/config_settings/BUILD.bazel)
+
+readelf_tool(
+    name = "readelf_tool",
+    visibility = ["//visibility:public"],
+)
 
 python_runtime_files(
     name = "python_runtime_files",
