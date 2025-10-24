@@ -179,6 +179,10 @@ def parse_repo_manifest(repo_root: pathlib.Path, manifest: str) \
     except xml.parsers.expat.ExpatError as e:
         logging.error("Unable to parse repo manifest: %s", e)
         return []
+    if not dom.documentElement:
+        logging.error(
+            "Unable to parse repo manifest. DOM has no root element!")
+        return []
     projects = dom.documentElement.getElementsByTagName("project")
     ret = list[pathlib.Path]()
     for project in projects:
@@ -225,7 +229,7 @@ class Stamp(object):
 
         self.init_for_dot_source_date_epoch_dir()
 
-    def _init_bzlmod_mapping(self) -> dict[pathlib.Path, pathlib.Path]:
+    def _init_bzlmod_mapping(self) -> dict[pathlib.Path, set[pathlib.Path]]:
         """Returns value for self.bzlmod_mapping.
 
         Key: source path relative to the workspace (e.g. external/kleaf)
@@ -298,11 +302,12 @@ class Stamp(object):
             all_projects.add(self.kernel_rel)
         all_projects |= set(self.projects)
 
+        filtered_projects: Iterable[pathlib.Path] = all_projects
         if self.ignore_missing_projects:
-            all_projects = filter(pathlib.Path.is_dir, all_projects)
+            filtered_projects = filter(pathlib.Path.is_dir, filtered_projects)
 
         scmversion_map = {}
-        for project in all_projects:
+        for project in filtered_projects:
             if not project.is_dir():
                 logging.error(
                     "Project %s in repo manifest does not exist on disk.",
@@ -325,18 +330,19 @@ class Stamp(object):
         return get_localversion_from_git(project)
 
     def async_get_source_date_epoch_all(self) \
-            -> dict[str, PathCollectible]:
+            -> dict[pathlib.Path, PathCollectible]:
 
         all_projects: set[pathlib.Path] = set()
         if self.kernel_dir:
             all_projects.add(self.kernel_rel)
         all_projects |= set(self.projects)
 
+        filtered_projects: Iterable[pathlib.Path] = all_projects
         if self.ignore_missing_projects:
-            all_projects = filter(pathlib.Path.is_dir, all_projects)
+            filtered_projects = filter(pathlib.Path.is_dir, filtered_projects)
 
         ret = {}
-        for proj in all_projects:
+        for proj in filtered_projects:
             for execroot_rel in self.get_execroot_rel_paths(proj):
                 ret[execroot_rel] = self.async_get_source_date_epoch(proj)
         return ret
@@ -354,7 +360,7 @@ class Stamp(object):
         if shutil.which("git"):
             args = [
                 "git", "-C",
-                rel_path.resolve(), "log", "-1", "--pretty=%ct"
+                str(rel_path.resolve()), "log", "-1", "--pretty=%ct"
             ]
             popen = subprocess.Popen(args, text=True, stdout=subprocess.PIPE)
             return PathPopen(rel_path, popen)
