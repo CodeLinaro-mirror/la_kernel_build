@@ -218,6 +218,12 @@ def collect(popen_obj: subprocess.Popen) -> str:
 class Stamp(object):
 
     def __init__(self):
+        git_program = shutil.which("git")
+        if git_program:
+            self.git_program = pathlib.Path(git_program)
+        else:
+            self.git_program = None
+
         self.ignore_missing_projects = os.environ.get(
             "KLEAF_IGNORE_MISSING_PROJECTS") == "true"
 
@@ -359,9 +365,9 @@ class Stamp(object):
         )) is not None:
             return PresetResult(rel_path, f"{source_date_epoch}")
 
-        if shutil.which("git"):
+        if self.git_program:
             args = [
-                "git", "-C",
+                str(self.git_program), "-C",
                 str(rel_path.resolve()), "log", "-1", "--pretty=%ct"
             ]
             popen = subprocess.Popen(args, text=True, stdout=subprocess.PIPE)
