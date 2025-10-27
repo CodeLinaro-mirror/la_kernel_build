@@ -627,7 +627,10 @@ class BazelWrapper(KleafHelpPrinter):
                 override_module_path.relative_to(self.workspace_dir))
         # dittosuite is a special dependency that is not available in
         # any registry, hence for docs generation keep it's override.
-        docs_override = override_module_path if override_module == "dittosuite" else ""
+        docs_override = override_module_path if override_module in (
+            "dittosuite",
+            "gbl",
+         ) else ""
         bazelrc.write(textwrap.dedent(f"""\
             common --override_module={override_module}={override_module_path}
             common:docs --override_module={override_module}={docs_override}
