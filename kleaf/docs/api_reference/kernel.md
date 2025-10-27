@@ -56,7 +56,7 @@ Build `boot` image.
 | <a id="boot_image-header_version"></a>header_version |  Boot image header version.<br><br>If unspecified, falls back to the value of BOOT_IMAGE_HEADER_VERSION in build configs. If BOOT_IMAGE_HEADER_VERSION is not set, defaults to 3.   | Integer | optional |  `0`  |
 | <a id="boot_image-kernel_binary"></a>kernel_binary |  The kernel binary to use, e.g. Image.lz4.<br><br>This can be extracted from the [`kernel_build()`](#kernel_build) with a [`kernel_build_output()`](#kernel_build_output) rule.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="boot_image-kernel_build"></a>kernel_build |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="boot_image-mkbootimg"></a>mkbootimg |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@kleaf//tools/mkbootimg"`  |
+| <a id="boot_image-mkbootimg"></a>mkbootimg |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@kleaf//build/kernel:mkbootimg"`  |
 
 
 <a id="checkpatch"></a>
@@ -461,7 +461,7 @@ gki_artifacts(<a href="#gki_artifacts-name">name</a>, <a href="#gki_artifacts-ar
 | <a id="gki_artifacts-boot_img_sizes"></a>boot_img_sizes |  A dictionary, with key is the compression algorithm, and value is the size of the boot image.<br><br>For example: <pre><code>{&#10;    "":    str(64 * 1024 * 1024), # For Image and boot.img&#10;    "lz4": str(64 * 1024 * 1024), # For Image.lz4 and boot-lz4.img&#10;}</code></pre>   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 | <a id="gki_artifacts-gki_kernel_cmdline"></a>gki_kernel_cmdline |  `GKI_KERNEL_CMDLINE`.   | String | optional |  `""`  |
 | <a id="gki_artifacts-kernel_build"></a>kernel_build |  The [`kernel_build`](kernel.md#kernel_build) that provides all `Image` and `Image.*`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
-| <a id="gki_artifacts-mkbootimg"></a>mkbootimg |  path to the `mkbootimg` tool; `MKBOOTIMG_PATH`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@kleaf//prebuilts/kernel-build-tools:mkbootimg"`  |
+| <a id="gki_artifacts-mkbootimg"></a>mkbootimg |  path to the `mkbootimg` tool; `MKBOOTIMG_PATH`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@kleaf//build/kernel:mkbootimg"`  |
 
 
 <a id="gki_artifacts_prebuilts"></a>
@@ -794,9 +794,9 @@ Generate an SPDX SBOM for kernels.
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="kernel_sbom-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="kernel_sbom-srcs"></a>srcs |  List of [kernel_build](#kernel_build) and [kernel_module](#kernel_module) targets   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
+| <a id="kernel_sbom-srcs"></a>srcs |  List of [kernel_module](#kernel_module) targets   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="kernel_sbom-out"></a>out |  The output SPDX JSON file name.   | String | optional |  `"kernel_sbom.spdx.json"`  |
-| <a id="kernel_sbom-kernel_build"></a>kernel_build |  **DEPRECATED**; use `srcs` instead. The [`kernel_build()`](#kernel_build) target.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="kernel_sbom-kernel_build"></a>kernel_build |  The [`kernel_build()`](#kernel_build) target.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
 <a id="kernel_unstripped_modules_archive"></a>
@@ -1039,7 +1039,7 @@ Build `vendor_boot` or `vendor_kernel_boot` image.
 | <a id="vendor_boot_image-initramfs_vendor_ramdisk_fragment_name"></a>initramfs_vendor_ramdisk_fragment_name |  If `initramfs` is specified, then build the .ko and depmod files as a standalone vendor ramdisk fragment named as the given string.   | String | optional |  `""`  |
 | <a id="vendor_boot_image-kernel_build"></a>kernel_build |  The [`kernel_build`](#kernel_build).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="vendor_boot_image-kernel_vendor_cmdline"></a>kernel_vendor_cmdline |  string of kernel parameters for vendor boot image   | String | optional |  `""`  |
-| <a id="vendor_boot_image-mkbootimg"></a>mkbootimg |  mkbootimg tool which builds boot.img. NOTE: This overrides `MKBOOTIMG_PATH`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@kleaf//prebuilts/kernel-build-tools:mkbootimg"`  |
+| <a id="vendor_boot_image-mkbootimg"></a>mkbootimg |  mkbootimg tool which builds boot.img. NOTE: This overrides `MKBOOTIMG_PATH`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@kleaf//build/kernel:mkbootimg"`  |
 | <a id="vendor_boot_image-ramdisk_compression"></a>ramdisk_compression |  If provided it specfies the format used for any ramdisks generated.If not provided a fallback value from build.config is used.   | String | optional |  `""`  |
 | <a id="vendor_boot_image-ramdisk_compression_args"></a>ramdisk_compression_args |  Command line arguments passed only to lz4 command to control compression level.   | String | optional |  `""`  |
 | <a id="vendor_boot_image-unpack_ramdisk"></a>unpack_ramdisk |  When false it skips unpacking the vendor ramdisk and copy it as is, without modifications, into the boot image. Also skip the mkbootfs step.<br><br>Unlike `kernel_images()`, `unpack_ramdisk` must be specified explicitly to clarify the intent.   | Boolean | required |  |
@@ -2000,7 +2000,7 @@ For details, see
 | <a id="kernel_images-build_dtbo"></a>build_dtbo |  Whether to build dtbo image. Keep this in sync with `BUILD_DTBO_IMG`.<br><br>If `dtbo_srcs` is non-empty, `build_dtbo` is `True` by default. Otherwise it is `False` by default.   |  `None` |
 | <a id="kernel_images-dtbo_srcs"></a>dtbo_srcs |  list of `*.dtbo` files used to package the `dtbo.img`. Keep this in sync with `MKDTIMG_DTBOS`; see example below.<br><br>If `dtbo_srcs` is non-empty, `build_dtbo` must not be explicitly set to `False`.<br><br>Example: <pre><code>kernel_build(&#10;    name = "tuna_kernel",&#10;    outs = [&#10;        "path/to/foo.dtbo",&#10;        "path/to/bar.dtbo",&#10;    ],&#10;)&#10;kernel_images(&#10;    name = "tuna_images",&#10;    kernel_build = ":tuna_kernel",&#10;    dtbo_srcs = [&#10;        ":tuna_kernel/path/to/foo.dtbo",&#10;        ":tuna_kernel/path/to/bar.dtbo",&#10;    ]&#10;)</code></pre>   |  `None` |
 | <a id="kernel_images-dtbo_config"></a>dtbo_config |  a config file to create dtbo image by cfg_create command.   |  `None` |
-| <a id="kernel_images-mkbootimg"></a>mkbootimg |  Path to the mkbootimg tool which builds boot.img. Only used if `build_boot`. If `None`, default to `//prebuilts/kernel-build-tools:mkbootimg`. NOTE: This overrides `MKBOOTIMG_PATH`.   |  `None` |
+| <a id="kernel_images-mkbootimg"></a>mkbootimg |  Path to the mkbootimg tool which builds boot.img. Only used if `build_boot`. If `None`, default to `//build/kernel:mkbootimg`. NOTE: This overrides `MKBOOTIMG_PATH`.   |  `None` |
 | <a id="kernel_images-deps"></a>deps |  Additional dependencies to build images.<br><br>This must include the following: - For `initramfs`:   - The file specified by `MODULES_LIST`   - The file specified by `MODULES_BLOCKLIST`, if `MODULES_BLOCKLIST` is set   - The file containing the list of modules needed for booting into recovery.   - The file containing the list of modules needed for booting into charger mode. - For `vendor_dlkm` image:   - The file specified by `VENDOR_DLKM_MODULES_LIST`   - The file specified by `VENDOR_DLKM_MODULES_BLOCKLIST`, if set   - The file specified by `VENDOR_DLKM_PROPS`, if set   - The file specified by `selinux_fc` in `VENDOR_DLKM_PROPS`, if set   |  `None` |
 | <a id="kernel_images-boot_image_outs"></a>boot_image_outs |  A list of output files that will be installed to `DIST_DIR` when `build_boot_images` in `build/kernel/build_utils.sh` is executed.<br><br>You may leave out `vendor_boot.img` from the list. It is automatically added when `build_vendor_boot = True`.<br><br>If `build_boot` is equal to `False`, the default is empty.<br><br>If `build_boot` is equal to `True`, the default list assumes the following: - `BOOT_IMAGE_FILENAME` is not set (which takes default value `boot.img`), or is set to   `"boot.img"` - `vendor_boot.img` if `build_vendor_boot` - `RAMDISK_EXT=lz4`. Is used when `ramdisk_compression`(see below) is not specified.   - The list contains `ramdisk.<ramdisk_ext>` which means it assumes `build_boot_images`     generates this file. See `build_utils.sh` on conditions for when it is actually     generated. - if `build_vendor_boot`, it assumes `VENDOR_BOOTCONFIG` is set and   `BOOT_IMAGE_HEADER_VERSION >= 4`, which creates `vendor-bootconfig.img` to contain   `VENDOR_BOOTCONFIG` . - The list contains `dtb.img`   |  `None` |
 | <a id="kernel_images-modules_list"></a>modules_list |  A file containing list of modules to use for `vendor_boot.modules.load`.   |  `None` |
