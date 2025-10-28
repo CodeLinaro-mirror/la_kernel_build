@@ -16,6 +16,14 @@
 
 visibility("//build/kernel/kleaf/...")
 
+CcToolInfo = provider(
+    doc = "Represents a tool from the CC toolchain.",
+    fields = {
+        "readelf_path": "Path to the readelf tool",
+        "all_files": "All [File](https://bazel.build/rules/lib/File]s from the CC toolchain",
+    },
+)
+
 WrittenDepsetInfo = provider(
     doc = "Describes a depset written to a file",
     fields = {
