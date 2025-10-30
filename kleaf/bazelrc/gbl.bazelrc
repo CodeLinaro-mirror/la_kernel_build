@@ -3,7 +3,6 @@ common:gbl --extra_toolchains=@gbl//toolchain:all
 test:gbl  --test_output=errors
 
 common:gbl --incompatible_autoload_externally=-@rules_python,-@rules_shell,-@rules_android,-@rules_java,-@protobuf,-@com_google_protobuf
-common:gbl --noincompatible_disallow_empty_glob
 common:gbl -c opt
 common:gbl --override_module=gbl=%workspace%/bootable/libbootloader/gbl
 common:gbl --override_module=apple_support=%workspace%/bootable/libbootloader/gbl/fake_modules/apple_support
