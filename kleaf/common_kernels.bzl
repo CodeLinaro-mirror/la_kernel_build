@@ -414,7 +414,7 @@ WARNING: common_kernels(modules_superset=) is not set for {}.
         name + "_modules_install",
         # BUILD_GKI_CERTIFICATION_TOOLS=1 for all kernel_build defined here.
         Label("//build/kernel:gki_certification_tools"),
-        "build.config.constants",
+        "bazel/constants.scl",
         Label("//build/kernel:init_ddk_zip"),
     ]
 

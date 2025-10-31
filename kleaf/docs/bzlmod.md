@@ -23,7 +23,7 @@ Set up your repo manifest to conform with the following filesystem layout.
     |- build/
     |    `- kernel/
     |- common/
-    |    `- build.config.constants              # Note 2
+    |    `- bazel/constants.scl              # Note 2
     `- external/
          |- bazelbuild-bazel-central-registry
          `- <other external repositories>       # Note 3
@@ -39,8 +39,8 @@ See
 [hybrid mode for gradual migration](https://bazel.build/external/migration#hybrid-mode)
 for details.
 
-**Note 2**: If `build.config.constants` exists elsewhere other than `common/`,
-create the symlink `common/build.config.constants` to the file. This may be
+**Note 2**: If `bazel/constants.scl` exists elsewhere other than `common/`,
+create the symlink `common/bazel/constants.scl` to the file. This may be
 done with `<linkfile>` in your repo manifest.
 
 **Note 3**: A list of external repositories are required for bzlmod to work.

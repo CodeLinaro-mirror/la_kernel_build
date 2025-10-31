@@ -499,16 +499,15 @@ class KleafProjectSetter:
             return
         self._extract_headers_archive(self.prebuilts_dir, self.kleaf_repo)
 
-        build_config_constants = self.prebuilts_dir / "build.config.constants"
-        if not build_config_constants.is_file():
+        constants_scl = self.prebuilts_dir / "constants.scl"
+        if not constants_scl.is_file():
             logging.warning(
-                "%s is not a file, skip copying", build_config_constants
+                "%s is not a file, skip copying", constants_scl
             )
             return
-        shutil.copy(
-            build_config_constants,
-            self.kleaf_repo / "common/build.config.constants",
-        )
+        dest_constants_scl = self.kleaf_repo / "common/bazel/constants.scl"
+        dest_constants_scl.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(constants_scl, dest_constants_scl)
         if not (self.kleaf_repo / "common/BUILD.bazel").is_file():
             (self.kleaf_repo / "common/BUILD.bazel").write_text("")
 
