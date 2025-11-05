@@ -1251,18 +1251,16 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
 
     def _setup_constants(self, branch, kmi_generation):
         """Writes BRANCH and KMI_GENERATION to build configs."""
-        build_config_constants_path = f"{self._common()}/build.config.constants"
-        build_config_common_path = f"{self._common()}/build.config.common"
+        path = f"{self._common()}/build.config.constants"
 
-        for path in (build_config_constants_path, build_config_common_path):
-            self.restore_file_after_test(path)
-            self.filter_lines(path, lambda x: not x.startswith("BRANCH") and
-                              not x.startswith("KMI_GENERATION"))
-            with open(path, "a") as f:
-                f.write(textwrap.dedent(f"""\
-                        BRANCH={branch}
-                        KMI_GENERATION={kmi_generation}
-                    """))
+        self.restore_file_after_test(path)
+        self.filter_lines(path, lambda x: not x.startswith("BRANCH") and
+                            not x.startswith("KMI_GENERATION"))
+        with open(path, "a") as f:
+            f.write(textwrap.dedent(f"""\
+                    BRANCH={branch}
+                    KMI_GENERATION={kmi_generation}
+                """))
 
     def _setup_mainline(self):
         self._setup_constants(branch="android-mainline", kmi_generation="")
