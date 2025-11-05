@@ -1091,6 +1091,7 @@ def _get_trim_post_defconfig_fragment_target(
             Label("//build/kernel/kleaf:kasan_is_true"): False,
             Label("//build/kernel/kleaf:kcsan_is_true"): False,
             Label("//build/kernel/kleaf:kgdb_is_true"): False,
+            Label("//build/kernel/kleaf:gdb_is_true"): False,
             Label("//build/kernel/kleaf:livepatch_is_true"): False,
             "//conditions:default": None,
         }),
