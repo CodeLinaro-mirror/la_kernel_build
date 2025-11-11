@@ -709,6 +709,19 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
+# Similar to --kgdb but only enables CONFIG_GDB_SCRIPTS.
+bool_flag(
+    name = "gdb",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "gdb_is_true",
+    flag_values = {":gdb": "1"},
+    visibility = ["//visibility:public"],
+)
+
 bool_flag(
     name = "use_prebuilt_gki",
     build_setting_default = False,
