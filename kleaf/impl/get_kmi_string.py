@@ -93,8 +93,13 @@ def get_kmi_string(kernel_release: str, keep_sublevel: bool) -> str:
     if "mainline" in kernel_release.split("-"):
         return f"{ver_string}-mainline"
 
+    # b/460033340: This doesn't strictly follow
+    #   https://source.android.com/docs/core/architecture/kernel/gki-versioning
+    #   because it also parses -rc<N>. This is so that for RCs, the
+    #   get_kmi_string script still provides a sensible value for comparison in
+    #   kernel_build.bzl.
     kmi_pat = re.compile(
-        r"^(\d+)\.(\d+)\.(\d+)-(?P<release>android\d+)-(?P<gen>\d+)(?:-.*)?$")
+        r"^(\d+)\.(\d+)\.(\d+)(?:-rc\d+)?-(?P<release>android\d+)-(?P<gen>\d+)(?:-.*)?$")
     kmi_mo = kmi_pat.match(kernel_release)
     if not kmi_mo:
         logging.warning("Unrecognized kernel release %s. This is not a valid GKI version. See "
