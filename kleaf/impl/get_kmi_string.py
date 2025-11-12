@@ -77,7 +77,7 @@ def get_kmi_string(kernel_release: str, keep_sublevel: bool) -> str:
     ver_mo = ver_pat.match(kernel_release)
     if not ver_mo:
         logging.error("Unrecognized kernel release %s. This is not a valid GKI version. See "
-                      "https://source.android.com/docs/core/architecture/kernel/gki-versioning."
+                      "https://source.android.com/docs/core/architecture/kernel/gki-versioning. "
                       "Check early warnings in the build log for details.",
                       kernel_release)
         sys.exit(1)
@@ -98,7 +98,7 @@ def get_kmi_string(kernel_release: str, keep_sublevel: bool) -> str:
     kmi_mo = kmi_pat.match(kernel_release)
     if not kmi_mo:
         logging.warning("Unrecognized kernel release %s. This is not a valid GKI version. See "
-                        "https://source.android.com/docs/core/architecture/kernel/gki-versioning."
+                        "https://source.android.com/docs/core/architecture/kernel/gki-versioning. "
                         "Check early warnings in the build log for details.",
                         kernel_release)
         return ver_string
