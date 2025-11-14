@@ -568,9 +568,8 @@ class BazelWrapper(KleafHelpPrinter):
 
         cache_dir_bazelrc = self.gen_bazelrc_dir / "cache_dir.bazelrc"
         with open(cache_dir_bazelrc, "w") as f:
-            # The label //build/... will be re-written by _transform_bazelrc_files.
             f.write(textwrap.dedent(f"""\
-                build --//build/kernel/kleaf:cache_dir={shlex.quote(str(self.known_args.cache_dir))}
+                build --@kleaf//build/kernel/kleaf:cache_dir={shlex.quote(str(self.known_args.cache_dir))}
             """))
         override_module_bazelrc = self.gen_bazelrc_dir / "override_module.bazelrc"
         with open(override_module_bazelrc, "w") as f:
@@ -691,41 +690,12 @@ class BazelWrapper(KleafHelpPrinter):
         """Given a list of bazelrc files, return startup options."""
         startup_options = []
         for old_path in bazelrc_files:
-            new_path = self._rewrite_bazelrc_file(old_path)
-            startup_options.append(f"--bazelrc={new_path}")
+            startup_options.append(f"--bazelrc={old_path}")
         return startup_options
-
-    def _rewrite_bazelrc_file(self, old_path: pathlib.Path) -> pathlib.Path:
-        """Given a bazelrc file, rewrite and return the path."""
-        if self._kleaf_repository_is_top_workspace():
-            # common case; Kleaf tooling is in main Bazel workspace
-            return old_path
-        with open(old_path) as old_file:
-            content = old_file.read()
-
-        # Rewrite //build to @<kleaf_repo_name>//build
-        content = content.replace(
-            "//build", f"{self._kleaf_repo_name()}//build")
-
-        new_path = self.gen_bazelrc_dir / old_path.name
-        os.makedirs(new_path.parent, exist_ok=True)
-        with open(new_path, "w") as new_file:
-            new_file.write(content)
-        return new_path
 
     def _kleaf_repository_is_top_workspace(self):
         """Returns true if the Kleaf repository is the top-level workspace @."""
         return self.workspace_dir == self.kleaf_repo_dir
-
-    def _kleaf_repo_name(self):
-        """Returns the name to the Kleaf repository."""
-        if self._kleaf_repository_is_top_workspace():
-            return "@"
-        # The main repository must refer to the Kleaf repository as @kleaf.
-        # TODO(b/276493276): Once we completely migrate to bzlmod, labels
-        # in bazelrc may be referred to as @kleaf//, then _rewrite_bazelrc_file
-        # may be deleted.
-        return f"@kleaf"
 
     def _kleaf_repo_rel(self):
         """Return root of the Kleaf repository relative to the top-level workspace.
