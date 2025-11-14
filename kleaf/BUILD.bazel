@@ -904,10 +904,22 @@ py_test(
     ],
 )
 
+py_test(
+    name = "bazelrc_writer_test",
+    srcs = [
+        "bazelrc_writer_test.py",
+    ],
+    deps = [
+        ":bazelrc_writer",
+        "@io_abseil_py//absl/testing:absltest",
+    ],
+)
+
 # Quick test on Kleaf static definitions and scripts, but not built artifacts
 test_suite(
     name = "quick_tests",
     tests = [
+        ":bazelrc_writer_test",
         ":check_declared_output_list_test",
         ":empty_test",
         "//build/kernel:init_ddk_test",
@@ -925,13 +937,19 @@ py_binary(
     name = "wrapper",
     srcs = [
         "bazel.py",
-        "bazelrc_writer.py",
         "kleaf_help.py",
     ],
     imports = ["."],
     main = "bazel.py",
     visibility = ["//build/kernel:__subpackages__"],
     deps = [
+        ":bazelrc_writer",
         "//build/kernel/kleaf/impl:default_host_tools",
     ],
+)
+
+py_library(
+    name = "bazelrc_writer",
+    srcs = ["bazelrc_writer.py"],
+    imports = ["."],
 )
