@@ -103,6 +103,14 @@ new_kleaf_local_repository(
     ],
 )
 
+kleaf_local_repository(
+    name = "prebuilt_rust",
+    path_candidates = [
+        "prebuilts/rust-toolchain/linux-x86",
+        "prebuilts/rust/linux-x86",
+    ],
+)
+
 # GBL deps, all should have mandatory=False
 
 # Hack for b/328465178

@@ -255,7 +255,7 @@ _get_rust_env = subrule(
 def _get_rust_tools(rust_toolchain_version):
     if not rust_toolchain_version:
         return []
-    rust_binaries = "//prebuilts/rust/linux-x86/%s:binaries" % rust_toolchain_version
+    rust_binaries = "@prebuilt_rust//%s:binaries" % rust_toolchain_version
 
     bindgen = "//prebuilts/clang-tools:linux-x86/bin/bindgen"
 
