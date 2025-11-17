@@ -21,6 +21,7 @@ DEFAULT_IMAGES = [
     "Image",
     "Image.lz4",
     "Image.gz",
+    "Image.zst",
 ]
 
 # List of output files from gki_artifacts()
