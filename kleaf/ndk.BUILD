@@ -19,6 +19,18 @@ _TRIPLES = [paths.basename(path) for path in glob(
     exclude_directories = 0,
 )]
 
+_LEVELS_FOR_TRIPLE = {
+    triple: [
+        int(paths.basename(path))
+        for path in glob(
+            ["toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/{}/*".format(triple)],
+            exclude_directories = 0,
+        )
+        if paths.basename(path).isdigit()
+    ]
+    for triple in _TRIPLES
+}
+
 _SYSROOT_TRIPLE_COMMON_FILES = [
     "libc.a",
     "libdl.a",
@@ -68,10 +80,20 @@ filegroup(
         ":sysroot_include",
     ],
     visibility = ["@kleaf_clang_toolchain//:__subpackages__"],
-) for triple in _TRIPLES for level in [
-    paths.basename(path)
-    for path in glob(
-        ["toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/{}/*".format(triple)],
-        exclude_directories = 0,
+) for triple in _TRIPLES for level in _LEVELS_FOR_TRIPLE[triple]]
+
+[
+    alias(
+        name = "sysroot_armv7a-linux-androideabi{}_files".format(level),
+        actual = "sysroot_arm-linux-androideabi{}_files".format(level),
+        visibility = ["@kleaf_clang_toolchain//:__subpackages__"],
     )
-]]
+    for level in _LEVELS_FOR_TRIPLE["arm-linux-androideabi"]
+    if "arm-linux-androideabi" in _TRIPLES and
+       "armv7a-linux-androideabi" not in _TRIPLES and
+       # Android 9, CDD-3.3.2-C-3-1
+       # If device implementations report the support of the armeabi ABI, they
+       # MUST also support armeabi-v7a and report its support, as armeabi is only for backwards
+       # compatibility with older apps.
+       level >= 29
+]
