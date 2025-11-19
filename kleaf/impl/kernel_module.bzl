@@ -410,6 +410,13 @@ def _kernel_module_impl(ctx):
         restore_out_dir_cmd = cache_dir_step.cmd,
     )
 
+    # Disable CLANG_AUTOFDO_PROFILE from the main kernel. That's the profile for the kernel
+    # image, not for the module, and the profile is not present anyway if we are building
+    # against prebuilts.
+    command += """
+        unset CLANG_AUTOFDO_PROFILE
+    """
+
     command += """
         # For DDK modules with all sources generated, {ext_mod}/ may not even exist. Create it.
         if [[ ! -d "{ext_mod}" ]]; then
