@@ -384,7 +384,7 @@ for EXT_MOD in ${EXT_MODULES}; do
 
     # Run the dist command passing in the output directory from Android build system
     ./tools/bazel --output_user_root="${DEFAULT_CACHE_DIR}" run "${build_flags[@]}" \
-      "$build_target" -- --dist_dir="${OUT_DIR}/${EXT_MOD_REL}"
+      "$build_target" -- --destdir="${OUT_DIR}/${EXT_MOD_REL}"
 
     # The Module.symvers file is named "<target>_<variant>_Modules.symvers, but other modules are
     # looking for just "Module.symvers". Concatenate any of them into one Module.symvers file.
