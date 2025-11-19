@@ -904,6 +904,7 @@ py_binary(
     name = "wrapper",
     srcs = [
         "bazel.py",
+        "bazel_rc_writer.py",
         "kleaf_help.py",
     ],
     imports = ["."],
