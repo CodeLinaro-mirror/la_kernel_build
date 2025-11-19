@@ -1,4 +1,4 @@
-# Copyright (C) 2022 The Android Open Source Project
+# Copyright (C) 2025 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,9 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# --config=stamp: Stamp the build.
-# See build/kernel/kleaf/docs/scmversion.md
+"""Helper rule to get the value of --stamp.
 
-build:stamp --stamp
+https://github.com/bazelbuild/bazel/issues/11164
+"""
 
-# See bazel.py for generated options
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+
+visibility("private")
+
+def _stamp_build_setting_impl(ctx):
+    return BuildSettingInfo(value = ctx.attr.value)
+
+stamp_build_setting = rule(
+    doc = "Helper to get the value of --stamp",
+    implementation = _stamp_build_setting_impl,
+    attrs = {
+        "value": attr.bool(
+            mandatory = True,
+        ),
+    },
+)

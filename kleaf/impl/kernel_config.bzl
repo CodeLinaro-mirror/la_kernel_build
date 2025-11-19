@@ -1265,7 +1265,7 @@ kernel_config = rule(
             default = "",
             values = ["disabled", "minimized", "match"],
         ),
-        "_config_is_stamp": attr.label(default = "//build/kernel/kleaf:config_stamp"),
+        "_stamp_value": attr.label(default = "//build/kernel/kleaf/impl:stamp_value"),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
         "_inherit_pre_defconfig_fragments_from_base_kernel": attr.label(default = "//build/kernel/kleaf:inherit_pre_defconfig_fragments_from_base_kernel"),
         "_inherit_post_defconfig_fragments_from_base_kernel": attr.label(default = "//build/kernel/kleaf:inherit_post_defconfig_fragments_from_base_kernel"),
