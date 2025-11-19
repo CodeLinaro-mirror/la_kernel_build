@@ -527,7 +527,13 @@ class BazelWrapper(KleafHelpPrinter):
         self.bazel_rc_writer = BazelRcWriter(
             self.absolute_out_dir / "bazel/bazelrc")
 
-        self._add_bazelrc_paths([
+        with self.bazel_rc_writer.open() as f:
+            self._generate_bazelrc(f)
+            self.transformed_startup_options.append(
+                f"--bazelrc={f.name}")
+
+    def _generate_bazelrc(self, f: TextIO):
+        f.write("".join("import {}\n".format(e) for e in [
             # Add support for various configs
             # Do not sort, the order here might matter.
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/ants.bazelrc",
@@ -537,62 +543,50 @@ class BazelWrapper(KleafHelpPrinter):
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/rbe.bazelrc",
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/silent.bazelrc",
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/gbl.bazelrc",
-        ])
-
-        self._add_bazelrc_paths([
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/stamp.bazelrc",
-        ])
-        with self.bazel_rc_writer.open("stamp_extra.bazelrc") as f:
-            workspace_status_common_sh = self._kleaf_repo_rel() / \
-                "build/kernel/kleaf/workspace_status_common.sh"
-            workspace_status_ci_sh = self._kleaf_repo_rel() / \
-                "build/kernel/kleaf/workspace_status_ci.sh"
-            workspace_status_sh = self._kleaf_repo_rel() / \
-                "build/kernel/kleaf/workspace_status.sh"
-            f.write(textwrap.dedent(f"""\
-                # By default, do not embed scmversion.
-                build --workspace_status_command={shlex.quote(str(workspace_status_common_sh))}
-                # With --config=stamp, embed scmversion.
-                build:stamp --workspace_status_command={shlex.quote(str(workspace_status_sh))}
-                # With --config=android_ci, embed scmversion, assuming git may not be present.
-                build:android_ci --workspace_status_command={shlex.quote(str(workspace_status_ci_sh))}
-            """))
-            self._add_bazelrc_paths([f.name])
+        ]))
 
-        self._add_bazelrc_paths([
+        workspace_status_common_sh = self._kleaf_repo_rel() / \
+            "build/kernel/kleaf/workspace_status_common.sh"
+        workspace_status_ci_sh = self._kleaf_repo_rel() / \
+            "build/kernel/kleaf/workspace_status_ci.sh"
+        workspace_status_sh = self._kleaf_repo_rel() / \
+            "build/kernel/kleaf/workspace_status.sh"
+        f.write(textwrap.dedent(f"""\
+            # By default, do not embed scmversion.
+            build --workspace_status_command={shlex.quote(str(workspace_status_common_sh))}
+            # With --config=stamp, embed scmversion.
+            build:stamp --workspace_status_command={shlex.quote(str(workspace_status_sh))}
+            # With --config=android_ci, embed scmversion, assuming git may not be present.
+            build:android_ci --workspace_status_command={shlex.quote(str(workspace_status_ci_sh))}
+        """))
+
+        f.write("".join("import {}\n".format(e) for e in [
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/release.bazelrc",
+
             self.kleaf_repo_dir / FLAGS_BAZEL_RC,
-        ])
+        ]))
 
-        with self.bazel_rc_writer.open("cache_dir.bazelrc") as f:
-            f.write(textwrap.dedent(f"""\
-                build --@kleaf//build/kernel/kleaf:cache_dir={shlex.quote(str(self.known_args.cache_dir))}
-            """))
-            self._add_bazelrc_paths([f.name])
+        f.write(textwrap.dedent(f"""\
+            build --@kleaf//build/kernel/kleaf:cache_dir={shlex.quote(str(self.known_args.cache_dir))}
 
-        with self.bazel_rc_writer.open("override_module.bazelrc") as f:
-            f.write(textwrap.dedent("""\
-                # Override modules to fake path by default.
-                # When building docs, allow to fetch from original URL.
+            # Override modules to fake path by default.
+            # When building docs, allow to fetch from original URL.
             """))
-            fake_module_dir = self.kleaf_repo_dir / "build/kernel/kleaf/bzlmod/fake_modules"
-            for override_module_path in fake_module_dir.glob("*/"):
+
+        fake_module_dir = self.kleaf_repo_dir / "build/kernel/kleaf/bzlmod/fake_modules"
+        for override_module_path in fake_module_dir.glob("*/"):
+            self._override_module(override_module_path, f)
+
+        dev_fake_module_dir = self.kleaf_repo_dir / "build/kernel/kleaf/bzlmod/dev_fake_modules"
+        if self._kleaf_repository_is_top_workspace():
+            for override_module_path in dev_fake_module_dir.glob("*/"):
                 self._override_module(override_module_path, f)
 
-            dev_fake_module_dir = self.kleaf_repo_dir / "build/kernel/kleaf/bzlmod/dev_fake_modules"
-            if self._kleaf_repository_is_top_workspace():
-                for override_module_path in dev_fake_module_dir.glob("*/"):
-                    self._override_module(override_module_path, f)
-            self._add_bazelrc_paths([f.name])
-
         if self.known_args.hermetic_actions:
-            with self.bazel_rc_writer.open("hermetic_actions.bazelrc"):
-                f.write(textwrap.dedent("""\
-                    build --action_env=PATH
-                """))
-                self._add_bazelrc_paths([f.name])
+            f.write(f'import {self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/hermetic_actions.bazelrc"}')
 
-        self._add_bazelrc_paths([
+        f.write("".join("import {}\n".format(e) for e in [
             # Toolchains and platforms
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/hermetic_cc.bazelrc",
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/platforms.bazelrc",
@@ -606,9 +600,8 @@ class BazelWrapper(KleafHelpPrinter):
 
             # Canary goes to the end because it uses flags / configs from elsewhere.
             self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/canary.bazelrc",
-
             self.kleaf_repo_dir / "build/kernel/kleaf/common.bazelrc",
-        ])
+        ]))
 
     def _override_module(self, override_module_path: pathlib.Path, bazelrc: TextIO):
         override_module = override_module_path.name
@@ -676,12 +669,6 @@ class BazelWrapper(KleafHelpPrinter):
             ["info"] +
             modified_command_options +
             ["output_base"], text=True).strip()
-
-    def _add_bazelrc_paths(self, bazelrc_files: list[pathlib.Path | str]):
-        """Adds bazelrc files to startup options."""
-        self.transformed_startup_options += [
-            f"--bazelrc={path}" for path in bazelrc_files
-        ]
 
     def _kleaf_repository_is_top_workspace(self):
         """Returns true if the Kleaf repository is the top-level workspace @."""
