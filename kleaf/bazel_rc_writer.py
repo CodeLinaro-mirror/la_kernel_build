@@ -27,8 +27,8 @@ class BazelRcWriter(object):
     def __post_init__(self):
         self.gen_bazelrc_dir.mkdir(parents=True, exist_ok=True)
 
-    def open(self, subpath: pathlib.Path | str) -> TextIO:
-        f = self.gen_bazelrc_dir / subpath
+    def open(self) -> TextIO:
+        f = self.gen_bazelrc_dir / "generated.bazelrc"
         f.parent.mkdir(parents=True, exist_ok=True)
         return f.open("w")
 
