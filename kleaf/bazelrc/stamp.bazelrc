@@ -16,6 +16,6 @@
 # See build/kernel/kleaf/docs/scmversion.md
 
 # Let rules know what configs we are using now
-build:stamp --//build/kernel/kleaf:config_stamp
+build:stamp --@kleaf//build/kernel/kleaf:config_stamp
 
 # See bazel.py for generated options

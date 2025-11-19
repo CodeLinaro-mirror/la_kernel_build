@@ -16,7 +16,7 @@
 # See build/kernel/kleaf/docs/release.md
 
 # Let rules know what configs we are using now
-build:release --//build/kernel/kleaf:config_release
+build:release --@kleaf//build/kernel/kleaf:config_release
 
 # Embed scmversion
 build:release --config=stamp

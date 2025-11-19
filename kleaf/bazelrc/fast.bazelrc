@@ -16,7 +16,7 @@
 # See build/kernel/kleaf/docs/fast.md
 
 # Let rules know what configs we are using now
-build:fast --//build/kernel/kleaf:config_fast
+build:fast --@kleaf//build/kernel/kleaf:config_fast
 
 # Inherit from local: reduce sandboxes.
 build:fast --config=local

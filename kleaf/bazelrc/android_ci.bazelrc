@@ -18,7 +18,7 @@ common:android_ci --noshow_progress
 
 # Embed scmversion
 # Don't directly use --config=stamp here to avoid conflicting --workspace_status_command
-build:android_ci --//build/kernel/kleaf:config_stamp
+build:android_ci --@kleaf//build/kernel/kleaf:config_stamp
 
 # Upload test results
 test:android_ci --config=ants
