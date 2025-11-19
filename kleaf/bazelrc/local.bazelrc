@@ -16,7 +16,7 @@
 # See build/kernel/kleaf/docs/sandbox.md
 
 # Let rules know what configs we are using now
-build:local --//build/kernel/kleaf:config_local
+build:local --@kleaf//build/kernel/kleaf:config_local
 
 # See kernel_module() for details.
 build --strategy=KernelModuleProcessWrapperSandbox=processwrapper-sandbox

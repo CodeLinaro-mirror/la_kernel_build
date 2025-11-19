@@ -8,9 +8,9 @@ build:remote --jobs=50
 # The toolchain container used for execution is defined in the target indicated
 # by "extra_execution_platforms", "host_platform" and "platforms".
 # More about platforms: https://docs.bazel.build/versions/master/platforms.html
-build:remote --extra_execution_platforms=//build/kernel/kleaf:rbe_platform
-build:remote --host_platform=//build/kernel/kleaf:rbe_platform
-build:remote --platforms=//build/kernel/kleaf:rbe_platform
+build:remote --extra_execution_platforms=@kleaf//build/kernel/kleaf:rbe_platform
+build:remote --host_platform=@kleaf//build/kernel/kleaf:rbe_platform
+build:remote --platforms=@kleaf//build/kernel/kleaf:rbe_platform
 
 # Starting with Bazel 0.27.0 strategies do not need to be explicitly
 # defined. See https://github.com/bazelbuild/bazel/issues/7480
@@ -33,4 +33,4 @@ build:remote --remote_timeout=3600
 build:remote --google_default_credentials=true
 
 # Let rules know what configs we are using now
-build:remote --//build/kernel/kleaf:config_remote
+build:remote --@kleaf//build/kernel/kleaf:config_remote
