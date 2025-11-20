@@ -682,8 +682,8 @@ class KleafIntegrationTestShard2(KleafIntegrationTestBase):
         """Test --user_clang_toolchain option."""
 
         clang_version = None
-        build_config_constants = f"{self._common()}/build.config.constants"
-        with open(build_config_constants) as f:
+        constants_scl = f"{self._common()}/bazel/constants.scl"
+        with open(constants_scl) as f:
             for line in f.read().splitlines():
                 if line.startswith("CLANG_VERSION="):
                     clang_version = line.strip().split("=", 2)[1]
@@ -1224,12 +1224,12 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
 
     def test_rustavailable(self):
         """Tests that --output_groups rustavailable works."""
-        build_config_constants_path = (
-            pathlib.Path(self._common()) / "build.config.constants")
-        self.restore_file_after_test(build_config_constants_path)
-        lines = build_config_constants_path.read_text().splitlines()
+        constants_scl_path = (
+            pathlib.Path(self._common()) / "bazel/constants.scl")
+        self.restore_file_after_test(constants_scl_path)
+        lines = constants_scl_path.read_text().splitlines()
         lines = [line for line in lines if not line.startswith("RUSTC_VERSION")]
-        build_config_constants_path.write_text("\n".join(lines))
+        constants_scl_path.write_text("\n".join(lines))
 
         errors = self._check_errors("build", [
             f"//{self._common()}:kernel_aarch64",
@@ -1251,7 +1251,7 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
 
     def _setup_constants(self, branch, kmi_generation):
         """Writes BRANCH and KMI_GENERATION to build configs."""
-        path = f"{self._common()}/build.config.constants"
+        path = f"{self._common()}/bazel/constants.scl"
 
         self.restore_file_after_test(path)
         self.filter_lines(path, lambda x: not x.startswith("BRANCH") and

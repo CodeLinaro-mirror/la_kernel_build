@@ -636,7 +636,7 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
-# Autoload build.config.constants for kernel_build().
+# Autoload build config constants for kernel_build().
 # always (default): Always load and check.
 # if_unset: load only when kernel_build(build_config=) is not set.
 string_flag(
