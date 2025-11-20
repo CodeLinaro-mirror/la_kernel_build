@@ -59,6 +59,11 @@ def load_arguments() -> dict[str, Any]:
         "--bid",
         help="Build ID. If specified, it is used to skip the check on post-submit.",
     )
+    parser.add_argument(
+        "--change_info",
+        type=_require_absolute_path,
+        help="Path to change-info file providing complete change information.",
+    )
     return parser.parse_known_args()
 
 
@@ -68,6 +73,11 @@ def _resolve_against_workspace_root(value: str) -> pathlib.Path:
         return path
     return pathlib.Path(os.environ["BUILD_WORKSPACE_DIRECTORY"]) / path
 
+def _require_absolute_path(p: str | pathlib.Path) -> pathlib.Path:
+    p = pathlib.Path(p)
+    if not p.is_absolute():
+        raise argparse.ArgumentTypeError("need to specify an absolute path")
+    return p
 
 def _log_command(args):
     quoted = [shlex.quote(str(arg)) for arg in args]
@@ -123,7 +133,11 @@ def main(
         checkpatch_args: list[str],
         dist_dir: pathlib.Path,
         bid: str | None,
+        change_info: pathlib.Path | None,
 ) -> int:
+    # TODO: b/462238342 - Use change-info file.
+    del change_info
+
     if bid:
         # Skip checkpatch for postsubmit (b/35390488).
         if not bid.startswith("P"):
