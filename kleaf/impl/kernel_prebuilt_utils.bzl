@@ -121,10 +121,10 @@ def _common_ci_target_config(
                 "mandatory": True,
                 "remote_filename_fmt": ddk_headers_archive_name,
             },
-            "build.config.constants": {
+            "constants.scl": {
                 "target_suffix": "init_ddk_files",
                 "mandatory": True,
-                "remote_filename_fmt": "build.config.constants",
+                "remote_filename_fmt": "constants.scl",
             },
             "manifest.xml": {
                 "target_suffix": "init_ddk_files",

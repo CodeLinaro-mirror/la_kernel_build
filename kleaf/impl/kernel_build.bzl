@@ -164,7 +164,7 @@ def kernel_build(
         build_config: Label of the build.config file, e.g. `"build.config.gki.aarch64"`.
 
             If it contains no files, the list of constants in `@kernel_toolchain_info` is used. This
-            is `//common:build.config.constants` by default, unless otherwise specified.
+            is `//common:bazel/constants.scl` by default, unless otherwise specified.
 
             If it contains no files, [`makefile`](#kernel_build-makefile) must be set as the anchor
             to the directory to run `make`.

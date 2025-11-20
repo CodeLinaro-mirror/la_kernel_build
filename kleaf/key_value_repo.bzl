@@ -41,7 +41,7 @@ by '='. Keys and values are stripped, hence whitespace characters around the
 separator are allowed.
 
 Example:
-Given a file `common/build.config.constants` with content
+Given a file `common/bazel/constants.scl` with content
 ```
     CLANG_VERSION=r433403
 ```
@@ -52,7 +52,7 @@ load("//build/kernel/kleaf:key_value_repo.bzl", "key_value_repo")
 
 key_value_repo(
     name = "kernel_toolchain_info",
-    srcs = ["//common:build.config.constants"],
+    srcs = ["//common:bazel/constants.scl"],
 )
 ```
 
