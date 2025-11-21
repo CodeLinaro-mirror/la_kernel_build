@@ -49,10 +49,19 @@ def split_array(array, cells):
 	return frozenset(tuple(array[i*cells:(i*cells)+cells]) for i in range(len(array) // cells))
 
 class DeviceTreeInfo(object):
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 	def __init__(self, plat, board, pmic):
+=======
+	def __init__(self, plat, board, pmic, oem=None, sku=None):
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 		self.plat_id = plat
 		self.board_id = board
 		self.pmic_id = pmic
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
+=======
+		self.oem_id = oem
+		self.softsku_id = sku
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 
 	def __str__(self):
 		s = ""
@@ -62,40 +71,63 @@ class DeviceTreeInfo(object):
 			s += " board-id = <{}>;".format(" ".join(map(str, self.board_id)))
 		if self.pmic_id is not None:
 			s += " pmic-id = <{}>;".format(" ".join(map(str, self.pmic_id)))
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
+=======
+		if self.oem_id is not None:
+			s += " oem-id = <{}>;".format(" ".join(map(str, self.oem_id)))
+		if self.softsku_id is not None:
+			s += " softsku-id = <{}>;".format(" ".join(map(str, self.softsku_id)))
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 		return s.strip()
 
 	def __repr__(self):
 		return "<{} {}>".format(self.__class__.__name__, str(self))
 
 	def has_any_properties(self):
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 		return self.plat_id is not None or self.board_id is not None or self.pmic_id is not None
+=======
+		return self.plat_id is not None or self.board_id is not None or self.pmic_id is not None or self.oem_id is not None or self.softsku_id is not None
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 
 	def __sub__(self, other):
 		"""
-		This devicetree has plat, board, and pmic id described like this:
+		This devicetree has plat, board, pmic, and softsku id described like this:
 		msm-id = <A>, <B>
 		board-id = <c>, <d>
 		pmic-id = <0, 1>
+		softsku-id = <1, >
 
-		Other has plat, board, pmic are:
+		Other has plat, board, pmic, softsku are:
 		msm-id = <A>, <B>
 		board-id = <c>
 		pmic-id = <0>
+		softsku-id = <1>
 
 		(self - other) will split self into a set of devicetrees with different identifers
 		and meets the following requirements:
 		 - One of the devicetrees matches the IDs supported by other
 		 - The devices which self matches are still supported (through 1 or more extra devicetrees)
-		   by creating new devicetrees with different plat/board/pmic IDs
+		   by creating new devicetrees with different plat/board/pmic/softsku IDs
 		"""
 		assert self.plat_id is None or isinstance(self.plat_id, (set, frozenset))
 		assert self.board_id is None or isinstance(self.board_id, (set, frozenset))
 		assert self.pmic_id is None or isinstance(self.pmic_id, (set, frozenset))
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
+=======
+		assert self.oem_id is None or isinstance(self.oem_id, (set, frozenset))
+		assert self.softsku_id is None or isinstance(self.softsku_id, (set, frozenset))
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 		assert other in self
 
 		new_plat = other.plat_id is not None and self.plat_id != other.plat_id
 		new_board = other.board_id is not None and self.board_id != other.board_id
 		new_pmic = other.pmic_id is not None and self.pmic_id != other.pmic_id
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
+=======
+		new_oem = other.oem_id is not None and self.oem_id != other.oem_id
+		new_softsku = other.softsku_id is not None and self.softsku_id != other.softsku_id
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 
 		res = set()
 		# Create the devicetree that matches other exactly
@@ -106,13 +138,25 @@ class DeviceTreeInfo(object):
 			s.board_id = other.board_id
 		if new_pmic:
 			s.pmic_id = other.pmic_id
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
+=======
+		if new_oem:
+			s.oem_id = other.oem_id
+		if new_softsku:
+			s.softsku_id = other.softsku_id
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 		res.add(s)
 
 		# now create the other possibilities by removing any combination of
-		# other's plat, board, and/or pmic. Set logic (unique elemnts) handles
+		# other's plat, board, pmic, oem, and/or softsku. Set logic (unique elemnts) handles
 		# duplicate devicetrees IDs spit out by this loop
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 		for combo in combinations_with_replacement([True, False], 3):
 			if not any((c and n) for (c, n) in zip(combo, (new_plat, new_board, new_pmic))):
+=======
+		for combo in combinations_with_replacement([True, False], 5):
+			if not any((c and n) for (c, n) in zip(combo, (new_plat, new_board, new_pmic, new_oem, new_softsku))):
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 				continue
 			s = copy.deepcopy(self)
 			if combo[0] and new_plat:
@@ -121,16 +165,44 @@ class DeviceTreeInfo(object):
 				s.board_id -= other.board_id
 			if combo[2] and new_pmic:
 				s.pmic_id -= other.pmic_id
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
+=======
+			if combo[3] and new_oem:
+				s.oem_id -= other.oem_id
+			if combo[4] and new_softsku:
+				s.softsku_id -= other.softsku_id
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 			res.add(s)
 		return res
 
 	def __hash__(self):
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 		# Hash should only consider msm-id/board-id/pmic-id
 		return hash((self.plat_id, self.board_id, self.pmic_id))
+=======
+		# Hash should only consider msm-id/board-id/pmic-id/oem-id/softsku-id
+		def normalize(value):
+			if value is None:
+				return None
+			if isinstance(value, (set, frozenset)):
+				return tuple(sorted(value))
+			return value
+		return hash((
+			normalize(self.plat_id),
+			normalize(self.board_id),
+			normalize(self.pmic_id),
+			normalize(self.oem_id),
+			normalize(self.softsku_id),
+		))
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 
 	def __and__(self, other):
 		s = copy.deepcopy(self)
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 		for prop in ['plat_id', 'board_id', 'pmic_id']:
+=======
+		for prop in ['plat_id', 'board_id', 'pmic_id', 'oem_id', 'softsku_id']:
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 			if getattr(self, prop) is None or getattr(other, prop) is None:
 				setattr(s, prop, None)
 			else:
@@ -146,14 +218,22 @@ class DeviceTreeInfo(object):
 
 	def __eq__(self, other):
 		"""
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 		Checks whether other plat_id, board_id, pmic_id matches either identically
+=======
+		Checks whether other plat_id, board_id, pmic_id, oem_id, softsku_id matches either identically
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 		or because the property is none
 		"""
 		if not isinstance(other, DeviceTreeInfo):
 			return False
 		if not other.has_any_properties():
 			return False
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 		return all(map(lambda p: self._do_equivalent(other, p), ['plat_id', 'board_id', 'pmic_id']))
+=======
+		return all(map(lambda p: self._do_equivalent(other, p), ['plat_id', 'board_id', 'pmic_id', 'oem_id', 'softsku_id']))
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 
 
 	def _do_gt(self, other, property):
@@ -185,7 +265,11 @@ class DeviceTreeInfo(object):
 			return False
 		if not other.has_any_properties():
 			return False
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 		return all(map(lambda p: self._do_gt(other, p), ['plat_id', 'board_id', 'pmic_id']))
+=======
+		return all(map(lambda p: self._do_gt(other, p), ['plat_id', 'board_id', 'pmic_id', 'oem_id', 'softsku_id']))
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 
 
 	def _do_contains(self, other, property):
@@ -219,7 +303,11 @@ class DeviceTreeInfo(object):
 			return False
 		if not other.has_any_properties():
 			return False
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 		return all(map(lambda p: self._do_contains(other, p), ['plat_id', 'board_id', 'pmic_id']))
+=======
+		return all(map(lambda p: self._do_contains(other, p), ['plat_id', 'board_id', 'pmic_id', 'oem_id', 'softsku_id']))
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 
 class DeviceTree(DeviceTreeInfo):
 	def __init__(self, filename):
@@ -227,10 +315,25 @@ class DeviceTree(DeviceTreeInfo):
 		logging.debug('Initializing new DeviceTree: {}'.format(os.path.basename(filename)))
 		msm_id = split_array(self.get_prop('/', 'qcom,msm-id', check_output=False), 2)
 		board_id = split_array(self.get_prop('/', 'qcom,board-id', check_output=False), 2)
-		# default pmic-id-size is 4
+        # default pmic-id-size is 4
 		pmic_id_size = self.get_prop('/', 'qcom,pmic-id-size', check_output=False) or 4
 		pmic_id = split_array(self.get_prop('/', 'qcom,pmic-id', check_output=False), pmic_id_size)
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 		super().__init__(msm_id, board_id, pmic_id)
+=======
+		oem_id = split_array(self.get_prop('/', 'qcom,oem-id', check_output=False), 1)
+		prop = self.get_prop('/', 'qcom,softsku-id', check_output=False)
+		if prop is None:
+			softsku_id = None
+		else:
+			if isinstance(prop, int):
+				softsku_array = [prop]
+			else:
+				softsku_array = list(prop)
+			softsku_id = split_array(softsku_array, 1)
+
+		super().__init__(msm_id, board_id, pmic_id, oem_id, softsku_id)
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 
 		if not self.has_any_properties():
 			logging.warning('{} has no properties and may match with any other devicetree'.format(os.path.basename(self.filename)))
@@ -269,14 +372,26 @@ class DeviceTree(DeviceTreeInfo):
 class InnerMergedDeviceTree(DeviceTreeInfo):
 	"""
 	InnerMergedDeviceTree is an actual representation of a merged devicetree.
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 	It has a platform, board, and pmic ID, the "base" devicetree, and some set of add-on
+=======
+	It has a platform, board, pmic, oem and softsku ID, the "base" devicetree, and some set of add-on
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 	devicetrees
 	"""
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 	def __init__(self, filename, plat_id, board_id, pmic_id, techpacks=None):
+=======
+	def __init__(self, filename, plat_id, board_id, pmic_id, oem_id=None, softsku_id=None, techpacks=None):
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 		self.base = filename
 		# All inner merged device trees start with zero techpacks
 		self.techpacks = techpacks or []
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 		super().__init__(plat_id, board_id, pmic_id)
+=======
+		super().__init__(plat_id, board_id, pmic_id, oem_id, softsku_id)
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 
 	def try_add(self, techpack):
 		if not isinstance(techpack, DeviceTree):
@@ -332,12 +447,22 @@ class InnerMergedDeviceTree(DeviceTreeInfo):
 			logging.debug('  {}'.format(' '.join(cmd)))
 			subprocess.run(cmd, check=True)
 
+		if self.softsku_id:
+			softsku_iter = self.softsku_id if isinstance(self.softsku_id, tuple) else chain.from_iterable(self.softsku_id)
+			cmd = ['fdtput', '-t', 'i', out_file, '/', 'qcom,softsku-id'] + list(map(str, softsku_iter))
+			logging.debug('  {}'.format(' '.join(cmd)))
+			subprocess.run(cmd, check=True)
+
 		return DeviceTree(out_file)
 
 	def get_name(self):
 		ext = os.path.splitext(os.path.basename(self.base))[1]
 		base_parts = self.filename_to_parts(self.base)
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 		name_hash = hex(hash((self.plat_id, self.board_id, self.pmic_id)))
+=======
+		name_hash = hex(hash((self.plat_id, self.board_id, self.pmic_id, self.oem_id, self.softsku_id)))
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 		name = '-'.join(chain.from_iterable([base_parts] + [self.filename_to_parts(tp.filename, ignored_parts=base_parts) for tp in self.techpacks]))
 		final_name = '-'.join([name, name_hash]) + ext
 		return final_name
@@ -354,7 +479,11 @@ class InnerMergedDeviceTree(DeviceTreeInfo):
 
 class MergedDeviceTree(object):
 	def __init__(self, other):
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 		self.merged_devicetrees = {InnerMergedDeviceTree(other.filename, other.plat_id, other.board_id, other.pmic_id)}
+=======
+		self.merged_devicetrees = {InnerMergedDeviceTree(other.filename, other.plat_id, other.board_id, other.pmic_id, other.oem_id, other.softsku_id)}
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 
 	def merged_dt_try_add(self, techpack):
 		did_add = False
@@ -531,7 +660,11 @@ def main():
 
 	logging.basicConfig(level=args.loglevel.upper(), format='%(levelname)s: %(message)s'.format(os.path.basename(sys.argv[0])))
 
+<<<<<<< HEAD   (e1cfa8 Merge 9a1d53222a363c9cc47fd5d6e4d0e0856f288238 on remote bra)
 	# 1. Parse the devicetrees -- extract the device info (msm-id, board-id, pmic-id)
+=======
+	# 1. Parse the devicetrees -- extract the device info (msm-id, board-id, pmic-id, oem-id, softsku-id)
+>>>>>>> CHANGE (b684f5 merge_dtbs: Add softsku support)
 	logging.info('Parsing base dtb files from {}'.format(args.base))
 	bases = parse_dt_files(args.base)
 	all_bases = '\n'.join(list(map(lambda x: str(x), bases)))
