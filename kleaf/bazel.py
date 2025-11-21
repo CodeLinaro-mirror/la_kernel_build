@@ -533,17 +533,21 @@ class BazelWrapper(KleafHelpPrinter):
                 f"--bazelrc={f.name}")
 
     def _generate_bazelrc(self, f: TextIO):
+        kleaf_repo = self._kleaf_repo_rel()
+        if not kleaf_repo.is_absolute():
+            kleaf_repo = "%workspace%" / kleaf_repo
+
         f.write("".join("import {}\n".format(e) for e in [
             # Add support for various configs
             # Do not sort, the order here might matter.
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/ants.bazelrc",
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/android_ci.bazelrc",
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/local.bazelrc",
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/fast.bazelrc",
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/rbe.bazelrc",
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/silent.bazelrc",
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/gbl.bazelrc",
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/stamp.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/ants.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/android_ci.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/local.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/fast.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/rbe.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/silent.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/gbl.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/stamp.bazelrc",
         ]))
 
         workspace_status_common_sh = self._kleaf_repo_rel() / \
@@ -562,9 +566,9 @@ class BazelWrapper(KleafHelpPrinter):
         """))
 
         f.write("".join("import {}\n".format(e) for e in [
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/release.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/release.bazelrc",
 
-            self.kleaf_repo_dir / FLAGS_BAZEL_RC,
+            kleaf_repo / FLAGS_BAZEL_RC,
         ]))
 
         f.write(textwrap.dedent(f"""\
@@ -584,23 +588,23 @@ class BazelWrapper(KleafHelpPrinter):
                 self._override_module(override_module_path, f)
 
         if self.known_args.hermetic_actions:
-            f.write(f'import {self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/hermetic_actions.bazelrc"}')
+            f.write(f'import {kleaf_repo / "build/kernel/kleaf/bazelrc/hermetic_actions.bazelrc"}')
 
         f.write("".join("import {}\n".format(e) for e in [
             # Toolchains and platforms
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/hermetic_cc.bazelrc",
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/platforms.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/hermetic_cc.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/platforms.bazelrc",
             # Control Network access - with no internet by default.
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/network.bazelrc",
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/docs.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/network.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/docs.bazelrc",
             # Makes it possible to build //test/dittosuite
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/ditto.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/ditto.bazelrc",
             # Experimental bzlmod support
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/bzlmod.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/bzlmod.bazelrc",
 
             # Canary goes to the end because it uses flags / configs from elsewhere.
-            self.kleaf_repo_dir / "build/kernel/kleaf/bazelrc/canary.bazelrc",
-            self.kleaf_repo_dir / "build/kernel/kleaf/common.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/canary.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/common.bazelrc",
         ]))
 
     def _override_module(self, override_module_path: pathlib.Path, bazelrc: TextIO):
