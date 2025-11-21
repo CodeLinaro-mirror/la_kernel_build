@@ -64,13 +64,47 @@ class PresetResult(PathCollectible):
 @dataclasses.dataclass(kw_only=True)
 class LocalversionResult(PathPopen):
     """Consists of results of localversion."""
-    suffix: str | None
+    suffix: str
 
     def collect(self) -> str:
-        ret = super().collect()
-        if self.suffix:
-            ret += self.suffix
-        return ret
+        return super().collect() + self.suffix
+
+
+@dataclasses.dataclass
+class GitProgram:
+    """Helper class to parse --git option."""
+
+    strategy: str
+
+    def __post_init__(self):
+        if self.strategy == "always":
+            ret = shutil.which("git")
+            if not ret:
+                self._path = None
+                return
+            self._path = pathlib.Path(ret)
+            return
+
+        if self.strategy == "never":
+            self._path = None
+            return
+
+        logging.error("--git must be one of always or never")
+
+    def __bool__(self):
+        self._check_valid()
+        return self._path is not None
+
+    def __str__(self):
+        self._check_valid()
+        if self._path is None:
+            raise ValueError("Must check __bool__ before calling __str__")
+        return str(self._path)
+
+    def _check_valid(self):
+        if self.strategy == "always" and self._path is None:
+            logging.error("git not found, but --git=always")
+            sys.exit(1)
 
 
 def load_attribute_from_json[T](json_file: pathlib.Path, attr_name: str, attr_type: type[T]) \
@@ -87,45 +121,57 @@ def load_attribute_from_json[T](json_file: pathlib.Path, attr_name: str, attr_ty
     return None
 
 
-def get_localversion_from_git(project: pathlib.Path) -> PathCollectible | None:
+def get_localversion_suffix() -> str:
+    if (build_number := os.environ.get("BUILD_NUMBER")):
+        return "-ab" + build_number
+    return ""
+
+
+def get_localversion_from_git(
+        git: GitProgram,
+        project: pathlib.Path,
+        fallback_sha: str | None) -> PathCollectible | None:
     """Calculate localversion without calling setlocalversion script.
 
     Args:
+      git: path to the git executable
       project: relative path to the project
+      fallback_sha: if there is no git or the directory does not exist,
+        use the given sha.
     Return:
       A PathCollectible object that resolves to the result, or None if bin or
       project does not exist.
     """
 
-    if not project.is_dir():
-        return None
+    if not project.is_dir() or not git:
+        if not fallback_sha:
+            return None
+        return PresetResult(
+            project,
+            "-g" + fallback_sha[:12] + get_localversion_suffix())
 
-    # Note: To ensure hermeticity as much as possible, only get git from
-    # host, then clear PATH.
-    script = """
-        GIT="$(command -v git)"
+    # Note: To ensure hermeticity as much as possible, clear PATH unless
+    # executing git commands.
+    script = f"""
         GIT_OLD_PATH="$PATH"
         PATH=
-        if head=$(PATH=$GIT_OLD_PATH $GIT rev-parse --verify --short=12 HEAD 2>/dev/null); then
+        if head=$(PATH=$GIT_OLD_PATH {git} rev-parse --verify --short=12 HEAD 2>/dev/null); then
             echo -n -g"$head"
         fi
         if (
             export PATH=$GIT_OLD_PATH
-            $GIT --no-optional-locks status -uno --porcelain 2>/dev/null ||
-            $GIT diff-index --name-only HEAD
+            {git} --no-optional-locks status -uno --porcelain 2>/dev/null ||
+            {git} diff-index --name-only HEAD
         ) | read placeholder; then
             echo -n -dirty
         fi
     """
     popen = subprocess.Popen(script, shell=True, text=True,
                              stdout=subprocess.PIPE, cwd=project)
-    suffix = None
-    if os.environ.get("BUILD_NUMBER"):
-        suffix = "-ab" + os.environ["BUILD_NUMBER"]
     return LocalversionResult(
         path=project,
         popen=popen,
-        suffix=suffix
+        suffix=get_localversion_suffix(),
     )
 
 
@@ -139,7 +185,7 @@ def _find_repo(curdir: pathlib.Path) -> pathlib.Path | None:
     return None
 
 
-def list_projects() -> list[pathlib.Path]:
+def list_project_shas() -> dict[pathlib.Path, str | None]:
     """Lists projects in the repository.
 
     Returns:
@@ -155,7 +201,7 @@ def list_projects() -> list[pathlib.Path]:
     if not repo_root:
         logging.warning(
             "Unable to determine repo root. Please specify --repo_manifest.")
-        return []
+        return {}
 
     if repo_manifest:
         with open(repo_manifest) as repo_manifest_file:
@@ -166,35 +212,36 @@ def list_projects() -> list[pathlib.Path]:
         return parse_repo_manifest(repo_root, output)
     except (subprocess.SubprocessError, FileNotFoundError) as e:
         logging.warning("Unable to execute repo manifest -r: %s", e)
-        return []
+        return {}
 
 
 def parse_repo_manifest(repo_root: pathlib.Path, manifest: str) \
-        -> list[pathlib.Path]:
+        -> dict[pathlib.Path, str | None]:
     """Parses a repo manifest file.
 
     Returns:
-        a list of paths to all projects in the repository.
+        key: paths to all projects in the repository; value: git SHA
     """
     kleaf_repo_dir = pathlib.Path(".").resolve()
     try:
         dom = xml.dom.minidom.parseString(manifest)
     except xml.parsers.expat.ExpatError as e:
         logging.error("Unable to parse repo manifest: %s", e)
-        return []
+        return {}
     if not dom.documentElement:
         logging.error(
             "Unable to parse repo manifest. DOM has no root element!")
-        return []
+        return {}
     projects = dom.documentElement.getElementsByTagName("project")
-    ret = list[pathlib.Path]()
+    ret = dict[pathlib.Path, str | None]()
     for project in projects:
         # https://gerrit.googlesource.com/git-repo/+/master/docs/manifest-format.md#element-project
         path_below_repo = pathlib.Path(project.getAttribute("path") or
                                        project.getAttribute("name"))
         realpath = repo_root / path_below_repo
         if realpath.is_relative_to(kleaf_repo_dir):
-            ret.append(realpath.relative_to(kleaf_repo_dir))
+            ret[realpath.relative_to(kleaf_repo_dir)] = \
+                project.getAttribute("revision") or None
         else:
             logging.warning("Skipping project %s because it is not below %s",
                             realpath, kleaf_repo_dir)
@@ -216,21 +263,19 @@ def collect(popen_obj: subprocess.Popen) -> str:
     return stdout.strip()
 
 
+@dataclasses.dataclass
 class Stamp(object):
+    git_program: GitProgram
 
-    def __init__(self):
-        git_program = shutil.which("git")
-        if git_program:
-            self.git_program = pathlib.Path(git_program)
-        else:
-            self.git_program = None
+    def __post_init__(self):
 
         self.ignore_missing_projects = os.environ.get(
             "KLEAF_IGNORE_MISSING_PROJECTS") == "true"
 
         self.bzlmod_mapping = self._init_bzlmod_mapping()
 
-        self.projects = list_projects()
+        self.fallback_shas = list_project_shas()
+        self.projects = list(self.fallback_shas.keys())
         extra_git_project_env_var = os.environ.get("KLEAF_EXTRA_GIT_PROJECTS")
         if extra_git_project_env_var:
             self.projects.extend(pathlib.Path(value) for value in
@@ -336,7 +381,8 @@ class Stamp(object):
         )) is not None:
             return PresetResult(project, scmversion)
 
-        return get_localversion_from_git(project)
+        return get_localversion_from_git(self.git_program, project,
+                                         self.fallback_shas.get(project))
 
     def async_get_source_date_epoch_all(self) \
             -> dict[pathlib.Path, PathCollectible]:
@@ -366,6 +412,7 @@ class Stamp(object):
         )) is not None:
             return PresetResult(rel_path, f"{source_date_epoch}")
 
+        # TODO - b/454390534: implement SOURCE_DATE_EPOCH when no git
         if self.git_program:
             args = [
                 str(self.git_program), "-C",
@@ -456,11 +503,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--git",
-                        choices=["always", "never"],
+                        dest="git_program",
+                        type=GitProgram,
                         default="always",
                         help="""Whether to execute `git`.
                             always: assume git exists on the host machine.
                             never: do not execute git.
                         """)
 
-    sys.exit(Stamp().main())
+    sys.exit(Stamp(**vars(parser.parse_args())).main())
