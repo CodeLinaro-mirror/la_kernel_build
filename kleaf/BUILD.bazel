@@ -649,21 +649,41 @@ string_flag(
     visibility = ["//visibility:public"],
 )
 
-# The values of --config, as passed by command line and bazelrc files.
-_config_values = (
-    "local",
-    "fast",
-    "hermetic_cc",
-    "stamp",
-    "release",
-    "remote",
-)
-
-[bool_flag(
-    name = "config_" + value,
+bool_flag(
+    name = "config_local",
     build_setting_default = False,
     visibility = ["//visibility:public"],
-) for value in _config_values]
+)
+
+bool_flag(
+    name = "config_fast",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+bool_flag(
+    name = "config_hermetic_cc",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+bool_flag(
+    name = "config_stamp",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+bool_flag(
+    name = "config_release",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+bool_flag(
+    name = "config_remote",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
 
 print_flags(
     name = "print_flags",
@@ -673,7 +693,13 @@ print_flags(
         ":kasan_generic",
         ":kcsan",
         ":kbuild_symtypes",
-    ] + [":config_" + value for value in _config_values],
+        ":config_local",
+        ":config_fast",
+        ":config_hermetic_cc",
+        ":config_stamp",
+        ":config_release",
+        ":config_remote",
+    ],
 )
 
 # If true, enable kernel live patching.
