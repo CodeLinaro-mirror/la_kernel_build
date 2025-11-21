@@ -1237,6 +1237,98 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
         ])
 
         self.assertIn("Rust compiler 'rustc' could not be found.", errors)
+
+    def test_workspace_status_command_git_strategies(self):
+        """Tests `--git` of workspace_status_stamp.py.
+
+            See b/454390534."""
+
+        for build_number in ("123456", None):
+            with self.subTest(build_number=build_number):
+                self._test_workspace_status_command_git_strategies_with_build_number(
+                    build_number)
+
+    def _test_workspace_status_command_git_strategies_with_build_number(
+            self, build_number: str | None):
+        target = "//build/kernel/kleaf/tests/integration_test/workspace_status_test:stable_status"
+        output_path = pathlib.Path(
+            "bazel-bin/build/kernel/kleaf/tests/integration_test/workspace_status_test/stable_status"
+        )
+
+        outputs = {}
+        for strategy in ("always", "never"):
+            with tempfile.NamedTemporaryFile(mode="r+", delete_on_close=False) as f:
+                # The integration test already runs in a hermetic context, so `python3` alone
+                # would suffice to find the Python binary, unlike the real workspace_status.sh.
+                f.write(textwrap.dedent(f"""\
+                    #!/bin/bash -e
+                    python3 build/kernel/kleaf/workspace_status_stamp.py --git={strategy}
+                """))
+                pathlib.Path(f.name).chmod(0o755)
+                f.close()
+
+                env = dict(os.environ)
+                if build_number:
+                    env["BUILD_NUMBER"] = build_number
+                elif "BUILD_NUMBER" in env:
+                    del env["BUILD_NUMBER"]
+
+                self._check_call(
+                    "build",
+                    [f"--workspace_status_command={f.name}", target],
+                    env = env)
+            outputs[strategy] = output_path.read_text()
+
+        self._compare_workspace_status(
+            outputs["always"], outputs["never"], build_number)
+
+    def _parse_workspace_status(self, output: str):
+        var_tuples = [line.split(maxsplit=1) for line in output.splitlines()]
+        variables = dict([item for item in var_tuples if len(item) >= 2])
+        return {
+            "STABLE_SCMVERSIONS": json.loads(variables["STABLE_SCMVERSIONS"]),
+            "STABLE_SOURCE_DATE_EPOCHS":
+                json.loads(variables["STABLE_SOURCE_DATE_EPOCHS"]),
+        }
+
+    def _compare_workspace_status(self, always_output: str, never_output: str,
+                                  build_number: str | None):
+
+        # -g2e82fba6c166-dirty-ab123456
+        always_parsed = self._parse_workspace_status(always_output)
+
+        # -g2e82fba6c166-ab123456
+        never_parsed = self._parse_workspace_status(never_output)
+
+        if build_number:
+            build_number = "-ab" + build_number
+
+        for project in (always_parsed["STABLE_SCMVERSIONS"].keys() |
+                        never_parsed["STABLE_SCMVERSIONS"].keys()):
+            always_scmversion = always_parsed["STABLE_SCMVERSIONS"].get(project)
+            never_scmversion = never_parsed["STABLE_SCMVERSIONS"].get(project)
+
+            if build_number:
+                self.assertTrue(
+                    always_scmversion.endswith(build_number),
+                    always_scmversion + " does not end with " + build_number)
+                self.assertTrue(
+                    never_scmversion.endswith(build_number),
+                    never_scmversion + " does not end with " + build_number)
+                always_scmversion = always_scmversion.removesuffix(build_number)
+                never_scmversion = never_scmversion.removesuffix(build_number)
+
+            self.assertEqual(always_scmversion.removesuffix("-dirty"),
+                             never_scmversion)
+
+        for project in (always_parsed["STABLE_SOURCE_DATE_EPOCHS"].keys() |
+                        never_parsed["STABLE_SOURCE_DATE_EPOCHS"].keys()):
+            self.assertNotEqual(
+                int(always_parsed["STABLE_SOURCE_DATE_EPOCHS"].get(project)), 0)
+            self.assertEqual(
+                never_parsed["STABLE_SOURCE_DATE_EPOCHS"].get(project), "0")
+
+
 class ScmversionIntegrationTest(KleafIntegrationTestBase):
 
     def setUp(self) -> None:
