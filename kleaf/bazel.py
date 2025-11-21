@@ -24,7 +24,7 @@ import sys
 import textwrap
 from typing import BinaryIO, Generator, TextIO, Tuple, Optional
 
-from bazel_rc_writer import BazelRcWriter
+from bazelrc_writer import BazelrcWriter
 from impl.default_host_tools import DEFAULT_HOST_TOOLS
 from kleaf_help import KleafHelpPrinter, FLAGS_BAZEL_RC
 
@@ -524,10 +524,10 @@ class BazelWrapper(KleafHelpPrinter):
         if self.known_startup_options.help:
             return
 
-        self.bazel_rc_writer = BazelRcWriter(
+        self.bazelrc_writer = BazelrcWriter(
             self.absolute_out_dir / "bazel/bazelrc")
 
-        with self.bazel_rc_writer.open() as f:
+        with self.bazelrc_writer.open() as f:
             self._generate_bazelrc(f)
             self.transformed_startup_options.append(
                 f"--bazelrc={f.name}")
@@ -856,7 +856,7 @@ class BazelWrapper(KleafHelpPrinter):
 
     async def remove_gen_dirs(self):
         sys.stderr.write("INFO: Deleting generated directories.\n")
-        self.bazel_rc_writer.clean()
+        self.bazelrc_writer.clean()
         shutil.rmtree(self.gen_default_hermetic_path_dir, ignore_errors=True)
 
 

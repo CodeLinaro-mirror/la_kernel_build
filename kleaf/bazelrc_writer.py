@@ -21,7 +21,7 @@ from typing import TextIO
 
 
 @dataclasses.dataclass
-class BazelRcWriter(object):
+class BazelrcWriter(object):
     gen_bazelrc_dir: pathlib.Path
 
     def __post_init__(self):
