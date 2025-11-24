@@ -75,6 +75,15 @@ def _get_step(ctx, compile_commands_parent):
                 --exclude '*' ${{COMMON_OUT_DIR}}/ {common_out_dir}/
             sed -e "s:${{COMMON_OUT_DIR}}:\\${{COMMON_OUT_DIR}}:g;s:${{ROOT_DIR}}:\\${{ROOT_DIR}}:g;s:${{KLEAF_INTERNAL_WORKSPACE_DIR}}:\\${{ROOT_DIR}}:g" \\
                 {compile_commands_parent}/compile_commands.json > {compile_commands_with_vars}
+
+            extra_files=$(find {common_out_dir} -name '*.cflags' -o -name '*.asflags')
+            # Avoid absolute paths in output files.
+            for extra_file in ${{extra_files}}
+            do
+                sed -i'' \\
+                    -e "s:${{COMMON_OUT_DIR}}:\\${{COMMON_OUT_DIR}}:g;s:${{ROOT_DIR}}:\\${{ROOT_DIR}}:g;s:${{KLEAF_INTERNAL_WORKSPACE_DIR}}:\\${{ROOT_DIR}}:g" \\
+                    ${{extra_file}}
+            done
             )
         """.format(
             common_out_dir = common_out_dir.path,

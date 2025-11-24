@@ -327,7 +327,7 @@ if [ "${RECOMPILE_ABL}" == "1" ] && [ -n "${TARGET_BUILD_VARIANT}" ] && \
       ./tools/bazel run \
         --"//bootable/bootloader/edk2:target_build_variant=${TARGET_BUILD_VARIANT}" \
         "//soc-repo:${KERNEL_TARGET}_${KERNEL_VARIANT}_abl_dist" \
-        -- --dist_dir "${ANDROID_KP_OUT_DIR}/dist"
+        -- --destdir "${ANDROID_KP_OUT_DIR}/dist"
     )
 
   COPY_ABL_NEEDED=1
@@ -474,7 +474,7 @@ if [ "${COPY_NEEDED}" == "1" ]; then
     "Image"
     "vmlinux"
     "System.map"
-    "out_dir/.config"
+    ".config"
     "Module.symvers"
     "kernel-uapi-headers.tar.gz"
     "build_opts.txt"
