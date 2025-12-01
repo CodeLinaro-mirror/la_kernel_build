@@ -327,14 +327,8 @@ for EXT_MOD in ${EXT_MODULES}; do
       break
     fi
   done
-  if [[ "$TARGET_PRODUCT" = "gen4_gvm" ||
-	  "$TARGET_PRODUCT" = "gen4_gvm_sgt" ||
-	  "$TARGET_PRODUCT" = "gen4_gvm_gy" ||
-	  "$TARGET_PRODUCT" = "gen4_gvm_gy_sgt" ||
-	  "$TARGET_PRODUCT" = "gen4_gvm_cmu" ||
-	  "$TARGET_PRODUCT" = "gen5_gvm" ||
-	  "$TARGET_PRODUCT" = "gen5_gvm_sgt" ||
-	  "$TARGET_PRODUCT" = "gen5_gvm_gy" ]]; then
+  if [[ "$TARGET_BOARD_PLATFORM" = "gen4" ||
+	  "$TARGET_BOARD_PLATFORM" = "gen5" ]]; then
      btgt="autogvm"
   elif [ "$TARGET_BOARD_PLATFORM" = "msmnile_au" ]; then
      btgt="gen3auto"
