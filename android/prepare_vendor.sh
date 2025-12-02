@@ -348,7 +348,14 @@ if [ "${COPY_NEEDED}" == "1" ]; then
     rm -f "${ANDROID_KERNEL_OUT}/vendor_dlkm/"*.ko "${ANDROID_KERNEL_OUT}/"vendor_dlkm/modules.*
     mkdir -p "${ANDROID_KERNEL_OUT}/vendor_dlkm"
     cp "${ANDROID_KP_OUT_DIR}/dist/"*.ko "${ANDROID_KERNEL_OUT}/vendor_dlkm"
-    cp "${ANDROID_KP_OUT_DIR}/dist/"*.modules.blocklist "${ANDROID_KERNEL_OUT}"
+    if [ -e "${ANDROID_KP_OUT_DIR}"/dist/vendor_dlkm.modules.blocklist ]; then
+      cp "${ANDROID_KP_OUT_DIR}"/dist/vendor_dlkm.modules.blocklist \
+        "${ANDROID_KERNEL_OUT}"/vendor_dlkm/modules.blocklist
+    fi
+    if [ -e "${ANDROID_KP_OUT_DIR}"/dist/system_dlkm.modules.blocklist ]; then
+      cp "${ANDROID_KP_OUT_DIR}"/dist/system_dlkm.modules.blocklist \
+        "${ANDROID_KERNEL_OUT}"/vendor_dlkm/system_dlkm.modules.blocklist
+    fi
     cp "${ANDROID_KP_OUT_DIR}/dist/"*.modules.load "${ANDROID_KERNEL_OUT}"
     mv "${ANDROID_KERNEL_OUT}/vendor_boot.modules.load" \
 	 "${ANDROID_KERNEL_OUT}/vendor_kernel_boot.modules.load"
