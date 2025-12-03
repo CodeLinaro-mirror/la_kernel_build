@@ -329,6 +329,8 @@ for EXT_MOD in ${EXT_MODULES}; do
   done
   if [[ "$TARGET_PRODUCT" = "gen4_gvm" ||
 	  "$TARGET_PRODUCT" = "gen4_gvm_sgt" ||
+	  "$TARGET_PRODUCT" = "gen4_gvm_gy" ||
+	  "$TARGET_PRODUCT" = "gen4_gvm_gy_sgt" ||
 	  "$TARGET_PRODUCT" = "gen4_gvm_cmu" ||
 	  "$TARGET_PRODUCT" = "gen5_gvm" ||
 	  "$TARGET_PRODUCT" = "gen5_gvm_sgt" ||
@@ -382,7 +384,7 @@ for EXT_MOD in ${EXT_MODULES}; do
 
     # Run the dist command passing in the output directory from Android build system
     ./tools/bazel --output_user_root="${DEFAULT_CACHE_DIR}" run "${build_flags[@]}" \
-      "$build_target" -- --dist_dir="${OUT_DIR}/${EXT_MOD_REL}"
+      "$build_target" -- --destdir="${OUT_DIR}/${EXT_MOD_REL}"
 
     # The Module.symvers file is named "<target>_<variant>_Modules.symvers, but other modules are
     # looking for just "Module.symvers". Concatenate any of them into one Module.symvers file.
