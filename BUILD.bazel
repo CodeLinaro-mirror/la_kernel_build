@@ -117,12 +117,11 @@ native_binary(
     visibility = ["//visibility:private"],
 )
 
-alias(
+native_binary(
     name = "depmod",
-    actual = select({
-        "//build/kernel/kleaf:depmod_from_sources_is_true": "@kmod//:depmod",
-        "//conditions:default": "//prebuilts/kernel-build-tools:depmod",
-    }),
+    src = "@kmod//:depmod",
+    # Prevents --nodepmod_from_sources from being set, and print a nice error message if so.
+    data = ["//build/kernel/kleaf:depmod_from_sources"],
     visibility = ["//build/kernel:__subpackages__"],
 )
 
