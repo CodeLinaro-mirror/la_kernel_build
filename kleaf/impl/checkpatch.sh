@@ -216,7 +216,7 @@ if [[ $CHECKPATCH_RC -ne 0 ]]; then
   echo "" >&2
   echo "Summary:" >&2
   echo "" >&2
-  { grep -r -h -E -A1 "^(ERROR|WARNING):" "${MY_RESULTS_PATH}" 1>&2; } || true
+  { grep -r -h -E -A2 "^(ERROR|WARNING|CHECK):" "${MY_RESULTS_PATH}" 1>&2; } || true
   echo "" >&2
   echo "See ${MY_RESULTS_PATH} for complete output." >&2
   CLEANUP_CHECKPATCH_RESULTS=0
