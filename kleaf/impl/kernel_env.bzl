@@ -764,7 +764,7 @@ kernel_env = rule(
         ),
         "_debug_make_verbosity": attr.label(default = "//build/kernel/kleaf:debug_make_verbosity"),
         "_config_is_local": attr.label(default = "//build/kernel/kleaf:config_local"),
-        "_config_is_stamp": attr.label(default = "//build/kernel/kleaf:config_stamp"),
+        "_stamp_value": attr.label(default = "//build/kernel/kleaf/impl:stamp_value"),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
         "_cache_dir_config_tags": attr.label(
             default = "//build/kernel/kleaf/impl:cache_dir_config_tags",

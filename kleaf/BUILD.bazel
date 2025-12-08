@@ -662,9 +662,10 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
-bool_flag(
+alias(
     name = "config_stamp",
-    build_setting_default = False,
+    actual = "//build/kernel/kleaf/impl:stamp_value",
+    deprecation = "DO NOT USE. File a bug if you need this.",
     visibility = ["//visibility:public"],
 )
 
@@ -691,7 +692,6 @@ print_flags(
         ":config_local",
         ":config_fast",
         ":config_hermetic_cc",
-        ":config_stamp",
         ":config_release",
         ":config_remote",
     ],

@@ -25,6 +25,7 @@ load(
     ":python.bzl",
     "python_runtime_files",
 )
+load(":stamp_build_setting.bzl", "stamp_build_setting")
 
 bzl_library(
     name = "impl",
@@ -235,6 +236,20 @@ bool_setting(
 bool_flag(
     name = "check_sandbox_in_actions",
     build_setting_default = True,
+    visibility = ["//build/kernel/kleaf:__subpackages__"],
+)
+
+config_setting(
+    name = "stamp_detect",
+    values = {"stamp": "1"},
+)
+
+stamp_build_setting(
+    name = "stamp_value",
+    value = select({
+        ":stamp_detect": True,
+        "//conditions:default": False,
+    }),
     visibility = ["//build/kernel/kleaf:__subpackages__"],
 )
 
