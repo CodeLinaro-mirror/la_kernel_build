@@ -16,6 +16,7 @@
 
 import argparse
 import os
+import re
 import sys
 
 
@@ -143,8 +144,12 @@ def main():
   if args.verbose:
     print('Checking symbols are not forbidden')
   for symbol in symbols:
+    reason = None
     if symbol in denied_symbols:
       reason = denied_symbols[symbol]
+    elif re.fullmatch(r'_R.*(4core|5alloc|6kernel|8bindings).*', symbol):
+      reason = 'appears to be a Rust symbol'
+    if reason is not None:
       print(f"symbol '{symbol}' is not allowed: {reason}", file=sys.stderr)
       exit_status = 1
 
