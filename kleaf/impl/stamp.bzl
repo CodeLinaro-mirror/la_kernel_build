@@ -54,7 +54,7 @@ def _write_localversion(ctx):
     # Emulate the logic in setlocalversion to prepend them.
 
     out_file = ctx.actions.declare_file(ctx.attr.name + "/localversion")
-    if ctx.attr._config_is_stamp[BuildSettingInfo].value:
+    if ctx.attr._stamp_value[BuildSettingInfo].value:
         inputs = [ctx.info_file]
         stable_scmversion_cmd = _get_status_at_path(ctx.info_file, "STABLE_SCMVERSIONS", '"${KERNEL_DIR}"')
     else:
@@ -123,7 +123,7 @@ def _ext_mod_get_localversion_file_impl(
         hermetic_tools,
         # TODO: https://github.com/bazelbuild/bazel/issues/25695 - Remove once it is available in subrule_ctx
         info_file,
-        _config_is_stamp,
+        _stamp_value,
         _build_utils_sh):
     """Creates a file that contains the localversion for the given external module.
 
@@ -133,14 +133,14 @@ def _ext_mod_get_localversion_file_impl(
         follow_stamp_flag: If true, respects --config=stamp. Otherwise returns None.
         hermetic_tools: hermetic tools
         info_file: ctx.info_file
-        _config_is_stamp: --config=stamp
+        _stamp_value: --stamp
         _build_utils_sh: build_utils.sh
     Returns:
         If follow_stamp_flag, and --config=stamp, returns the file that contains
         the localversion. Otherwise returns None.
     """
 
-    if not follow_stamp_flag or not _config_is_stamp[BuildSettingInfo].value:
+    if not follow_stamp_flag or not _stamp_value[BuildSettingInfo].value:
         return None
 
     inputs = [info_file, _build_utils_sh]
@@ -172,7 +172,7 @@ def _ext_mod_get_localversion_file_impl(
 _ext_mod_get_localversion_file = subrule(
     implementation = _ext_mod_get_localversion_file_impl,
     attrs = {
-        "_config_is_stamp": attr.label(default = "//build/kernel/kleaf:config_stamp"),
+        "_stamp_value": attr.label(default = "//build/kernel/kleaf/impl:stamp_value"),
         "_build_utils_sh": attr.label(
             default = "//build/kernel:build_utils",
             allow_single_file = True,
@@ -217,7 +217,7 @@ def _set_source_date_epoch(ctx):
     Args:
         ctx: [ctx](https://bazel.build/rules/lib/ctx)
     """
-    if ctx.attr._config_is_stamp[BuildSettingInfo].value:
+    if ctx.attr._stamp_value[BuildSettingInfo].value:
         # SOURCE_DATE_EPOCH needs to be set before calling _setup_env.sh to
         # avoid calling into git. However, determining the correct SOURCE_DATE_EPOCH
         # from SOURCE_DATE_EPOCHS needs KERNEL_DIR, which is set by
