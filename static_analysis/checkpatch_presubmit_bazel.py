@@ -65,7 +65,6 @@ def load_arguments() -> dict[str, Any]:
     parser.add_argument(
         "--change_info",
         type=_require_absolute_path,
-        required=True,
         help="Path to change-info file providing complete change information.",
     )
     return parser.parse_known_args()
@@ -133,18 +132,66 @@ def _run_checkpatch(
     ).returncode
 
 
-def main(
-        checkpatch_args: list[str],
-        dist_dir: pathlib.Path,
-        bid: str | None,
-        change_info: pathlib.Path | None,
-) -> int:
-    if bid:
-        # Skip checkpatch for postsubmit (b/35390488).
-        if not bid.startswith("P"):
-            logging.info("Did not identify a presubmit build. Exiting.")
-            return 0
+def _invoke_using_applied_prop(dist_dir: pathlib.Path) -> int:
+    applied_prop = dist_dir / "applied.prop"
+    applied_prop_dict: dict[pathlib.Path, list[str]] = \
+        collections.defaultdict(list)
+    with open(applied_prop) as applied_prop_file:
+        for line in applied_prop_file:
+            line = line.strip()
+            if not line:
+                continue
+            path, git_sha1 = line.split(maxsplit=2)
+            applied_prop_dict[pathlib.Path(path)].append(git_sha1)
 
+    targets: list[(list[str], str)] = []
+    for path, git_sha1_list in applied_prop_dict.items():
+        if len(git_sha1_list) > 1:
+            logging.error("Multiple git sha1 found in %s for %s",
+                          applied_prop, path)
+            return 1
+        path_targets = _find_checkpatch_targets(path)
+        if not path_targets:
+            logging.info(
+                "Skipping %s because no checkpatch() target is found.", path)
+            continue
+        targets.append((path_targets, git_sha1_list[0]))
+
+    checkpatch_log = dist_dir / "checkpatch.log"
+    checkpatch_full_log = dist_dir / "checkpatch_full.log"
+    if checkpatch_log.exists():
+        os.unlink(checkpatch_log)
+    if checkpatch_full_log.exists():
+        os.unlink(checkpatch_full_log)
+    return_codes = []
+    for path_targets, git_sha1 in targets:
+        for target in path_targets:
+            return_codes.append(_run_checkpatch(
+                target=target,
+                git_sha1=git_sha1,
+                log=checkpatch_log,
+                checkpatch_args=checkpatch_args,
+            ))
+            _run_checkpatch(
+                target=target,
+                git_sha1=git_sha1,
+                log=checkpatch_full_log,
+                checkpatch_args=checkpatch_args + ["--ignored_checks", ""],
+                silent=True,
+            )
+
+    success = sum(return_codes) == 0
+
+    if not success:
+        logging.info("See %s for complete output.", checkpatch_log.name)
+
+    return success
+
+
+def _invoke_using_change_info_json(
+    dist_dir: pathlib.Path,
+    change_info: pathlib.Path
+) -> int:
     targets: list[(list[str], str, str)] = []
     with change_info.open() as change_info_file:
         for change in json.load(change_info_file).get("changes"):
@@ -154,7 +201,7 @@ def main(
             # build. The SHA is specified by the "latestRevision" field.
             revision = change["latestRevision"]
 
-            path_targets = _find_checkpatch_targets(bazel_wrapper, project_path)
+            path_targets = _find_checkpatch_targets(project_path)
             if not path_targets:
                 logging.info(
                     "Skipping %s because no checkpatch() target is found.", project_path)
@@ -198,6 +245,29 @@ def main(
             "See %s/ folder for complete output.",
             checkpatch_topdir.name
         )
+
+    return success
+
+def main(
+        checkpatch_args: list[str],
+        dist_dir: pathlib.Path,
+        bid: str | None,
+        change_info: pathlib.Path | None,
+) -> int:
+    if bid:
+        # Skip checkpatch for postsubmit (b/35390488).
+        if not bid.startswith("P"):
+            logging.info("Did not identify a presubmit build. Exiting.")
+            return 0
+
+    if change_info:
+        success = _invoke_using_change_info_json(
+            dist_dir=dist_dir,
+            change_info=change_info
+        )
+    else:
+        # Fallback, since change-info is not guaranteed to exist
+        success = _invoke_using_applied_prop(dist_dir=dist_dir)
 
     return 0 if success else 1
 
