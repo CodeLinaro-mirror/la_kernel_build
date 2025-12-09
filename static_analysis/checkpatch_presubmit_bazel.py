@@ -23,6 +23,7 @@ tools/bazel run //build/kernel/static_analysis:checkpatch_presubmit -- \\
 
 import argparse
 import collections
+import json
 import logging
 import os
 import pathlib
@@ -64,6 +65,7 @@ def load_arguments() -> dict[str, Any]:
     parser.add_argument(
         "--change_info",
         type=_require_absolute_path,
+        required=True,
         help="Path to change-info file providing complete change information.",
     )
     parser.add_argument("--bazel_wrapper",
@@ -154,46 +156,43 @@ def main(
         change_info: pathlib.Path | None,
         bazel_wrapper: pathlib.Path,
 ) -> int:
-    # TODO: b/462238342 - Use change-info file.
-    del change_info
-
     if bid:
         # Skip checkpatch for postsubmit (b/35390488).
         if not bid.startswith("P"):
             logging.info("Did not identify a presubmit build. Exiting.")
             return 0
-    applied_prop = dist_dir / "applied.prop"
-    applied_prop_dict: dict[pathlib.Path, list[str]] = \
-        collections.defaultdict(list)
-    with open(applied_prop) as applied_prop_file:
-        for line in applied_prop_file:
-            line = line.strip()
-            if not line:
+
+    targets: list[(list[str], str, str)] = []
+    with change_info.open() as change_info_file:
+        for change in json.load(change_info_file).get("changes"):
+            project_name = change["project"]
+            project_path = pathlib.Path(change["projectPath"])
+            # Only interested in the git SHA of the CL at the time of the
+            # build. The SHA is specified by the "latestRevision" field.
+            revision = change["latestRevision"]
+
+            path_targets = _find_checkpatch_targets(bazel_wrapper, project_path)
+            if not path_targets:
+                logging.info(
+                    "Skipping %s because no checkpatch() target is found.", project_path)
                 continue
-            path, git_sha1 = line.split(maxsplit=2)
-            applied_prop_dict[pathlib.Path(path)].append(git_sha1)
 
-    targets: list[(list[str], str)] = []
-    for path, git_sha1_list in applied_prop_dict.items():
-        if len(git_sha1_list) > 1:
-            logging.error("Multiple git sha1 found in %s for %s",
-                          applied_prop, path)
-            return 1
-        path_targets = _find_checkpatch_targets(bazel_wrapper, path)
-        if not path_targets:
-            logging.info(
-                "Skipping %s because no checkpatch() target is found.", path)
-            continue
-        targets.append((path_targets, git_sha1_list[0]))
+            targets.append((path_targets, revision, project_name))
 
-    checkpatch_log = dist_dir / "checkpatch.log"
-    checkpatch_full_log = dist_dir / "checkpatch_full.log"
-    if checkpatch_log.exists():
-        os.unlink(checkpatch_log)
-    if checkpatch_full_log.exists():
-        os.unlink(checkpatch_full_log)
+    checkpatch_topdir = dist_dir / "checkpatch"
     return_codes = []
-    for path_targets, git_sha1 in targets:
+
+    for path_targets, git_sha1, project_name in targets:
+        sanitized_project_name = project_name.replace("/", "__")
+        checkpatch_dir = checkpatch_topdir / sanitized_project_name / git_sha1
+        checkpatch_dir.mkdir(parents=True, exist_ok=True)
+
+        checkpatch_log = checkpatch_dir / "checkpatch.log"
+        checkpatch_log.unlink(missing_ok=True)
+
+        checkpatch_full_log = checkpatch_dir / "checkpatch_full.log"
+        checkpatch_full_log.unlink(missing_ok=True)
+
         for target in path_targets:
             return_codes.append(_run_checkpatch(
                 bazel_wrapper=bazel_wrapper,
