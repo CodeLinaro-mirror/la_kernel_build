@@ -213,7 +213,10 @@ def main(
     success = sum(return_codes) == 0
 
     if not success:
-        logging.info("See %s for complete output.", checkpatch_log.name)
+        logging.info(
+            "See %s/ folder for complete output.",
+            checkpatch_topdir.name
+        )
 
     return 0 if success else 1
 
