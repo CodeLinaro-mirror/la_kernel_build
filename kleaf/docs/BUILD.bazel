@@ -46,6 +46,7 @@ bzl_library(
         "//build/bazel_common_rules/workspace",
         "//build/kernel/kleaf/artifact_tests",
         "//build/kernel/kleaf/impl",
+        "//build/kernel/kleaf/tests:runtime_protection_presence_test/symbol_presence_test_bzl_lib",
         "//prebuilts/clang/host/linux-x86/kleaf:clang_toolchain_repository",
         "@bazel_skylib//:workspace",
         "@bazel_skylib//lib:dicts",
