@@ -146,6 +146,9 @@ def _env_for_recursive_bazel_calls() -> dict[str, str]:
     # - so that rules_python stage1 script won't override it with 1, and
     #   import-ing a module from py_binary.deps works.
     env["PYTHONSAFEPATH"] = ""
+    # Use an alternate lock file so that the lock held by the
+    # parent process won't effect the test.
+    env["KLEAF_BAZELRC_SUBDIR"] = "checkpatch"
     return env
 
 
