@@ -200,6 +200,17 @@ class BazelWrapper(KleafHelpPrinter):
         self._rebuild_kleaf_help_args()
         self._add_default_hermetic_path()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """If we have not execve, releases the bazelrc lock after execution.
+
+        Otherwise, rely on process exit to close the fds."""
+        if self.bazelrc_writer:
+            return self.bazelrc_writer.release_lock()
+        return False
+
     @classmethod
     def _get_workspace_dir(cls):
         """Returns Root of the top level workspace (named "@")
@@ -525,9 +536,11 @@ class BazelWrapper(KleafHelpPrinter):
             return
 
         self.bazelrc_writer = BazelrcWriter(
-            self.absolute_out_dir / "bazel/bazelrc")
+            self.absolute_out_dir / "bazel" / "bazelrc" /
+            os.environ.get("KLEAF_BAZELRC_SUBDIR", ""))
+        self.bazelrc_writer.acquire_lock()
 
-        with self.bazelrc_writer.open() as f:
+        with self.bazelrc_writer.open_file() as f:
             self._generate_bazelrc(f)
             self.transformed_startup_options.append(
                 f"--bazelrc={f.name}")
@@ -990,9 +1003,10 @@ def _bazel_wrapper_main():
         # <kleaf_repo_dir>/build/kernel/kleaf/bazel.py
         kleaf_repo_dir = (
             pathlib.Path(__file__).resolve().parent.parent.parent.parent)
-    return BazelWrapper(kleaf_repo_dir=kleaf_repo_dir,
-                        bazel_args=sys.argv[1:],
-                        env=os.environ).run()
+    with BazelWrapper(kleaf_repo_dir=kleaf_repo_dir,
+                      bazel_args=sys.argv[1:],
+                      env=os.environ) as wrapper:
+        return wrapper.run()
 
 if __name__ == "__main__":
     sys.exit(_bazel_wrapper_main())

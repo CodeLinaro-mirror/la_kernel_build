@@ -299,7 +299,10 @@ class KleafIntegrationTestBase(unittest.TestCase, BazelCommandExecutor):
 
         kwargs["env"] = kwargs.get("env", os.environ) | {
             "KLEAF_REPO_DIR_OVERRIDE": self._get_kleaf_repo_dir_override(
-                pathlib.Path(kwargs.get("cwd", os.getcwd())))
+                pathlib.Path(kwargs.get("cwd", os.getcwd()))),
+            # Use an alternate lock file so that the lock held by the
+            # parent process won't effect the test.
+            "KLEAF_BAZELRC_SUBDIR": "integration_test",
         }
 
         # kwargs has known arguments filtered out.
@@ -1327,6 +1330,28 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
                 int(always_parsed["STABLE_SOURCE_DATE_EPOCHS"].get(project)), 0)
             self.assertEqual(
                 never_parsed["STABLE_SOURCE_DATE_EPOCHS"].get(project), "0")
+
+    def test_parallel_execution(self):
+        """Tests that bazel.py wrapper can handle parallel executions.
+
+        Note: This test may return false negatives (passing even when
+        the underlying bug is not fixed), because the underlying bug is
+        a race condition. However, with 30 trials it is very likely to be
+        reproduced.
+
+        See b/452382967#comment37."""
+
+        processes = list[subprocess.Popen]()
+        for _ in range(30):
+            processes.append(self._popen(
+                "build", ["--nobuild", "--announce_rc",
+                          "//build/kernel:hermetic-tools"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            ))
+
+        for process in processes:
+            _, stderr = process.communicate()
+            self.assertEqual(0, process.returncode, stderr)
 
 
 class ScmversionIntegrationTest(KleafIntegrationTestBase):
