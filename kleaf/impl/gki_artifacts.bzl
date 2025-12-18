@@ -41,6 +41,7 @@ def _gki_artifacts_impl(ctx):
     outs = []
     boot_lz4 = None
     boot_gz = None
+    boot_lzma = None
 
     tarball = ctx.actions.declare_file("{}/boot-img.tar.gz".format(ctx.label.name))
     outs.append(tarball)
@@ -63,6 +64,8 @@ def _gki_artifacts_impl(ctx):
                 boot_lz4 = boot_image
             elif compression == "gz":
                 boot_gz = boot_image
+            elif compression == "lzma":
+                boot_lzma = boot_image
             outs.append(boot_image)
         else:
             # Not an image
@@ -140,6 +143,7 @@ def _gki_artifacts_impl(ctx):
         OutputGroupInfo(
             boot_lz4 = depset([boot_lz4] if boot_lz4 else []),
             boot_gz = depset([boot_gz] if boot_gz else []),
+            boot_lzma = depset([boot_lzma] if boot_lzma else []),
         ),
     ]
 
