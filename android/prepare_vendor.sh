@@ -366,6 +366,15 @@ if [ "${COPY_NEEDED}" == "1" ]; then
     mkdir -p "${ANDROID_KERNEL_OUT}/system_dlkm/"
     # Unzip the system_dlkm staging tar copied from kernel_platform to system_dlkm out directory
     tar -xf "$system_dlkm_archive" -C "${ANDROID_KERNEL_OUT}/system_dlkm/"
+
+    if [ "${KERNEL_TARGET}" == "gen3gvmcoqos" ]; then
+        # Starting with the android14-6.1 kernel and later, the system_dlkm_staging_archive.tar.gz
+        # file contains the original and "flatten" versions of the compiled modules directory. 
+        # The "flatten" version is not used, but due to hard-coded logic in the core scripts, 
+        # modules from this folder and subfolders are copied to the target system_dlkm image. 
+        # Hence, delete unnecessary copies of modules.
+        rm -rf "${ANDROID_KERNEL_OUT}/system_dlkm/flatten"
+    fi
   else
     echo "  WARNING!! No system_dlkm (second stage) modules found"
   fi
