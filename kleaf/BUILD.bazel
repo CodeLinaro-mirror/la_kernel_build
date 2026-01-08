@@ -931,6 +931,14 @@ test_suite(
     ],
 )
 
+# Similar as quick_tests but depends on host environment.
+test_suite(
+    name = "quick_host_tests",
+    tests = [
+        "//build/kernel/kleaf/tests/ddk_menuconfig_test",
+    ],
+)
+
 # Declare py_library for Bazel wrapper for testing purposes.
 
 py_binary(
