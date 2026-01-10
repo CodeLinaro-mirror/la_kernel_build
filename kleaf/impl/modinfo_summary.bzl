@@ -39,16 +39,22 @@ def _modinfo_summary_report_impl(ctx):
             slot = slot,
         )
         inputs.append(modules_staging_archive)
+
+    verbose_cmd = ""
+    if ctx.attr.verbose:
+        verbose_cmd = "--verbose"
+
     command = hermetic_tools.setup + """
         {modules_staging_archive_cmd}
         # Run the reporter
-        {modinfo_summary} --directory {intermediates_dir} --output {modinfo_summary_xml}
+        {modinfo_summary} --directory {intermediates_dir} --output {modinfo_summary_xml} {verbose}
         rm -rf {intermediates_dir}
     """.format(
         modinfo_summary = ctx.executable._modinfo_summary.path,
         modules_staging_archive_cmd = modules_staging_archive_cmd,
         modinfo_summary_xml = modinfo_summary_xml.path,
         intermediates_dir = intermediates_dir,
+        verbose = verbose_cmd,
     )
 
     ctx.actions.run_shell(
@@ -71,6 +77,7 @@ modinfo_summary_report = rule(
             cfg = "exec",
             executable = True,
         ),
+        "verbose": attr.bool(),
     },
     toolchains = [hermetic_toolchain.type],
 )
