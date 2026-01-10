@@ -455,6 +455,7 @@ WARNING: common_kernels(modules_superset=) is not set for {}.
 
     _define_common_kernels_additional_tests(
         name = name + "_additional_tests",
+        host_name = name + "_additional_host_tests",
         kernel_build_name = name,
         kernel_modules_install = name + "_modules_install",
         modules = (modules_superset or []),
@@ -474,8 +475,16 @@ WARNING: common_kernels(modules_superset=) is not set for {}.
         ],
     )
 
+    native.test_suite(
+        name = name + "_host_tests",
+        tests = [
+            name + "_additional_host_tests",
+        ],
+    )
+
 def _define_common_kernels_additional_tests(
         name,
+        host_name,
         kernel_build_name,
         makefile,
         defconfig,
@@ -553,7 +562,14 @@ def _define_common_kernels_additional_tests(
             pre_defconfig_fragment = Label("//build/kernel/kleaf/tests/defconfig_test:pre_defconfig_fragment"),
             visibility = ["//visibility:private"],
         )
-        extra_tests.append(name + "_pre_defconfig_fragments_menuconfig_test")
+
+        # This test relies on host dependencies, hence it should run separately.
+        native.test_suite(
+            name = host_name,
+            tests = [
+                name + "_pre_defconfig_fragments_menuconfig_test",
+            ],
+        )
 
     # Build ddk_examples to make sure our DDK examples are up-to-date. Note that these examples
     # deliberately refers to //common explicitly to provide a clear example, so this build test
