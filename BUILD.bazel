@@ -305,7 +305,6 @@ hermetic_tools(
             "python",
             "python3",
         ]),
-        "@zstd//:zstd_cli": "zstd",
     } | {
         tool: paths.basename(package_relative_label(tool).name)
         for tool in _TOOLS
