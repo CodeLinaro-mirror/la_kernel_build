@@ -1072,47 +1072,6 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
         self.assertFalse(pathlib.Path(new_out1.name).exists())
         self.assertTrue(pathlib.Path(new_out2.name).exists())
 
-    def test_menuconfig_merge(self):
-        """Test that menuconfig works with a raw merge_config.sh in PRE_DEFCONFIG_CMDS.
-
-        See `menuconfig_merge_test/` for details.
-
-        See b/276889737 and b/274878805."""
-
-        args = [
-            "//build/kernel/kleaf/tests/integration_test/menuconfig_merge_test:menuconfig_merge_test_config",
-        ] + _FASTEST
-
-        output = self._check_output("run", args)
-
-        def matching_line(line): return re.match(
-            r"^Updating .*common/arch/arm64/configs/menuconfig_test_defconfig$",
-            line)
-        self.assertTrue(
-            any([matching_line(line) for line in output.splitlines()]))
-
-        # It should be fine to call the same command subsequently.
-        self._check_call("run", args)
-
-    def test_menuconfig_fragment(self):
-        """Test that menuconfig works with a FRAGMENT_CONFIG defined.
-
-        See `menuconfig_fragment_test/` for details.
-
-        See b/276889737 and b/274878805."""
-
-        args = [
-            "//build/kernel/kleaf/tests/integration_test/menuconfig_fragment_test:menuconfig_fragment_test_config",
-        ] + _FASTEST
-
-        output = self._check_output("run", args)
-
-        expected_line = f"Updated {os.environ['BUILD_WORKSPACE_DIRECTORY']}/build/kernel/kleaf/tests/integration_test/menuconfig_fragment_test/defconfig.fragment"
-        self.assertTrue(expected_line, output.splitlines())
-
-        # It should be fine to call the same command subsequently.
-        self._check_call("run", args)
-
     def test_ddk_defconfig_must_present(self):
         """Test that for ddk_module, items in defconfig must be in the final .config.
 
@@ -1352,6 +1311,51 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
         for process in processes:
             _, stderr = process.communicate()
             self.assertEqual(0, process.returncode, stderr)
+
+
+class QuickIntegrationHostTest(KleafIntegrationTestBase):
+    """Similar to QuickIntegrationTest but with host dependencies."""
+
+    def test_menuconfig_merge(self):
+        """Test that menuconfig works with a raw merge_config.sh in PRE_DEFCONFIG_CMDS.
+
+        See `menuconfig_merge_test/` for details.
+
+        See b/276889737 and b/274878805."""
+
+        args = [
+            "//build/kernel/kleaf/tests/integration_test/menuconfig_merge_test:menuconfig_merge_test_config",
+        ] + _FASTEST
+
+        output = self._check_output("run", args)
+
+        def matching_line(line): return re.match(
+            r"^Updating .*common/arch/arm64/configs/menuconfig_test_defconfig$",
+            line)
+        self.assertTrue(
+            any([matching_line(line) for line in output.splitlines()]))
+
+        # It should be fine to call the same command subsequently.
+        self._check_call("run", args)
+
+    def test_menuconfig_fragment(self):
+        """Test that menuconfig works with a FRAGMENT_CONFIG defined.
+
+        See `menuconfig_fragment_test/` for details.
+
+        See b/276889737 and b/274878805."""
+
+        args = [
+            "//build/kernel/kleaf/tests/integration_test/menuconfig_fragment_test:menuconfig_fragment_test_config",
+        ] + _FASTEST
+
+        output = self._check_output("run", args)
+
+        expected_line = f"Updated {os.environ['BUILD_WORKSPACE_DIRECTORY']}/build/kernel/kleaf/tests/integration_test/menuconfig_fragment_test/defconfig.fragment"
+        self.assertTrue(expected_line, output.splitlines())
+
+        # It should be fine to call the same command subsequently.
+        self._check_call("run", args)
 
 
 class ScmversionIntegrationTest(KleafIntegrationTestBase):
