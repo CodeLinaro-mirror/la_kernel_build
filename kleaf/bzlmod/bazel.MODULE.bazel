@@ -176,7 +176,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_devicetree",
-    version = "0.1.3",
+    version = "0.1.4",
 )
 bazel_dep(
     name = "rules_pkg",
