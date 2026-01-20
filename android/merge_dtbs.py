@@ -568,7 +568,6 @@ def main():
 	parser.add_argument('-b', '--base', required=True, help="Folder containing base DTBs from Kernel Platform output")
 	parser.add_argument('-t', '--techpack', required=True, help="Folder containing techpack DLKM DTBOs")
 	parser.add_argument('-o', '--out', required=True, help="Output folder where merged DTBs will be saved")
-	parser.add_argument('--disable-dtbo', action='store_true', help="If set, merge DTBO into DTB")
 	parser.add_argument('--loglevel', choices=['debug', 'info', 'warn', 'error'], default='info', help="Set loglevel to see debug messages")
 
 	args = parser.parse_args()
@@ -630,11 +629,12 @@ def main():
 		for future in as_completed(futures):
 			base, dtbo, task_id = futures[future]
 
-	if args.disable_dtbo:
 	# 5. merge dtb + dtbo = dtb
 	# if enable merge dtbo into dtb please control the number of dtbs and dtbos you actually
 	# need, because too many msm-id increase the number of dtb that are finally generated,
 	# thus increasing the size of the final boot.img.
+	env_disable_dtbo = os.environ.get('MERGE_DISABLE_DTBO', '').strip().lower() in ['1', 'true', 'yes', 'on']
+	if env_disable_dtbo:
 		logging.info("disable-dtbo: merging DTBO into DTB and saving merged DTBs")
 		merged_dir = os.path.join(args.out, "merged")
 		os.makedirs(merged_dir, exist_ok=True)
