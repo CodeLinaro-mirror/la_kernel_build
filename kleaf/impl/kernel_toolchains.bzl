@@ -139,7 +139,7 @@ def _kernel_toolchains_impl(ctx):
         # Append to *LDFLAGS based on the current settings of $OUT_DIR.
         function kleaf_internal_append_one_ldflags() {{
             local backtrack_relative=$1
-            local RUNPATH_EXECROOT='$$$$\\{{ORIGIN\\}}/'"${{backtrack_relative}}$(realpath ${{ROOT_DIR}} --relative-to ${{OUT_DIR}})"
+            local RUNPATH_EXECROOT='$$$$\\{{ORIGIN\\}}/'"${{backtrack_relative}}$(realpath ${{ROOT_DIR}} --relative-to ${{COMMON_OUT_DIR}})"
             export HOSTLDFLAGS="${{HOSTLDFLAGS}} "{hostldexpr}
             export USERLDFLAGS="${{USERLDFLAGS}} "{userldexpr}
         }}
@@ -152,6 +152,7 @@ def _kernel_toolchains_impl(ctx):
             kleaf_internal_append_one_ldflags ../../../../
             kleaf_internal_append_one_ldflags ../../../../../
             kleaf_internal_append_one_ldflags ../../../../../../
+            kleaf_internal_append_one_ldflags ../../../../../../../
         }}
         export -f kleaf_internal_eval_ldflags
 
