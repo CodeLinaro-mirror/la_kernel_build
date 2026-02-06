@@ -53,8 +53,7 @@ def _ddk_uapi_headers_impl(ctx):
          # Make the staging directory
            mkdir -p {kernel_uapi_headers_dir}/usr
          # Make unifdef, required by scripts/headers_install.sh
-           # Hack to avoid make interpreting $$ as the PID.
-           make -f /dev/null -C ${{KERNEL_DIR}} CFLAGS="${{HOSTCFLAGS}}" LDFLAGS="${{HOSTLDFLAGS//\\$\\$/\\$}}" scripts/unifdef
+           make -C ${{KERNEL_DIR}} -f /dev/null scripts/unifdef
          # Install each header individually
            while read -r hdr; do
              out_prefix=$(dirname $(echo ${{hdr}} | sed -e 's|.*{strip_prefix}||g'))
