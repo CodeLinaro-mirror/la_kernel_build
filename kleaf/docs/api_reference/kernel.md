@@ -33,7 +33,7 @@ Like filegroup, but applies transitions to Android.
 <pre>
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "checkpatch")
 
-checkpatch(<a href="#checkpatch-name">name</a>, <a href="#checkpatch-checkpatch_pl">checkpatch_pl</a>, <a href="#checkpatch-ignorelist">ignorelist</a>)
+checkpatch(<a href="#checkpatch-name">name</a>, <a href="#checkpatch-checkpatch_pl">checkpatch_pl</a>, <a href="#checkpatch-ignorelist">ignorelist</a>, <a href="#checkpatch-strict">strict</a>)
 </pre>
 
 Run `checkpatch.sh` at the root of this package.
@@ -46,6 +46,7 @@ Run `checkpatch.sh` at the root of this package.
 | <a id="checkpatch-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="checkpatch-checkpatch_pl"></a>checkpatch_pl |  Label to `checkpatch.pl`.<br><br>This is usually `//<common_package>:scripts/checkpatch.pl`.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="checkpatch-ignorelist"></a>ignorelist |  checkpatch ignorelist   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@kleaf//build/kernel/static_analysis:checkpatch_ignorelist"`  |
+| <a id="checkpatch-strict"></a>strict |  Adds --strict to checkpatch invocation   | Boolean | optional |  `False`  |
 
 
 <a id="ddk_config"></a>
