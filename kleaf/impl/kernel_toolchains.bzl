@@ -139,19 +139,24 @@ def _kernel_toolchains_impl(ctx):
         # Append to *LDFLAGS based on the current settings of $OUT_DIR.
         function kleaf_internal_append_one_ldflags() {{
             local backtrack_relative=$1
-            local RUNPATH_EXECROOT='$$$$\\{{ORIGIN\\}}/'"${{backtrack_relative}}$(realpath ${{ROOT_DIR}} --relative-to ${{OUT_DIR}})"
+            local RUNPATH_EXECROOT='$$$$\\{{ORIGIN\\}}/'"${{backtrack_relative}}"
             export HOSTLDFLAGS="${{HOSTLDFLAGS}} "{hostldexpr}
             export USERLDFLAGS="${{USERLDFLAGS}} "{userldexpr}
         }}
         export -f kleaf_internal_append_one_ldflags
 
         function kleaf_internal_eval_ldflags() {{
-            kleaf_internal_append_one_ldflags ../
-            kleaf_internal_append_one_ldflags ../../
-            kleaf_internal_append_one_ldflags ../../../
-            kleaf_internal_append_one_ldflags ../../../../
-            kleaf_internal_append_one_ldflags ../../../../../
-            kleaf_internal_append_one_ldflags ../../../../../../
+            local relative_root="$(realpath -m "${{ROOT_DIR}}" --relative-to "${{OUT_DIR}}")"
+            local relative_depth="${{relative_root//[^\\/]/}}"
+            # This comes from the maximum path seen so far (e.g.):
+            #   arch/arm64/kernel/pi/relacheck and arch/arm64/kvm/hyp/nvhe/gen-hyprel
+            local max_depth=$((${{#relative_depth}} + 7))
+            local backtrack=""
+            for depth in $(seq 1 ${{max_depth}}); do
+                backtrack="${{backtrack}}.."
+                kleaf_internal_append_one_ldflags "${{backtrack}}"
+                backtrack="${{backtrack}}/"
+            done
         }}
         export -f kleaf_internal_eval_ldflags
 
