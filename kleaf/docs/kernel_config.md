@@ -310,7 +310,7 @@ own defconfig fragments to avoid fragmentation in the ecosystem (pun intended).
 
 **NOTE**: w.r.t. to KMI, the following flags will disable both `TRIM_UNUSED_KSYMS`
 (by not setting it) and `MODULE_SIG_PROTECT`(by explicitly turning it off):
-(`--notrim`, `--debug`, `--gcov`, `--kcov`, `--k*san`, `--kgdb`).
+(`--notrim`, `--debug`, `--gcov`, `--kcov`, `--k*san`, `--kgdb`, `--gdb`).
 
 #### User-defined flags
 

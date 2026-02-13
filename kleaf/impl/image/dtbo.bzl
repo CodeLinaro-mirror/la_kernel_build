@@ -28,6 +28,7 @@ def _dtbo_impl(ctx):
     transitive_inputs = [target.files for target in ctx.attr.srcs]
     transitive_inputs.append(ctx.attr.kernel_build[KernelSerializedEnvInfo].inputs)
     tools = ctx.attr.kernel_build[KernelSerializedEnvInfo].tools
+    dtbo_tool = ctx.attr.tool
 
     command = kernel_utils.setup_serialized_env_cmd(
         serialized_env_info = ctx.attr.kernel_build[KernelSerializedEnvInfo],
@@ -41,21 +42,23 @@ def _dtbo_impl(ctx):
                   cp {srcs} {dtbo_staging_dir}
 
                 # make dtbo
-                  mkdtimg cfg_create {output} {config} ${{MKDTIMG_FLAGS}} -d {dtbo_staging_dir}
+                  {dtbo_tool} cfg_create {output} {config} ${{MKDTIMG_FLAGS}} -d {dtbo_staging_dir}
                   rm -rf {dtbo_staging_dir}
         """.format(
             output = output.path,
             srcs = " ".join([f.path for f in ctx.files.srcs]),
             config = ctx.file.config_file.path,
             dtbo_staging_dir = dtbo_staging_dir,
+            dtbo_tool = dtbo_tool,
         )
     else:
         command += """
                 # make dtbo
-                  mkdtimg create {output} ${{MKDTIMG_FLAGS}} {srcs}
+                  {dtbo_tool} create {output} ${{MKDTIMG_FLAGS}} {srcs}
         """.format(
             output = output.path,
             srcs = " ".join([f.path for f in ctx.files.srcs]),
+            dtbo_tool = dtbo_tool,
         )
 
     debug.print_scripts(ctx, command)
@@ -108,7 +111,7 @@ dtbo = rule(
             allow_single_file = True,
             doc = """A config file to create dtbo image by cfg_create command.
 
-            If set, use mkdtimg cfg_create with the given config file, instead of mkdtimg create""",
+            If set, use mkdtboimg cfg_create with the given config file, instead of mkdtimg create""",
         ),
         "_debug_print_scripts": attr.label(
             default = "//build/kernel/kleaf:debug_print_scripts",
@@ -118,6 +121,17 @@ dtbo = rule(
 
             Default to `<name>/dtbo.img` if not set.
         """,
+        ),
+        "tool": attr.string(
+            default = "mkdtimg",
+            doc = """Name of the tool called to generate the dtbo image.
+
+            Supported tools are `mkdtimg` and `mkdtboimg`. Default to `mkdtimg`
+            if not set.  """,
+            values = [
+                "mkdtimg",
+                "mkdtboimg",
+            ],
         ),
     },
 )

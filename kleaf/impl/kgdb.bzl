@@ -23,6 +23,7 @@ def _kgdb_config_settings_raw():
     """Attributes of rules that supports kgdb."""
     return {
         "_kgdb": "//build/kernel/kleaf:kgdb",
+        "_gdb": "//build/kernel/kleaf:gdb",
     }
 
 def _get_grab_gdb_scripts_step(ctx):
@@ -41,7 +42,7 @@ def _get_grab_gdb_scripts_step(ctx):
 
     outputs = []
     cmd = ""
-    if ctx.attr._kgdb[BuildSettingInfo].value:
+    if ctx.attr._kgdb[BuildSettingInfo].value or ctx.attr._gdb[BuildSettingInfo].value:
         kgdb = ctx.actions.declare_directory("{name}/gdb_scripts".format(name = ctx.label.name))
         outputs.append(kgdb)
         cmd = """
@@ -65,31 +66,38 @@ def _additional_make_goals(ctx):
     Args:
         ctx: ctx
     """
-    if ctx.attr._kgdb[BuildSettingInfo].value:
+    if ctx.attr._kgdb[BuildSettingInfo].value or ctx.attr._gdb[BuildSettingInfo].value:
         return ["scripts_gdb"]
     return []
 
-def _get_scripts_config_args_impl(_subrule_ctx, *, _kgdb):
+def _get_scripts_config_args_impl(_subrule_ctx, *, _kgdb, _gdb):
     """Returns arguments to `scripts/config` for --kgdb.
 
     Args:
         _subrule_ctx: subrule_ctx
         _kgdb: --kgdb
+        _gdb: --gdb
     Returns:
         a list of arguments to `scripts/config`
     """
-    if not _kgdb[BuildSettingInfo].value:
+    if not _kgdb[BuildSettingInfo].value and not _gdb[BuildSettingInfo].value:
         return []
+    if _kgdb[BuildSettingInfo].value:
+        return [
+            _config.enable("GDB_SCRIPTS"),
+            _config.enable("KGDB"),
+            _config.enable("KGDB_KDB"),
+            _config.disable("RANDOMIZE_BASE"),
+            _config.disable("STRICT_KERNEL_RWX"),
+            _config.enable("VT"),
+            _config.disable("VT_CONSOLE"),
+            _config.disable("WATCHDOG"),
+            _config.enable_if("KGDB_LOW_LEVEL_TRAP", condition = "X86"),
+        ]
+
+    # --gdb is enabled.
     return [
         _config.enable("GDB_SCRIPTS"),
-        _config.enable("KGDB"),
-        _config.enable("KGDB_KDB"),
-        _config.disable("RANDOMIZE_BASE"),
-        _config.disable("STRICT_KERNEL_RWX"),
-        _config.enable("VT"),
-        _config.disable("VT_CONSOLE"),
-        _config.disable("WATCHDOG"),
-        _config.enable_if("KGDB_LOW_LEVEL_TRAP", condition = "X86"),
     ]
 
 _get_scripts_config_args = subrule(

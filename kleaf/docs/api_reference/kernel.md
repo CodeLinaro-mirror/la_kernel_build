@@ -33,7 +33,7 @@ Like filegroup, but applies transitions to Android.
 <pre>
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "checkpatch")
 
-checkpatch(<a href="#checkpatch-name">name</a>, <a href="#checkpatch-checkpatch_pl">checkpatch_pl</a>, <a href="#checkpatch-ignorelist">ignorelist</a>)
+checkpatch(<a href="#checkpatch-name">name</a>, <a href="#checkpatch-checkpatch_pl">checkpatch_pl</a>, <a href="#checkpatch-ignorelist">ignorelist</a>, <a href="#checkpatch-strict">strict</a>)
 </pre>
 
 Run `checkpatch.sh` at the root of this package.
@@ -46,6 +46,7 @@ Run `checkpatch.sh` at the root of this package.
 | <a id="checkpatch-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="checkpatch-checkpatch_pl"></a>checkpatch_pl |  Label to `checkpatch.pl`.<br><br>This is usually `//<common_package>:scripts/checkpatch.pl`.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="checkpatch-ignorelist"></a>ignorelist |  checkpatch ignorelist   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@kleaf//build/kernel/static_analysis:checkpatch_ignorelist"`  |
+| <a id="checkpatch-strict"></a>strict |  Adds --strict to checkpatch invocation   | Boolean | optional |  `False`  |
 
 
 <a id="ddk_config"></a>
@@ -339,7 +340,7 @@ Build `dtb` image.
 <pre>
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "dtbo")
 
-dtbo(<a href="#dtbo-name">name</a>, <a href="#dtbo-srcs">srcs</a>, <a href="#dtbo-out">out</a>, <a href="#dtbo-config_file">config_file</a>, <a href="#dtbo-kernel_build">kernel_build</a>)
+dtbo(<a href="#dtbo-name">name</a>, <a href="#dtbo-srcs">srcs</a>, <a href="#dtbo-out">out</a>, <a href="#dtbo-config_file">config_file</a>, <a href="#dtbo-kernel_build">kernel_build</a>, <a href="#dtbo-tool">tool</a>)
 </pre>
 
 Build dtbo.
@@ -352,8 +353,9 @@ Build dtbo.
 | <a id="dtbo-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="dtbo-srcs"></a>srcs |  List of `*.dtbo` files used to package the `dtbo.img`. This corresponds to `MKDTIMG_DTBOS` in build configs; see example below.<br><br>Example: <pre><code>kernel_build(&#10;    name = "tuna_kernel",&#10;    outs = [&#10;        "path/to/foo.dtbo",&#10;        "path/to/bar.dtbo",&#10;    ],&#10;)&#10;dtbo(&#10;    name = "tuna_images",&#10;    kernel_build = ":tuna_kernel",&#10;    srcs = [&#10;        ":tuna_kernel/path/to/foo.dtbo",&#10;        ":tuna_kernel/path/to/bar.dtbo",&#10;    ],&#10;)</code></pre>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="dtbo-out"></a>out |  Name of the `dtbo` image.<br><br>Default to `<name>/dtbo.img` if not set.   | String | optional |  `""`  |
-| <a id="dtbo-config_file"></a>config_file |  A config file to create dtbo image by cfg_create command.<br><br>If set, use mkdtimg cfg_create with the given config file, instead of mkdtimg create   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="dtbo-config_file"></a>config_file |  A config file to create dtbo image by cfg_create command.<br><br>If set, use mkdtboimg cfg_create with the given config file, instead of mkdtimg create   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="dtbo-kernel_build"></a>kernel_build |  The [`kernel_build`](#kernel_build).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="dtbo-tool"></a>tool |  Name of the tool called to generate the dtbo image.<br><br>Supported tools are `mkdtimg` and `mkdtboimg`. Default to `mkdtimg` if not set.   | String | optional |  `"mkdtimg"`  |
 
 
 <a id="extract_symbols"></a>
@@ -717,6 +719,29 @@ In `foo_dist`, specifying `foo_modules_install` in `data` won't include
 | <a id="kernel_modules_install-outs"></a>outs |  A list of additional outputs from `make modules_install`.<br><br>Since external modules are returned by default, it can be used to obtain modules.* related files (results of depmod). Only files with allowed names can be added to outs. (`_OUT_ALLOWLIST`) <pre><code>_OUT_ALLOWLIST = ["modules.dep", "modules.alias", "modules.builtin", "modules.symbols", "modules.softdep"]</code></pre> Example: <pre><code>kernel_modules_install(&#10;    name = "foo_modules_install",&#10;    kernel_modules = [":foo_module_list"],&#10;    outs = [&#10;        "modules.dep",&#10;        "modules.alias",&#10;    ],&#10;)</code></pre>   | List of strings | optional |  `[]`  |
 | <a id="kernel_modules_install-kernel_build"></a>kernel_build |  Label referring to the `kernel_build` module. Otherwise, it is inferred from `kernel_modules`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="kernel_modules_install-kernel_modules"></a>kernel_modules |  A list of labels referring to `kernel_module`s to install.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+
+
+<a id="kernel_sbom"></a>
+
+## kernel_sbom
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_sbom")
+
+kernel_sbom(<a href="#kernel_sbom-name">name</a>, <a href="#kernel_sbom-srcs">srcs</a>, <a href="#kernel_sbom-out">out</a>, <a href="#kernel_sbom-kernel_build">kernel_build</a>)
+</pre>
+
+Generate an SPDX SBOM for kernels.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="kernel_sbom-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="kernel_sbom-srcs"></a>srcs |  List of [kernel_build](#kernel_build) and [kernel_module](#kernel_module) targets   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
+| <a id="kernel_sbom-out"></a>out |  The output SPDX JSON file name.   | String | optional |  `"kernel_sbom.spdx.json"`  |
+| <a id="kernel_sbom-kernel_build"></a>kernel_build |  **DEPRECATED**; use `srcs` instead. The [`kernel_build()`](#kernel_build) target.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 
 
 <a id="kernel_unstripped_modules_archive"></a>

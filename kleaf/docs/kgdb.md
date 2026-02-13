@@ -1,7 +1,7 @@
 # GDB scripts
 
-To enable `CONFIG_GDB_SCRIPTS` and collect the scripts, use the `--kgdb`
-flag.
+To enable `CONFIG_GDB_SCRIPTS` and collect the scripts, use the `--kgdb` or
+`--gdb` flags.
 
 The scripts may be found under `bazel-bin/<package>/<target_name>/gdb_scripts`.
 
