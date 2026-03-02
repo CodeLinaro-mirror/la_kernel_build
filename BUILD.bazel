@@ -125,12 +125,11 @@ native_binary(
     visibility = ["//build/kernel:__subpackages__"],
 )
 
-alias(
+native_binary(
     name = "dtc",
-    actual = select({
-        "//build/kernel/kleaf:dtc_from_sources_is_true": "@dtc",
-        "//conditions:default": "//prebuilts/kernel-build-tools:dtc",
-    }),
+    src = "@dtc",
+    # Prevents --nodtc_from_sources from being set, and print a nice error message if so.
+    data = ["//build/kernel/kleaf:dtc_from_sources"],
     visibility = ["//visibility:private"],
 )
 
@@ -340,10 +339,7 @@ devicetree_toolchain(
         "-Wno-simple_bus_reg",
     ],
     dtc = ":dtc",
-    fdtoverlay = select({
-        "//build/kernel/kleaf:dtc_from_sources_is_true": "@dtc//:fdtoverlay",
-        "//conditions:default": None,
-    }),
+    fdtoverlay = "@dtc//:fdtoverlay",
     preprocess = True,
 )
 
