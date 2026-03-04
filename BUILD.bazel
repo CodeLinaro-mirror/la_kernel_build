@@ -13,13 +13,14 @@
 # limitations under the License.
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
 load("@rules_devicetree//devicetree:toolchain.bzl", "devicetree_toolchain")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_library.bzl", "sh_library")
 load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_tools")
 load("//build/kernel/kleaf/impl:executable_dispatcher.bzl", "executable_dispatcher")
+
+## External tools that requires special handling
 
 executable_dispatcher(
     name = "rsync",
@@ -28,7 +29,7 @@ executable_dispatcher(
     visibility = ["//visibility:private"],
 )
 
-native_binary(
+executable_dispatcher(
     name = "toybox",
     src = "@toybox",
     data = [
@@ -42,7 +43,7 @@ native_binary(
     visibility = ["//visibility:private"],
 )
 
-native_binary(
+executable_dispatcher(
     name = "gzip",
     src = "@pigz",
     # Prevents --nogzip_is_pigz from being set, and print a nice error message if so.
@@ -63,12 +64,11 @@ executable_dispatcher(
     visibility = ["//visibility:private"],
 )
 
-# Also used in bootstrap_hermetic_tools, so use a native_binary to ensure
+# Also used in bootstrap_hermetic_tools, so use a executable_dispatcher to ensure
 # the name of the binary is correct.
-native_binary(
+executable_dispatcher(
     name = "sed",
     src = ":toybox",
-    out = "sed",
     visibility = ["//build/kernel/kleaf/bootstrap_hermetic_tools:__pkg__"],
 )
 
@@ -109,7 +109,7 @@ executable_dispatcher(
     visibility = ["//visibility:private"],
 )
 
-native_binary(
+executable_dispatcher(
     name = "lz4",
     src = "@lz4",
     # Prevents --notoolchain_from_sources from being set, and print a nice error message if so.
@@ -117,7 +117,7 @@ native_binary(
     visibility = ["//visibility:private"],
 )
 
-native_binary(
+executable_dispatcher(
     name = "depmod",
     src = "@kmod//:depmod",
     # Prevents --nodepmod_from_sources from being set, and print a nice error message if so.
@@ -125,7 +125,13 @@ native_binary(
     visibility = ["//build/kernel:__subpackages__"],
 )
 
-native_binary(
+executable_dispatcher(
+    name = "modinfo",
+    src = ":depmod",
+    visibility = ["//visibility:private"],
+)
+
+executable_dispatcher(
     name = "dtc",
     src = "@dtc",
     # Prevents --nodtc_from_sources from being set, and print a nice error message if so.
@@ -133,37 +139,99 @@ native_binary(
     visibility = ["//visibility:private"],
 )
 
-alias(
+executable_dispatcher(
     name = "mkbootimg",
-    actual = "//prebuilts/kernel-build-tools:mkbootimg",
+    src = "//prebuilts/kernel-build-tools:mkbootimg",
     visibility = ["//visibility:public"],
 )
 
-alias(
+executable_dispatcher(
     name = "unpack_bootimg",
-    actual = "//prebuilts/kernel-build-tools:unpack_bootimg",
+    src = "//prebuilts/kernel-build-tools:unpack_bootimg",
     visibility = ["//visibility:public"],
 )
 
-# List of tools where label names are used as the tool names
-_TOOLS = [
+executable_dispatcher(
+    name = "bzcat",
+    src = ":bzip2",
+    visibility = ["//visibility:private"],
+)
+
+executable_dispatcher(
+    name = "lzma",
+    src = ":xz",
+    visibility = ["//visibility:private"],
+)
+
+executable_dispatcher(
+    name = "xzcat",
+    src = "//prebuilts/build-tools:xz",
+    visibility = ["//visibility:private"],
+)
+
+executable_dispatcher(
+    name = "unzip",
+    src = "//prebuilts/build-tools:ziptool",
+    visibility = ["//visibility:private"],
+)
+
+executable_dispatcher(
+    name = "zipinfo",
+    src = "//prebuilts/build-tools:ziptool",
+    visibility = ["//visibility:private"],
+)
+
+executable_dispatcher(
+    name = "python3",
+    src = "//build/kernel/kleaf/impl:python_runtime_files",
+    python_hack = True,
+    visibility = ["//visibility:private"],
+)
+
+executable_dispatcher(
+    name = "python",
+    src = ":python3",
+    python_hack = True,
+    visibility = ["//visibility:private"],
+)
+
+# List of the above that goes into the hermetic toolchain,
+# where label.name is the tool name
+_SPECIAL_TOOLS_SAME_NAME = [
     # keep sorted
     ":bison",
+    ":bzcat",
+    ":depmod",
     ":dtc",
     ":flex",
     ":gzip",
     ":lz4",
+    ":lzma",
+    ":modinfo",
+    ":python",
+    ":python3",
     ":rsync",
     ":sed",
     ":swig",
     ":tar",
+    ":unzip",
+    ":xzcat",
+    ":zipinfo",
+]
+
+# External tools that requires no special handling and goes into the hermetic toolchain,
+# where basename(label.name) is the tool name
+_SIMPLE_TOOLS_SAME_NAME = [
+    # keep sorted
     "//prebuilts/build-tools:awk",
     "//prebuilts/build-tools:bc",
+    "//prebuilts/build-tools:bzip2",
     "//prebuilts/build-tools:m4",
     "//prebuilts/build-tools:make",
     "//prebuilts/build-tools:openssl",
     "//prebuilts/build-tools:runextractor",
     "//prebuilts/build-tools:soong_zip",
+    "//prebuilts/build-tools:xz",
     "//prebuilts/kernel-build-tools:avbtool",
     "//prebuilts/kernel-build-tools:blk_alloc_to_base_fs",
     "//prebuilts/kernel-build-tools:build_image",
@@ -198,6 +266,12 @@ _TOOLS = [
     ],
     allow_empty = True,
 )
+
+[executable_dispatcher(
+    name = paths.basename(package_relative_label(tool).name),
+    src = tool,
+    visibility = ["//visibility:private"],
+) for tool in _SIMPLE_TOOLS_SAME_NAME]
 
 # List of toybox aliases
 _TOYS = [
@@ -272,41 +346,22 @@ _TOYS = [
     "xxd",
 ]
 
+[executable_dispatcher(
+    name = toy,
+    src = ":toybox",
+    visibility = ["//visibility:private"],
+) for toy in _TOYS]
+
+# List of tools where label.name is the tool name
+_TOOLS_SAME_NAME = _SPECIAL_TOOLS_SAME_NAME + \
+                   [":" + paths.basename(package_relative_label(tool).name) for tool in _SIMPLE_TOOLS_SAME_NAME +
+                                                                                        _TOYS]
+
 hermetic_tools(
     name = "hermetic-tools",
     symlinks = {
-        ":toybox": ":".join(_TOYS),
-        ":depmod": ":".join([
-            # keep sorted
-            "depmod",
-            "modinfo",
-        ]),
-        "//prebuilts/build-tools:bzip2": ":".join([
-            # keep sorted
-            "bzcat",
-            "bzip2",
-        ]),
-        "//prebuilts/build-tools:xz": ":".join([
-            # keep sorted
-            "lzma",
-            "xz",
-            "xzcat",
-        ]),
-        "//prebuilts/build-tools:ziptool": ":".join([
-            # keep sorted
-            "unzip",
-            "zipinfo",
-        ]),
-
-        # Python
-        "//build/kernel/kleaf/impl:python_runtime_files": ":".join([
-            # keep sorted
-            "python",
-            "python3",
-        ]),
-    } | {
-        tool: paths.basename(package_relative_label(tool).name)
-        for tool in _TOOLS
+        tool: package_relative_label(tool).name
+        for tool in _TOOLS_SAME_NAME
     },
     visibility = ["//visibility:public"],
 )

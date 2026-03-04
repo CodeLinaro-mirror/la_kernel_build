@@ -18,6 +18,7 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "bool_setting")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("//build/kernel/kleaf/impl:executable_dispatcher.bzl", "executable_dispatcher")
 load(":cc.bzl", "readelf_tool")
 load(":kernel_platform_toolchain.bzl", "kernel_platform_toolchain")
 load(":kernel_toolchains.bzl", "kernel_toolchains")
@@ -508,16 +509,16 @@ python_runtime_files(
     visibility = ["//build/kernel:__pkg__"],
 )
 
-alias(
+executable_dispatcher(
     name = "stg",
-    actual = "//prebuilts/kernel-build-tools:stg",
+    src = "//prebuilts/kernel-build-tools:stg",
     # All kernel_abi() can see this
     visibility = ["//visibility:public"],
 )
 
-alias(
+executable_dispatcher(
     name = "stgdiff",
-    actual = "//prebuilts/kernel-build-tools:stgdiff",
+    src = "//prebuilts/kernel-build-tools:stgdiff",
     # All kernel_abi() can see this
     visibility = ["//visibility:public"],
 )
