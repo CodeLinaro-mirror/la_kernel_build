@@ -18,7 +18,6 @@ load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("//build/kernel/kleaf/impl:ddk/ddk_module_config.bzl", "ddk_module_config")
 load("//build/kernel/kleaf/tests/utils:config_test.bzl", "config_test")
 load("//build/kernel/kleaf/tests/utils:contain_lines_test.bzl", "contain_lines_test")
-load("//build/kernel/kleaf/tests/utils:ddk_config_get_dot_config.bzl", "ddk_config_get_dot_config")
 load(":optimize_ddk_config_actions_transition.bzl", "target_with_optimize_ddk_config_actions")
 
 def ddk_config_inheritance_test(
@@ -64,9 +63,10 @@ def ddk_config_inheritance_test(
         **kwargs
     )
 
-    ddk_config_get_dot_config(
+    native.filegroup(
         name = name + "_dot_config",
-        target = name + "_module_config",
+        srcs = [name + "_module_config"],
+        output_group = ".config",
         **kwargs
     )
 
