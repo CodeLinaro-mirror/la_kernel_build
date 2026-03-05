@@ -15,17 +15,27 @@
 """RBE-friendly native_binary() that supports embedding args and env."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load(":native_binary_aspect.bzl", "NativeBinaryAspectInfo", "native_binary_aspect")
 load(":utils.bzl", "utils")
 
 visibility("//build/kernel/...")
 
 def _get_single_executable(ctx, target):
+    # If --nohermetic_tools_symlink_source is set, and src is native_binary, handle a special case:
+    # don't use the executable provided by the native_binary() target (which is a symlink), but use
+    # the actual source file.
+    # This is a hack and it wouldn't work if we had custom rules that uses
+    # ctx.action.symlink(), but it is good enough for tools in //prebuilts/build-tools.
+    if not ctx.attr._use_symlinks[BuildSettingInfo].value and NativeBinaryAspectInfo in target:
+        return target[NativeBinaryAspectInfo].executable
+
     if target[DefaultInfo].files_to_run.executable:
         return target[DefaultInfo].files_to_run.executable
 
-    # Hack for python_runtime_files()
+    # Hack for python_runtime_files() / reversed_env directories
     label = ctx.label.same_package_label(ctx.attr.name)
     files_list = target.files.to_list()
     if len(files_list) != 1:
@@ -55,7 +65,7 @@ def _write_source_file_impl(ctx):
     env_str = ""
     env_short_str = ""
     for var_name, target in env.items():
-        file = utils.single_file(target.files.to_list(), target.label)
+        file = _get_single_executable(ctx, target)
         env_str += "{{{}, {}}},".format(repr(var_name), repr(file.path))
         env_short_str += "{{{}, {}}},".format(repr(var_name), repr(file.short_path))
 
@@ -86,16 +96,30 @@ _write_source_file = rule(
         "actual_executable": attr.label(
             cfg = "target",
             allow_files = True,
+            aspects = [native_binary_aspect],
         ),
         "append_args": attr.string_list(),
         "reversed_env": attr.label_keyed_string_dict(
             allow_files = True,
+            aspects = [native_binary_aspect],
         ),
         "out": attr.string(),
+        "_use_symlinks": attr.label(
+            default = "//build/kernel/kleaf:hermetic_tools_use_symlinks",
+        ),
     },
 )
 
-def _get_binary_runfiles(_ctx, target):
+def _get_binary_runfiles(ctx, target):
+    # If --nohermetic_tools_symlink_source is set, and target is native_binary, handle a special case:
+    #   just return native_binary.src + native_binary.data as the runfiles of the
+    #   executable_dispatcher.
+    # Otherwise just use the runfiles from the target.
+    if not ctx.attr._use_symlinks[BuildSettingInfo].value and NativeBinaryAspectInfo in target:
+        return depset(
+            [target[NativeBinaryAspectInfo].executable],
+            transitive = [target[NativeBinaryAspectInfo].runfiles],
+        )
     transitive_runfiles = [target.files]
     if target.default_runfiles:
         transitive_runfiles.append(target.default_runfiles.files)
@@ -117,9 +141,14 @@ _runfiles_helper = rule(
     attrs = {
         "actual_executable": attr.label(
             allow_files = True,
+            aspects = [native_binary_aspect],
         ),
         "data": attr.label_list(
             allow_files = True,
+            aspects = [native_binary_aspect],
+        ),
+        "_use_symlinks": attr.label(
+            default = "//build/kernel/kleaf:hermetic_tools_use_symlinks",
         ),
     },
 )
@@ -281,6 +310,9 @@ def executable_dispatcher(
 
     native.alias(
         name = name,
-        actual = simple_target or "_dispatched/" + name,
+        actual = select({
+            "//build/kernel/kleaf:hermetic_tools_use_symlinks_is_true": simple_target or "_dispatched/" + name,
+            "//conditions:default": "_dispatched/" + name,
+        }),
         **kwargs
     )

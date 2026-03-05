@@ -704,6 +704,14 @@ class KleafIntegrationTestShard2(KleafIntegrationTestBase):
         ]
         self._build(args)
 
+    def test_nohermetic_tools_use_symlinks(self):
+        """Test --nohermetic_tools_use_symlinks option."""
+        args = [
+            "--nohermetic_tools_use_symlinks",
+            f"//{self._common()}:kernel"
+        ]
+        self._build(args)
+
 
 class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
     """Tests setting up a DDK workspace with @kleaf as dependency."""

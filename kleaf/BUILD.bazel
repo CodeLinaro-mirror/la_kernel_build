@@ -790,6 +790,21 @@ filegroup(
     visibility = ["//visibility:private"],
 )
 
+# If true (which is the default), allow the use of symlinks
+# for hermetic tools. Set this to false for RBE.
+# https://github.com/bazelbuild/bazel/issues/26551
+bool_flag(
+    name = "hermetic_tools_use_symlinks",
+    build_setting_default = True,
+    visibility = ["//build/kernel:__subpackages__"],
+)
+
+config_setting(
+    name = "hermetic_tools_use_symlinks_is_true",
+    flag_values = {":hermetic_tools_use_symlinks": "1"},
+    visibility = ["//build/kernel:__subpackages__"],
+)
+
 py_library(
     name = "buildozer_command_builder",
     srcs = ["buildozer_command_builder.py"],
