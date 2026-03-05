@@ -637,6 +637,7 @@ string_flag(
         "if_unset",
     ],
     visibility = ["//visibility:public"],
+    warn_message = "if_unset will not be supported. Constants will always be auto-loaded.",
 )
 
 bool_flag(
