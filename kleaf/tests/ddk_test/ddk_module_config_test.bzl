@@ -20,7 +20,6 @@ Require `//common` package.
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("//build/kernel/kleaf:kernel.bzl", "ddk_module", "kernel_build")
 load("//build/kernel/kleaf/tests/utils:contain_lines_test.bzl", "contain_lines_test")
-load("//build/kernel/kleaf/tests/utils:ddk_config_get_dot_config.bzl", "ddk_config_get_dot_config")
 
 def ddk_module_config_test_suite(name):
     """Defines analysis test for `ddk_module_config`.
@@ -59,9 +58,10 @@ def ddk_module_config_test_suite(name):
         tags = ["manual"],
     )
 
-    ddk_config_get_dot_config(
+    native.filegroup(
         name = name + "_actual",
-        target = name + "_ddk_module_config",
+        srcs = [name + "_ddk_module"],
+        output_group = ".config",
         tags = ["manual"],
     )
 

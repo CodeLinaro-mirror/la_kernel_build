@@ -25,6 +25,7 @@ load(":ddk/ddk_config/ddk_config_info_subrule.bzl", "ddk_config_info_subrule")
 load(":ddk/ddk_config/ddk_config_main_action_subrule.bzl", "ddk_config_main_action_subrule")
 load(":ddk/ddk_config/ddk_config_restore_out_dir_step.bzl", "ddk_config_restore_out_dir_step")
 load(":ddk/ddk_config/ddk_config_script_subrule.bzl", "ddk_config_script_subrule")
+load(":ddk/ddk_config/extract_dot_config.bzl", "extract_dot_config")
 
 visibility("//build/kernel/kleaf/...")
 
@@ -77,6 +78,12 @@ def _ddk_module_config_impl(ctx):
     if main_action_ret.kconfig_ext:
         default_info_files.append(main_action_ret.kconfig_ext)
 
+    dot_config = extract_dot_config(serialized_env_info = _create_serialized_env_info(
+        out_dir = main_action_ret.out_dir,
+        script_name = "{name}/{name}_dot_config_setup.sh".format(name = ctx.label.name),
+        kernel_build_serialized_env_info = ctx.attr.kernel_build[KernelBuildExtModuleInfo].ddk_config_env,
+    ))
+
     return [
         DefaultInfo(
             files = depset(default_info_files),
@@ -85,6 +92,7 @@ def _ddk_module_config_impl(ctx):
         ),
         OutputGroupInfo(
             override_parent_log = depset([main_action_ret.override_parent_log]),
+            **({".config": depset([dot_config])})
         ),
         serialized_env_info,
         ddk_config_info,
@@ -189,6 +197,7 @@ for its format.
         ddk_config_info_subrule,
         ddk_config_main_action_subrule,
         ddk_config_script_subrule,
+        extract_dot_config,
         _create_serialized_env_info,
     ],
     executable = True,
