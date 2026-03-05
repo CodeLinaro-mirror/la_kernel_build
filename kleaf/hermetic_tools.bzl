@@ -24,7 +24,6 @@ load(
 )
 load("//build/kernel/kleaf/impl:hermetic_genrule.bzl", _hermetic_genrule = "hermetic_genrule")
 load("//build/kernel/kleaf/impl:hermetic_toolchain.bzl", _hermetic_toolchain = "hermetic_toolchain")
-load("//build/kernel/kleaf/impl:utils.bzl", "utils")
 
 # Re-export functions
 hermetic_exec = _hermetic_exec
@@ -90,6 +89,19 @@ def _handle_hermetic_symlinks(ctx, symlinks_attr):
 
     return all_outputs
 
+def _get_hermetic_base(all_outputs, short = None):
+    bases = {}
+    for f in all_outputs:
+        key = paths.dirname(f.short_path if short else f.path)
+        if key not in bases:
+            bases[key] = []
+        bases[key].append(f)
+    if not len(bases) == 1:
+        fail("hermetic_tools should have all outputs in one single directory, but got {}".format(
+            bases,
+        ))
+    return bases.keys()[0]
+
 def _hermetic_tools_internal_impl(ctx):
     debug.print_platforms(ctx)
 
@@ -107,15 +119,8 @@ def _hermetic_tools_internal_impl(ctx):
            set -o pipefail
     """
 
-    hermetic_base = paths.join(
-        utils.package_bin_dir(ctx),
-        ctx.attr.outer_target_name,
-    )
-    hermetic_base_short = paths.join(
-        ctx.label.workspace_root,
-        ctx.label.package,
-        ctx.attr.outer_target_name,
-    )
+    hermetic_base = _get_hermetic_base(all_outputs)
+    hermetic_base_short = _get_hermetic_base(all_outputs, short = True)
 
     hashbang = """#!/bin/bash -e
 """
