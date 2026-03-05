@@ -95,6 +95,35 @@ _write_source_file = rule(
     },
 )
 
+def _get_binary_runfiles(_ctx, target):
+    transitive_runfiles = [target.files]
+    if target.default_runfiles:
+        transitive_runfiles.append(target.default_runfiles.files)
+
+    return depset(transitive = transitive_runfiles)
+
+def _runfiles_helper_impl(ctx):
+    data_runfiles = depset(transitive =
+                               [target.files for target in ctx.attr.data] +
+                               [_get_binary_runfiles(ctx, target) for target in ctx.attr.data])
+
+    executable_runfiles = _get_binary_runfiles(ctx, ctx.attr.actual_executable)
+
+    return DefaultInfo(files = depset(transitive = [data_runfiles, executable_runfiles]))
+
+_runfiles_helper = rule(
+    doc = """Helper to calculate runfiles for executable_dispatcher.""",
+    implementation = _runfiles_helper_impl,
+    attrs = {
+        "actual_executable": attr.label(
+            allow_files = True,
+        ),
+        "data": attr.label_list(
+            allow_files = True,
+        ),
+    },
+)
+
 def _executable_dispatcher_internal_impl(
         name,
         visibility,
@@ -103,29 +132,27 @@ def _executable_dispatcher_internal_impl(
         append_args,
         reversed_env,
         **kwargs):
-    # Extra layer ensures that src is configurable.
-    native.alias(
-        name = name + "_actual_executable",
-        actual = src,
-        visibility = ["//visibility:private"],
-        **kwargs
-    )
     _write_source_file(
         name = name + "_source.cpp",
         template = Label("executable_dispatcher.template.cpp"),
-        actual_executable = name + "_actual_executable",
+        actual_executable = src,
         out = name,
         append_args = append_args,
         reversed_env = reversed_env,
         visibility = ["//visibility:private"],
         **kwargs
     )
+    _runfiles_helper(
+        name = name + "_runfiles_helper",
+        actual_executable = src,
+        data = data,
+        visibility = ["//visibility:private"],
+        **kwargs
+    )
     cc_binary(
         name = name,
         srcs = [name + "_source.cpp"],
-        data = data + [
-            name + "_actual_executable",
-        ],
+        data = [name + "_runfiles_helper"],
         visibility = visibility,
         **kwargs
     )
