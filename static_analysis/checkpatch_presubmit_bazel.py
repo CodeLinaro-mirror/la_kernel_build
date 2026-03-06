@@ -23,6 +23,7 @@ tools/bazel run //build/kernel/static_analysis:checkpatch_presubmit -- \\
 
 import argparse
 import collections
+import json
 import logging
 import os
 import pathlib
@@ -59,6 +60,11 @@ def load_arguments() -> dict[str, Any]:
         "--bid",
         help="Build ID. If specified, it is used to skip the check on post-submit.",
     )
+    parser.add_argument(
+        "--change_info",
+        type=_require_absolute_path,
+        help="Path to change-info file providing complete change information.",
+    )
     return parser.parse_known_args()
 
 
@@ -68,6 +74,11 @@ def _resolve_against_workspace_root(value: str) -> pathlib.Path:
         return path
     return pathlib.Path(os.environ["BUILD_WORKSPACE_DIRECTORY"]) / path
 
+def _require_absolute_path(p: str | pathlib.Path) -> pathlib.Path:
+    p = pathlib.Path(p)
+    if not p.is_absolute():
+        raise argparse.ArgumentTypeError("need to specify an absolute path")
+    return p
 
 def _log_command(args):
     quoted = [shlex.quote(str(arg)) for arg in args]
@@ -119,16 +130,7 @@ def _run_checkpatch(
     ).returncode
 
 
-def main(
-        checkpatch_args: list[str],
-        dist_dir: pathlib.Path,
-        bid: str | None,
-) -> int:
-    if bid:
-        # Skip checkpatch for postsubmit (b/35390488).
-        if not bid.startswith("P"):
-            logging.info("Did not identify a presubmit build. Exiting.")
-            return 0
+def _invoke_using_applied_prop(dist_dir: pathlib.Path) -> int:
     applied_prop = dist_dir / "applied.prop"
     applied_prop_dict: dict[pathlib.Path, list[str]] = \
         collections.defaultdict(list)
@@ -180,6 +182,90 @@ def main(
 
     if not success:
         logging.info("See %s for complete output.", checkpatch_log.name)
+
+    return success
+
+
+def _invoke_using_change_info_json(
+    dist_dir: pathlib.Path,
+    change_info: pathlib.Path
+) -> int:
+    targets: list[(list[str], str, str)] = []
+    with change_info.open() as change_info_file:
+        for change in json.load(change_info_file).get("changes"):
+            project_name = change["project"]
+            project_path = pathlib.Path(change["projectPath"])
+            # Only interested in the git SHA of the CL at the time of the
+            # build. The SHA is specified by the "latestRevision" field.
+            revision = change["latestRevision"]
+
+            path_targets = _find_checkpatch_targets(project_path)
+            if not path_targets:
+                logging.info(
+                    "Skipping %s because no checkpatch() target is found.", project_path)
+                continue
+
+            targets.append((path_targets, revision, project_name))
+
+    checkpatch_topdir = dist_dir / "checkpatch"
+    return_codes = []
+
+    for path_targets, git_sha1, project_name in targets:
+        sanitized_project_name = project_name.replace("/", "__")
+        checkpatch_dir = checkpatch_topdir / sanitized_project_name / git_sha1
+        checkpatch_dir.mkdir(parents=True, exist_ok=True)
+
+        checkpatch_log = checkpatch_dir / "checkpatch.log"
+        checkpatch_log.unlink(missing_ok=True)
+
+        checkpatch_full_log = checkpatch_dir / "checkpatch_full.log"
+        checkpatch_full_log.unlink(missing_ok=True)
+
+        for target in path_targets:
+            return_codes.append(_run_checkpatch(
+                target=target,
+                git_sha1=git_sha1,
+                log=checkpatch_log,
+                checkpatch_args=checkpatch_args,
+            ))
+            _run_checkpatch(
+                target=target,
+                git_sha1=git_sha1,
+                log=checkpatch_full_log,
+                checkpatch_args=checkpatch_args + ["--ignored_checks", ""],
+                silent=True,
+            )
+
+    success = sum(return_codes) == 0
+
+    if not success:
+        logging.info(
+            "See %s/ folder for complete output.",
+            checkpatch_topdir.name
+        )
+
+    return success
+
+def main(
+        checkpatch_args: list[str],
+        dist_dir: pathlib.Path,
+        bid: str | None,
+        change_info: pathlib.Path | None,
+) -> int:
+    if bid:
+        # Skip checkpatch for postsubmit (b/35390488).
+        if not bid.startswith("P"):
+            logging.info("Did not identify a presubmit build. Exiting.")
+            return 0
+
+    if change_info:
+        success = _invoke_using_change_info_json(
+            dist_dir=dist_dir,
+            change_info=change_info
+        )
+    else:
+        # Fallback, since change-info is not guaranteed to exist
+        success = _invoke_using_applied_prop(dist_dir=dist_dir)
 
     return 0 if success else 1
 
