@@ -104,7 +104,7 @@ class CompareTest(unittest.TestCase):
         if not arguments.order:
             diff = collections.Counter(expected_lines) - collections.Counter(actual_lines)
             self.assertFalse(diff,
-                             f"{actual} does not contain all lines from {expected}, missing\n" +
+                             f"{actual.resolve()} does not contain all lines from {expected}, missing\n" +
                              ("\n".join(diff.elements())))
         else:
             expected_index = self._check_sublist_with_order(actual_lines, expected_lines)
