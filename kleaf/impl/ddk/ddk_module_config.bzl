@@ -25,6 +25,7 @@ load(":ddk/ddk_config/ddk_config_info_subrule.bzl", "ddk_config_info_subrule")
 load(":ddk/ddk_config/ddk_config_main_action_subrule.bzl", "ddk_config_main_action_subrule")
 load(":ddk/ddk_config/ddk_config_restore_out_dir_step.bzl", "ddk_config_restore_out_dir_step")
 load(":ddk/ddk_config/ddk_config_script_subrule.bzl", "ddk_config_script_subrule")
+load(":ddk/ddk_config/extract_dot_config.bzl", "extract_dot_config")
 
 visibility("//build/kernel/kleaf/...")
 
@@ -52,9 +53,16 @@ def _ddk_module_config_impl(ctx):
         override_parent = ctx.attr.override_parent,
     )
 
+    # Info from kernel_build
+    if ctx.attr.generate_btf:
+        # All outputs are required for BTF generation, including vmlinux image
+        kernel_build_serialized_env_info = ctx.attr.kernel_build[KernelBuildExtModuleInfo].mod_full_env
+    else:
+        kernel_build_serialized_env_info = ctx.attr.kernel_build[KernelBuildExtModuleInfo].mod_min_env
     serialized_env_info = _create_serialized_env_info(
-        ctx = ctx,
         out_dir = main_action_ret.out_dir,
+        script_name = "{name}/{name}_setup.sh".format(name = ctx.label.name),
+        kernel_build_serialized_env_info = kernel_build_serialized_env_info,
     )
 
     menuconfig_ret = ddk_config_script_subrule(
@@ -70,6 +78,12 @@ def _ddk_module_config_impl(ctx):
     if main_action_ret.kconfig_ext:
         default_info_files.append(main_action_ret.kconfig_ext)
 
+    dot_config = extract_dot_config(serialized_env_info = _create_serialized_env_info(
+        out_dir = main_action_ret.out_dir,
+        script_name = "{name}/{name}_dot_config_setup.sh".format(name = ctx.label.name),
+        kernel_build_serialized_env_info = ctx.attr.kernel_build[KernelBuildExtModuleInfo].ddk_config_env,
+    ))
+
     return [
         DefaultInfo(
             files = depset(default_info_files),
@@ -78,6 +92,7 @@ def _ddk_module_config_impl(ctx):
         ),
         OutputGroupInfo(
             override_parent_log = depset([main_action_ret.override_parent_log]),
+            **({".config": depset([dot_config])})
         ),
         serialized_env_info,
         ddk_config_info,
@@ -87,15 +102,8 @@ def _ddk_module_config_impl(ctx):
         ),
     ]
 
-def _create_serialized_env_info(ctx, out_dir):
+def _create_serialized_env_info_impl(subrule_ctx, out_dir, script_name, kernel_build_serialized_env_info):
     """Creates info for module build."""
-
-    # Info from kernel_build
-    if ctx.attr.generate_btf:
-        # All outputs are required for BTF generation, including vmlinux image
-        pre_info = ctx.attr.kernel_build[KernelBuildExtModuleInfo].mod_full_env
-    else:
-        pre_info = ctx.attr.kernel_build[KernelBuildExtModuleInfo].mod_min_env
 
     restore_out_dir_step = ddk_config_restore_out_dir_step(out_dir)
 
@@ -104,11 +112,11 @@ def _create_serialized_env_info(ctx, out_dir):
         . {pre_setup_script}
         {restore_out_dir_cmd}
     """.format(
-        pre_setup_script = pre_info.setup_script.path,
+        pre_setup_script = kernel_build_serialized_env_info.setup_script.path,
         restore_out_dir_cmd = restore_out_dir_step.cmd,
     )
-    setup_script = ctx.actions.declare_file("{name}/{name}_setup.sh".format(name = ctx.attr.name))
-    ctx.actions.write(
+    setup_script = subrule_ctx.actions.declare_file(script_name)
+    subrule_ctx.actions.write(
         output = setup_script,
         content = setup_script_cmd,
     )
@@ -122,9 +130,14 @@ def _create_serialized_env_info(ctx, out_dir):
 
     return KernelSerializedEnvInfo(
         setup_script = setup_script,
-        inputs = depset([setup_script], transitive = [pre_info.inputs, restore_out_dir_step.inputs]),
-        tools = pre_info.tools,
+        inputs = depset([setup_script], transitive = [kernel_build_serialized_env_info.inputs, restore_out_dir_step.inputs]),
+        tools = kernel_build_serialized_env_info.tools,
     )
+
+_create_serialized_env_info = subrule(
+    implementation = _create_serialized_env_info_impl,
+    subrules = [ddk_config_restore_out_dir_step],
+)
 
 ddk_module_config = rule(
     implementation = _ddk_module_config_impl,
@@ -184,7 +197,8 @@ for its format.
         ddk_config_info_subrule,
         ddk_config_main_action_subrule,
         ddk_config_script_subrule,
-        ddk_config_restore_out_dir_step,
+        extract_dot_config,
+        _create_serialized_env_info,
     ],
     executable = True,
 )

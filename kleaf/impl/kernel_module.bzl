@@ -743,11 +743,13 @@ def _kernel_module_impl(ctx):
 
     if ctx.attr.internal_ddk_config:
         ddk_config_info = ctx.attr.internal_ddk_config[DdkConfigInfo]
+        output_group_args = {".config": ctx.attr.internal_ddk_config[OutputGroupInfo][".config"]}
     else:
         ddk_config_info = empty_ddk_config_info(
             kernel_build_ddk_config_env =
                 ctx.attr.kernel_build[KernelBuildExtModuleInfo].ddk_config_env,
         )
+        output_group_args = {}
 
     # Only declare outputs in the "outs" list. For additional outputs that this rule created,
     # the label is available, but this rule doesn't explicitly return it in the info.
@@ -766,6 +768,7 @@ def _kernel_module_impl(ctx):
             # For kernel_module_test
             runfiles = ctx.runfiles(files = output_files),
         ),
+        OutputGroupInfo(**output_group_args),
         KernelModuleSetupInfo(
             inputs = depset(setup_deps),
             setup = setup,
