@@ -98,13 +98,10 @@ def _executable_dispatcher_impl(
         name,
         visibility,
         src,
-        out,
         data,
         append_args,
         reversed_env,
         **kwargs):
-    out = out or name
-
     # Extra layer ensures that src is configurable.
     native.alias(
         name = name + "_actual_executable",
@@ -116,28 +113,21 @@ def _executable_dispatcher_impl(
         name = name + "_source.cpp",
         template = Label("executable_dispatcher.template.cpp"),
         actual_executable = name + "_actual_executable",
-        out = out,
+        out = name,
         append_args = append_args,
         reversed_env = reversed_env,
         visibility = ["//visibility:private"],
         **kwargs
     )
     cc_binary(
-        name = out,
+        name = name,
         srcs = [name + "_source.cpp"],
         data = data + [
             name + "_actual_executable",
         ],
-        visibility = ["//visibility:private"] if name != out else visibility,
+        visibility = visibility,
         **kwargs
     )
-    if name != out:
-        native.alias(
-            name = name,
-            actual = out,
-            visibility = visibility,
-            **kwargs
-        )
 
 executable_dispatcher = macro(
     doc = "RBE-friendly native_binary() that supports embedding args and env.",
@@ -148,12 +138,6 @@ executable_dispatcher = macro(
             cfg = "target",
             allow_files = True,
             mandatory = True,
-        ),
-        "out": attr.string(
-            doc = """Default is name.
-                Unlike skylib's native_binary(), this rule doesn't add `.exe`.
-            """,
-            configurable = False,
         ),
         "data": attr.label_list(allow_files = True),
         "append_args": attr.string_list(
