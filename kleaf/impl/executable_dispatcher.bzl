@@ -91,7 +91,6 @@ _write_source_file = rule(
             allow_files = True,
         ),
         "out": attr.string(),
-        "source_name": attr.string(),
     },
 )
 
@@ -120,7 +119,6 @@ def _executable_dispatcher_impl(
         out = out,
         append_args = append_args,
         reversed_env = reversed_env,
-        source_name = name + "_source.cpp",
         visibility = ["//visibility:private"],
         **kwargs
     )
