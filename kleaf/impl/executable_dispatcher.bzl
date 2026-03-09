@@ -94,7 +94,7 @@ _write_source_file = rule(
     },
 )
 
-def _executable_dispatcher_impl(
+def _executable_dispatcher_internal_impl(
         name,
         visibility,
         src,
@@ -129,9 +129,9 @@ def _executable_dispatcher_impl(
         **kwargs
     )
 
-executable_dispatcher = macro(
+executable_dispatcher_internal = macro(
     doc = "RBE-friendly native_binary() that supports embedding args and env.",
-    implementation = _executable_dispatcher_impl,
+    implementation = _executable_dispatcher_internal_impl,
     attrs = {
         "src": attr.label(
             doc = "The actual executable.",
@@ -176,3 +176,50 @@ executable_dispatcher = macro(
         ),
     },
 )
+
+def executable_dispatcher(
+        name,
+        src,
+        data = None,
+        append_args = None,
+        reversed_env = None,
+        **kwargs):
+    """RBE-friendly native_binary() that supports embedding args and env.
+
+    Args:
+        name: Name of the target.
+        src:
+            The actual executable.
+        data:
+            Runfiles.
+        append_args:
+            Extra arguments that are appended at the end.
+        reversed_env:
+            Extra environment variables.
+        **kwargs: Additional attributes to the internal rule, e.g.
+          [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
+          See complete list
+          [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
+    """
+
+    # This is not a symbolic macro because symbolic macros does not allow us
+    # to create targets like `_dispatched/<name>`; all targets must start with name.
+
+    private_kwargs = kwargs | {
+        "visibility": ["//visibility:private"],
+    }
+
+    executable_dispatcher_internal(
+        name = "_dispatched/" + name,
+        src = src,
+        data = data,
+        append_args = append_args,
+        reversed_env = reversed_env,
+        **private_kwargs
+    )
+
+    native.alias(
+        name = name,
+        actual = "_dispatched/" + name,
+        **kwargs
+    )
