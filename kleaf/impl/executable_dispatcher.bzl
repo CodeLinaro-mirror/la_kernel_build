@@ -15,6 +15,7 @@
 """RBE-friendly native_binary() that supports embedding args and env."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load(":utils.bzl", "utils")
 
@@ -134,7 +135,11 @@ executable_dispatcher_internal = macro(
     implementation = _executable_dispatcher_internal_impl,
     attrs = {
         "src": attr.label(
-            doc = "The actual executable.",
+            doc = """The actual executable.
+
+                Note: Unless `python_hack` is set, this assumes that `src`' label name's basename is
+                the same as name of the actual binary.
+            """,
             cfg = "target",
             allow_files = True,
             mandatory = True,
@@ -183,19 +188,27 @@ def executable_dispatcher(
         data = None,
         append_args = None,
         reversed_env = None,
+        python_hack = None,
         **kwargs):
     """RBE-friendly native_binary() that supports embedding args and env.
 
     Args:
         name: Name of the target.
-        src:
+        src: [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes).
             The actual executable.
-        data:
+
+            Note: Unless `python_hack` is set, this assumes that `src`' label name's basename is the
+            same as name of the actual binary.
+        data: [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes).
             Runfiles.
-        append_args:
+        append_args: [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes).
             Extra arguments that are appended at the end.
-        reversed_env:
+        reversed_env: [Nonconfigurable](https://bazel.build/reference/be/common-definitions#configurable-attributes).
             Extra environment variables.
+        python_hack: Enable hack for python.
+
+            `python_runtime_files` can't be used in `native_binary`. This is a hack to avoid
+            falling to that case.
         **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
@@ -204,6 +217,27 @@ def executable_dispatcher(
 
     # This is not a symbolic macro because symbolic macros does not allow us
     # to create targets like `_dispatched/<name>`; all targets must start with name.
+
+    simple_target = None
+    if not append_args and not reversed_env:
+        # If no extra args or env, an alias or native_binary would suffice.
+        simple_target = name + "_simple"
+        if python_hack or (not data and name == paths.basename(native.package_relative_label(src).name)):
+            # Simple case: use alias
+            native.alias(
+                name = simple_target,
+                actual = src,
+                **kwargs
+            )
+        else:
+            # Simple case: use native_binary
+            native_binary(
+                name = simple_target,
+                src = src,
+                data = data,
+                out = name,
+                **kwargs
+            )
 
     private_kwargs = kwargs | {
         "visibility": ["//visibility:private"],
@@ -220,6 +254,6 @@ def executable_dispatcher(
 
     native.alias(
         name = name,
-        actual = "_dispatched/" + name,
+        actual = simple_target or "_dispatched/" + name,
         **kwargs
     )
