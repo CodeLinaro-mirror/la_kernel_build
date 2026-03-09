@@ -140,6 +140,12 @@ executable_dispatcher(
 )
 
 executable_dispatcher(
+    name = "avbtool",
+    src = "//prebuilts/kernel-build-tools:avbtool",
+    visibility = ["//visibility:public"],
+)
+
+executable_dispatcher(
     name = "mkbootimg",
     src = "//prebuilts/kernel-build-tools:mkbootimg",
     visibility = ["//visibility:public"],
@@ -199,6 +205,7 @@ executable_dispatcher(
 # where label.name is the tool name
 _SPECIAL_TOOLS_SAME_NAME = [
     # keep sorted
+    ":avbtool",
     ":bison",
     ":bzcat",
     ":depmod",
@@ -232,7 +239,6 @@ _SIMPLE_TOOLS_SAME_NAME = [
     "//prebuilts/build-tools:runextractor",
     "//prebuilts/build-tools:soong_zip",
     "//prebuilts/build-tools:xz",
-    "//prebuilts/kernel-build-tools:avbtool",
     "//prebuilts/kernel-build-tools:blk_alloc_to_base_fs",
     "//prebuilts/kernel-build-tools:build_image",
     "//prebuilts/kernel-build-tools:build_super_image",
