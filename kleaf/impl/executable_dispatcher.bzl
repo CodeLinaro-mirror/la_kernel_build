@@ -36,7 +36,7 @@ def _get_single_executable(ctx, target):
     return files_list[0]
 
 def _write_source_file_impl(ctx):
-    out = ctx.actions.declare_file(ctx.attr.source_name or ctx.label.name)
+    out = ctx.actions.declare_file(ctx.label.name)
     actual_executable = _get_single_executable(ctx, ctx.attr.actual_executable)
 
     # This is not a perfect translation, but it is good enough for our use cases.
@@ -103,7 +103,6 @@ def _executable_dispatcher_impl(
         data,
         append_args,
         reversed_env,
-        internal_dispatcher_source_name,
         **kwargs):
     out = out or name
 
@@ -121,7 +120,7 @@ def _executable_dispatcher_impl(
         out = out,
         append_args = append_args,
         reversed_env = reversed_env,
-        source_name = internal_dispatcher_source_name,
+        source_name = name + "_source.cpp",
         visibility = ["//visibility:private"],
         **kwargs
     )
@@ -192,9 +191,6 @@ executable_dispatcher = macro(
                 Values: Name (**key**) of the environment variable.
             """,
             allow_files = True,
-        ),
-        "internal_dispatcher_source_name": attr.string(
-            doc = "If set, use the given name as the .cpp source file name.",
         ),
     },
 )
