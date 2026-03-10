@@ -30,6 +30,13 @@ kleaf_local_repository = use_repo_rule(
 )
 
 new_kleaf_local_repository(
+    name = "argp-standalone",
+    build_file = "build/kernel/kleaf/argp-standalone.BUILD",
+    mandatory = False,
+    path = "external/argp-standalone",
+)
+
+new_kleaf_local_repository(
     name = "avb_test",
     build_file = "build/kernel/kleaf/avb_test.BUILD",
     path = "external/avb/test",
