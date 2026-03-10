@@ -54,6 +54,13 @@ new_kleaf_local_repository(
 )
 
 new_kleaf_local_repository(
+    name = "obstack",
+    build_file = "build/kernel/kleaf/obstack.BUILD",
+    mandatory = False,
+    path = "external/obstack",
+)
+
+new_kleaf_local_repository(
     name = "toybox",
     build_file = "build/kernel/kleaf/toybox.BUILD",
     path = "external/toybox",
