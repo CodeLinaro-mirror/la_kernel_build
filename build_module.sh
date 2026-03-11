@@ -336,11 +336,17 @@ for EXT_MOD in ${EXT_MODULES}; do
      btgt="sdmsteppeauto"
   elif [ "$TARGET_BOARD_PLATFORM" = "chora" ]; then
      btgt="canoe"
+  elif [ "$TARGET_BOARD_PLATFORM" = "hamoa_la" ]; then
+     btgt="hamoa_la"
   else
      btgt="$TARGET_BOARD_PLATFORM"
   fi
 
-  filter_regex="${btgt/_/-}_${VARIANT/_/-}_${SUBTARGET_REGEX:-.*}_dist$"
+  if [[ "$btgt" == "hamoa_la" ]]; then
+     filter_regex="${btgt}_${VARIANT/_/-}_${SUBTARGET_REGEX:-.*}_dist$"
+  else
+     filter_regex="${btgt/_/-}_${VARIANT/_/-}_${SUBTARGET_REGEX:-.*}_dist$"
+  fi
 
   # Query for a target that matches the pattern for module distribution
   if [ "$ENABLE_DDK_BUILD" = "true" ] \
