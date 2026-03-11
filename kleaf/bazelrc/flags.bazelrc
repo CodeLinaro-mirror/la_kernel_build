@@ -71,6 +71,7 @@ build --flag_alias=noincompatible_inherit_pre_defconfig_fragments_from_base_kern
 build --flag_alias=incompatible_inherit_post_defconfig_fragments_from_base_kernel=@kleaf//build/kernel/kleaf:inherit_post_defconfig_fragments_from_base_kernel
 build --flag_alias=noincompatible_inherit_post_defconfig_fragments_from_base_kernel=no@kleaf//build/kernel/kleaf:inherit_post_defconfig_fragments_from_base_kernel
 build --flag_alias=livepatch=@kleaf//build/kernel/kleaf:livepatch
+build --flag_alias=nohermetic_tools_use_symlinks=no@kleaf//build/kernel/kleaf:hermetic_tools_use_symlinks
 
 # flags that control the build process
 build --flag_alias=experimental_optimize_ddk_config_actions=@kleaf//build/kernel/kleaf:optimize_ddk_config_actions
