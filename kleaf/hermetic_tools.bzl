@@ -16,6 +16,7 @@ Provide tools for a hermetic build.
 """
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//build/kernel/kleaf/impl:debug.bzl", "debug")
 load(
     "//build/kernel/kleaf/impl:hermetic_exec.bzl",
@@ -24,7 +25,6 @@ load(
 )
 load("//build/kernel/kleaf/impl:hermetic_genrule.bzl", _hermetic_genrule = "hermetic_genrule")
 load("//build/kernel/kleaf/impl:hermetic_toolchain.bzl", _hermetic_toolchain = "hermetic_toolchain")
-load("//build/kernel/kleaf/impl:utils.bzl", "utils")
 
 # Re-export functions
 hermetic_exec = _hermetic_exec
@@ -70,8 +70,12 @@ def _get_single_executable(ctx, target):
     return files_list[0]
 
 def _handle_tool(ctx, tool_name, actual_target):
-    out = ctx.actions.declare_file("{}/{}".format(ctx.attr.outer_target_name, tool_name))
     target_file = _get_single_executable(ctx, actual_target)
+
+    if not ctx.attr._use_symlinks[BuildSettingInfo].value:
+        return [target_file]
+
+    out = ctx.actions.declare_file("{}/{}".format(ctx.attr.outer_target_name, tool_name))
 
     ctx.actions.symlink(
         output = out,
@@ -90,6 +94,19 @@ def _handle_hermetic_symlinks(ctx, symlinks_attr):
 
     return all_outputs
 
+def _get_hermetic_base(all_outputs, short = None):
+    bases = {}
+    for f in all_outputs:
+        key = paths.dirname(f.short_path if short else f.path)
+        if key not in bases:
+            bases[key] = []
+        bases[key].append(f)
+    if not len(bases) == 1:
+        fail("hermetic_tools should have all outputs in one single directory, but got {}".format(
+            bases,
+        ))
+    return bases.keys()[0]
+
 def _hermetic_tools_internal_impl(ctx):
     debug.print_platforms(ctx)
 
@@ -107,15 +124,8 @@ def _hermetic_tools_internal_impl(ctx):
            set -o pipefail
     """
 
-    hermetic_base = paths.join(
-        utils.package_bin_dir(ctx),
-        ctx.attr.outer_target_name,
-    )
-    hermetic_base_short = paths.join(
-        ctx.label.workspace_root,
-        ctx.label.package,
-        ctx.attr.outer_target_name,
-    )
+    hermetic_base = _get_hermetic_base(all_outputs)
+    hermetic_base_short = _get_hermetic_base(all_outputs, short = True)
 
     hashbang = """#!/bin/bash -e
 """
@@ -177,6 +187,9 @@ _hermetic_tools_internal = rule(
         # --noincompatible_disable_hermetic_tools_symlink_source is not set.
         "_disable_symlink_source": attr.label(
             default = "//build/kernel/kleaf:incompatible_disable_hermetic_tools_symlink_source",
+        ),
+        "_use_symlinks": attr.label(
+            default = "//build/kernel/kleaf:hermetic_tools_use_symlinks",
         ),
     },
     subrules = [debug.print_platforms],
