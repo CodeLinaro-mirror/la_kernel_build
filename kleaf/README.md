@@ -38,6 +38,8 @@
 
 ### [Visualizing dependencies](docs/dependencies.md)
 
+### [Kunit with Kleaf](tests/kunit_examples/README.md)
+
 ## Advanced topics
 
 ### [Handling SCM version](docs/scmversion.md)
