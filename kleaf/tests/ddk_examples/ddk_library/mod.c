@@ -33,3 +33,4 @@ module_init(module_func);
 MODULE_DESCRIPTION("A test module for Kleaf testing purposes");
 MODULE_AUTHOR("Hong, Yifan <elsk@google.com>");
 MODULE_LICENSE("GPL v2");
+MODULE_VERSION("FAKE");
