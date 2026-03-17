@@ -149,6 +149,47 @@ semantically identical to the original `ddk_headers` definition.
 | <a id="ddk_headers_archive-srcs"></a>srcs |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 
 
+<a id="ddk_prebuilt_module"></a>
+
+## ddk_prebuilt_module
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_prebuilt_module")
+
+ddk_prebuilt_module(<a href="#ddk_prebuilt_module-name">name</a>, <a href="#ddk_prebuilt_module-src">src</a>, <a href="#ddk_prebuilt_module-hdrs">hdrs</a>, <a href="#ddk_prebuilt_module-config">config</a>, <a href="#ddk_prebuilt_module-includes">includes</a>, <a href="#ddk_prebuilt_module-linux_includes">linux_includes</a>, <a href="#ddk_prebuilt_module-module_symvers">module_symvers</a>)
+</pre>
+
+Wraps ddk_module prebuilt files so it can be used in [ddk_module.srcs](#ddk_module-srcs).
+
+Example:
+
+```
+# Optional
+ddk_config(
+    name = "foo_config",
+)
+ddk_prebuilt_module(
+    name = "foo",
+    src = "foo.ko",
+    module_symvers = "foo_Module.symvers",
+    config = ":foo_config", # Optional
+)
+```
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="ddk_prebuilt_module-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="ddk_prebuilt_module-src"></a>src |  The .ko file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="ddk_prebuilt_module-hdrs"></a>hdrs |  [ddk_headers.hdrs](#ddk_headers-hdrs)   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="ddk_prebuilt_module-config"></a>config |  A [ddk_config](#ddk_config).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="ddk_prebuilt_module-includes"></a>includes |  [ddk_headers.hdrs](#ddk_headers-includes)   | List of strings | optional |  `[]`  |
+| <a id="ddk_prebuilt_module-linux_includes"></a>linux_includes |  [ddk_headers.hdrs](#ddk_headers-linux_includes)   | List of strings | optional |  `[]`  |
+| <a id="ddk_prebuilt_module-module_symvers"></a>module_symvers |  Module.symvers file.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+
+
 <a id="ddk_prebuilt_object"></a>
 
 ## ddk_prebuilt_object
