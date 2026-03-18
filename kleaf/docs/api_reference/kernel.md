@@ -902,7 +902,7 @@ the list have higher priority:
 <pre>
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "modinfo_summary_report")
 
-modinfo_summary_report(<a href="#modinfo_summary_report-name">name</a>, <a href="#modinfo_summary_report-deps">deps</a>)
+modinfo_summary_report(<a href="#modinfo_summary_report-name">name</a>, <a href="#modinfo_summary_report-deps">deps</a>, <a href="#modinfo_summary_report-verbose">verbose</a>)
 </pre>
 
 Generate a report from kernel modules of the given kernel build.
@@ -914,6 +914,7 @@ Generate a report from kernel modules of the given kernel build.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="modinfo_summary_report-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="modinfo_summary_report-deps"></a>deps |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="modinfo_summary_report-verbose"></a>verbose |  -   | Boolean | optional |  `False`  |
 
 
 <a id="super_image"></a>
