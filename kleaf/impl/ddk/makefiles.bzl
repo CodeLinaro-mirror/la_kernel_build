@@ -598,12 +598,15 @@ def _makefiles_impl(ctx):
     if ctx.attr.module_autofdo_profile:
         srcs_depset_transitive.append(ctx.attr.module_autofdo_profile.files)
 
+    library_srcs = (ctx.attr.module_srcs if ctx.attr.target_type == "library" else [])
+
     ddk_headers_info = ddk_headers_common_impl(
         ctx.label,
         # hdrs of the ddk_module + hdrs of submodules.
         # Don't export kernel_build[DdkHeadersInfo] to avoid raising its priority;
         # dependent makefiles() target will put kernel_build[DdkHeadersInfo] at the end.
-        ctx.attr.module_hdrs + submodule_deps,
+        # If this is a ddk_library, also append srcs because modpost needs them (b/491372662).
+        ctx.attr.module_hdrs + submodule_deps + library_srcs,
         # includes of the ddk_module. The includes of submodules are handled by adding
         # them to hdrs.
         ctx.attr.module_includes,
