@@ -378,6 +378,9 @@ def _get_outs_list_impl(
         outs_depset_direct = []
         for srcs_list in src_matrix:
             for src in srcs_list:
+                if src.extension not in ("c", "S", "rs"):
+                    continue
+
                 # All sources must be below this package.
                 # Use short_path here because we don't care about bin_dir for generated sources.
                 # path/to/foo.c -> [path/to/foo.o_shipped, path/to/.foo.o.cmd_shipped]
