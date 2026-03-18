@@ -1,5 +1,8 @@
+load("@bazel_skylib//rules:select_file.bzl", "select_file")
 load(
     "@kleaf//build/kernel/kleaf:kernel.bzl",
+    "ddk_headers",
+    "ddk_library",
     "ddk_module",
     "ddk_prebuilt_object",
 )
@@ -21,6 +24,25 @@ test_cc_object(
     src = "bar.c",
     kernel_build = "@kleaf//common:kernel_aarch64",
     visibility = ["//visibility:private"],
+)
+
+ddk_library(
+    name = "baz_lib",
+    srcs = ["baz.c"],
+    kernel_build = "@kleaf//common:kernel_aarch64",
+    visibility = ["//visibility:private"],
+)
+
+select_file(
+    name = "baz_object",
+    srcs = ":baz_lib",
+    subpath = "baz_lib/baz.o_shipped",
+)
+
+select_file(
+    name = "baz_cmd",
+    srcs = ":baz_lib",
+    subpath = "baz_lib/.baz.o.cmd_shipped",
 )
 
 # Wrap the foo.o file and generate a fake .foo.o.cmd file so it can be used
@@ -47,6 +69,25 @@ ddk_prebuilt_object(
     visibility = ["//visibility:private"],
 )
 
+# Wrap the baz.o and .baz.o.cmd file so it can be used in ddk_module.srcs.
+ddk_prebuilt_object(
+    name = "provide_cmd",
+    # In practice, just say `src = "baz.o"` to point to the prebuilt file.
+    src = ":baz_object",
+    # In practice, just say `src = ".baz.o.cmd"` to point to the prebuilt file.
+    cmd = ":baz_cmd",
+    visibility = ["//visibility:private"],
+)
+
+# Because `provide_cmd` has cmd, and mod.c has MODULE_VERSION(), we have to
+# provide the sources that are originally used to build baz.o, a.k.a. baz.c, to
+# mymod. For details, see README.md.
+ddk_headers(
+    name = "provide_cmd_srcs",
+    hdrs = ["baz.c"],
+    visibility = ["//visibility:private"],
+)
+
 ddk_module(
     name = "mymod",
     srcs = ["mod.c"],
@@ -63,5 +104,7 @@ ddk_module(
     deps = [
         ":bar",
         ":foo",
+        ":provide_cmd",
+        ":provide_cmd_srcs",
     ],
 )
