@@ -62,6 +62,7 @@ bzl_library(
         "ddk/ddk_config/ddk_config_main_action_subrule.bzl",
         "ddk/ddk_config/ddk_config_restore_out_dir_step.bzl",
         "ddk/ddk_config/ddk_config_script_subrule.bzl",
+        "ddk/ddk_config/extract_dot_config.bzl",
         "ddk/ddk_headers.bzl",
         "ddk/ddk_headers_archive.bzl",
         "ddk/ddk_library.bzl",
