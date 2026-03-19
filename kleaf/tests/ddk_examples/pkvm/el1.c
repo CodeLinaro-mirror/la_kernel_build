@@ -21,9 +21,7 @@ int __kvm_nvhe_example_pkvm_module_hyp_init(const struct pkvm_module_ops *ops);
 
 static int __init example_pkvm_module_init(void)
 {
-    unsigned long token;
-
-    return pkvm_load_el2_module(__kvm_nvhe_example_pkvm_module_hyp_init, &token);
+    return pkvm_load_el2_module(__kvm_nvhe_example_pkvm_module_hyp_init);
 }
 module_init(example_pkvm_module_init);
 
