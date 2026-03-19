@@ -12,25 +12,6 @@
  * GNU General Public License for more details.
  *
  */
+void baz(void);
 
-#if defined(FOO)
-#error mod.c must not be compiled with -DFOO!
-#endif
-
-#if !defined(MAIN_MODULE)
-#error foo.c must be compiled with -DMAIN_MODULE!
-#endif
-
-#include <linux/module.h>
-#include "foo.h"
-
-static int __init module_func(void) {
-    foo();
-    return 0;
-}
-module_init(module_func);
-
-MODULE_DESCRIPTION("A test module for Kleaf testing purposes");
-MODULE_AUTHOR("Hong, Yifan <elsk@google.com>");
-MODULE_LICENSE("GPL v2");
-MODULE_VERSION("FAKE");
+void baz(void) {}

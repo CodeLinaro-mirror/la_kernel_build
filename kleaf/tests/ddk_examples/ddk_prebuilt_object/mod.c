@@ -17,10 +17,12 @@
 
 extern void foo(void);
 extern void bar(void);
+extern void baz(void);
 
 static int __init module_func(void) {
     foo();
     bar();
+    baz();
     return 0;
 }
 module_init(module_func);
@@ -28,3 +30,4 @@ module_init(module_func);
 MODULE_DESCRIPTION("A test module for Kleaf testing purposes");
 MODULE_AUTHOR("Hong, Yifan <elsk@google.com>");
 MODULE_LICENSE("GPL v2");
+MODULE_VERSION("FAKE");
