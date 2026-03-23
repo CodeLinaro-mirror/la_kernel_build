@@ -108,6 +108,16 @@ def _run_checkpatch(
     ).returncode
 
 
+def _find_repo(curdir: pathlib.Path) -> pathlib.Path | None:
+    """Find repo installation."""
+    while curdir.parent != curdir:  # is not root
+        maybe_dot_repo = curdir / ".repo"
+        if maybe_dot_repo.is_dir():
+            return curdir
+        curdir = curdir.parent
+    return None
+
+
 def main(
         checkpatch_args: list[str],
         dist_dir: pathlib.Path,
@@ -129,13 +139,34 @@ def main(
             path, git_sha1 = line.split(maxsplit=2)
             applied_prop_dict[pathlib.Path(path)].append(git_sha1)
 
+    repo_root_s = os.environ.get("KLEAF_REPO_MANIFEST", ":").split(":")[0]
+    if repo_root_s:
+        repo_root = pathlib.Path(repo_root_s).resolve()
+    else:
+        repo_root = _find_repo(pathlib.Path(".").resolve())
+
+    if not repo_root:
+        logging.error(
+            "Unable to determine repo root. Please specify --repo_manifest.")
+        return 1
+
+    workspace_dir = pathlib.Path(os.environ["BUILD_WORKSPACE_DIRECTORY"])
+
     targets: list[(list[str], str)] = []
     for path, git_sha1_list in applied_prop_dict.items():
         if len(git_sha1_list) > 1:
             logging.error("Multiple git sha1 found in %s for %s",
                           applied_prop, path)
             return 1
-        path_targets = _find_checkpatch_targets(path)
+
+        realpath = repo_root / path
+        if realpath.is_relative_to(workspace_dir):
+            package_path = realpath.relative_to(workspace_dir)
+        else:
+            logging.info("Skipping %s because it is not in the workspace.", path)
+            continue
+
+        path_targets = _find_checkpatch_targets(package_path)
         if not path_targets:
             logging.info(
                 "Skipping %s because no checkpatch() target is found.", path)
