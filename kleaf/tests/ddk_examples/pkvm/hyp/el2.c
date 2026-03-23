@@ -20,6 +20,8 @@
 #error el2.c must be compiled with -DFOO!
 #endif
 
+int example_pkvm_module_hyp_init(const struct pkvm_module_ops *ops);
+
 int example_pkvm_module_hyp_init(const struct pkvm_module_ops *ops) {
     return 0;
 }
