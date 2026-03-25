@@ -14,16 +14,38 @@
 
 """Wraps prebuilt DDK module files, so it can be used as a dependency."""
 
+load("@bazel_skylib//lib:paths.bzl", "paths")
 load(
     ":common_providers.bzl",
+    "CompileCommandsInfo",
     "DdkConfigInfo",
+    "DdkHeadersInfo",
+    "DdkLibraryInfo",
+    "GcovInfo",
+    "KernelCmdsInfo",
+    "KernelModuleInfo",
+    "KernelModuleSetupInfo",
+    "KernelUnstrippedModulesInfo",
     "ModuleSymversFileInfo",
+    "ModuleSymversInfo",
 )
 load(":ddk/copy_ddk_prebuilt_step.bzl", "copy_ddk_prebuilt_step")
+load(":ddk/ddk_config/ddk_config_info_subrule.bzl", "empty_ddk_config_info")
 load(":ddk/ddk_headers.bzl", "ddk_headers_common_impl")
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
 
 visibility("//build/kernel/kleaf/...")
+
+# Empty providers needed for kernel_module_group compatibility
+_empty_compile_commands_info = CompileCommandsInfo(infos = depset())
+_empty_ddk_headers_info = DdkHeadersInfo(include_infos = depset(), files = depset())
+_empty_modules_symver_file_info = ModuleSymversFileInfo(module_symvers = depset())
+_empty_modules_symver_info = ModuleSymversInfo(restore_paths = depset())
+_empty_ddk_library_info = DdkLibraryInfo(files = depset())
+_empty_gcov_info = GcovInfo(gcno_mapping = "", gcno_dir = None)
+_empty_kernel_cmds_info = KernelCmdsInfo(srcs = depset(), directories = depset())
+_empty_kernel_module_setup_info = KernelModuleSetupInfo(inputs = depset(), setup = "")
+_empty_kernel_unstripped_modules_info = KernelUnstrippedModulesInfo(directories = depset())
 
 def _ddk_prebuilt_module_impl(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
@@ -46,17 +68,40 @@ def _ddk_prebuilt_module_impl(ctx):
         module_symvers = copy_ddk_prebuilt_step(
             hermetic_tools,
             ctx.file.module_symvers,
-            "{}/Module.symvers".format(ctx.label.name),
+            "{}/{}_Module.symvers".format(ctx.label.name, out_stem),
             "ModuleSymvers",
+        )
+        module_symvers_name = module_symvers.basename
+        ext_mod = paths.join(ctx.label.repo_name, ctx.label.package)
+        module_symvers_restore_path = paths.join(ext_mod, module_symvers_name)
+        setup_command = """
+        (
+            # Create directories if not present.
+            mkdir -p ${{ROOT_DIR}}/{ext_mod}
+            ext_mod_rel=$(realpath ${{ROOT_DIR}}/{ext_mod} --relative-to ${{KERNEL_DIR}})
+            # Restore Modules.symvers
+            mkdir -p $(dirname ${{COMMON_OUT_DIR}}/{module_symvers_restore_path})
+            rsync -aL {module_symvers} ${{COMMON_OUT_DIR}}/{module_symvers_restore_path}
+        )
+        """.format(
+            ext_mod = ext_mod,
+            module_symvers = module_symvers.path,
+            module_symvers_restore_path = module_symvers_restore_path,
         )
         all_files.append(module_symvers)
         infos.append(ModuleSymversFileInfo(module_symvers = depset([module_symvers])))
+        infos.append(ModuleSymversInfo(restore_paths = depset([module_symvers_restore_path])))
+        infos.append(KernelModuleSetupInfo(inputs = depset([module_symvers]), setup = setup_command))
     else:
-        infos.append(ModuleSymversFileInfo(module_symvers = depset()))
+        infos.append(_empty_modules_symver_file_info)
+        infos.append(_empty_modules_symver_info)
+        infos.append(_empty_kernel_module_setup_info)
 
     # DdkConfigInfo
     if ctx.attr.config:
         infos.append(ctx.attr.config[DdkConfigInfo])
+    else:
+        infos.append(empty_ddk_config_info(kernel_build_ddk_config_env = None))
 
     # DdkHeadersInfo
     if ctx.attr.hdrs or ctx.attr.includes or ctx.attr.linux_includes:
@@ -67,13 +112,35 @@ def _ddk_prebuilt_module_impl(ctx):
             ctx.attr.linux_includes,
         )
         infos.append(ddk_headers_info)
+    else:
+        infos.append(_empty_ddk_headers_info)
 
     infos.append(DefaultInfo(files = depset(all_files)))
+
+    _empty_kernel_module_info = KernelModuleInfo(
+        kernel_build_infos = None,
+        modules_staging_dws_depset = depset(),
+        kernel_uapi_headers_dws_depset = depset(),
+        files = depset(),
+        packages = depset(),
+        label = ctx.label,
+        modules_order = depset(),
+    )
+
+    # Add empty but neccesary infos for kernel_module_group
+    infos.extend([
+        _empty_compile_commands_info,
+        _empty_ddk_library_info,
+        _empty_gcov_info,
+        _empty_kernel_cmds_info,
+        _empty_kernel_module_info,
+        _empty_kernel_unstripped_modules_info,
+    ])
     return infos
 
 ddk_prebuilt_module = rule(
     implementation = _ddk_prebuilt_module_impl,
-    doc = """Wraps ddk_module prebuilt files so it can be used in [ddk_module.srcs](#ddk_module-srcs).
+    doc = """Wraps ddk_module prebuilt files so it can be used in [ddk_module.deps](#ddk_module-deps).
 
         Example:
 
@@ -117,6 +184,7 @@ ddk_prebuilt_module = rule(
     },
     subrules = [
         copy_ddk_prebuilt_step,
+        empty_ddk_config_info,
     ],
     toolchains = [hermetic_toolchain.type],
 )
