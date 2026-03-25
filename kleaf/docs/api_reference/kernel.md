@@ -159,7 +159,7 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_prebuilt_module")
 ddk_prebuilt_module(<a href="#ddk_prebuilt_module-name">name</a>, <a href="#ddk_prebuilt_module-src">src</a>, <a href="#ddk_prebuilt_module-hdrs">hdrs</a>, <a href="#ddk_prebuilt_module-config">config</a>, <a href="#ddk_prebuilt_module-includes">includes</a>, <a href="#ddk_prebuilt_module-linux_includes">linux_includes</a>, <a href="#ddk_prebuilt_module-module_symvers">module_symvers</a>)
 </pre>
 
-Wraps ddk_module prebuilt files so it can be used in [ddk_module.srcs](#ddk_module-srcs).
+Wraps ddk_module prebuilt files so it can be used in [ddk_module.deps](#ddk_module-deps).
 
 Example:
 
