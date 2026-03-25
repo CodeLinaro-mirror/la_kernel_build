@@ -12,13 +12,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_prebuilt_module")
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_module", "ddk_prebuilt_module", "kernel_module_group")
 
 # TODO: umendez - Add ddk_module rule here to generate the artifacts.
-#  For now before running this test, generate them using the CF target:
-#  //common-modules/virtual-device/kleaf_test/mixed_dep_test/ddk_module:my_ddk_module
+# For now before running this test, generate them using the sample from ddk_config_deps:
+#  tools/bazel build //build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/parent1:parent1
+#  cp bazel-bin/build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/parent1/parent1/parent1.ko build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_module/
+#  cp bazel-bin/build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/parent1/parent1/parent1_Module.symvers build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_module/
 ddk_prebuilt_module(
+    name = "parent1",
+    src = "parent1.ko",
+    hdrs = ["parent1.h"],
+    includes = ["."],
+    module_symvers = "parent1_Module.symvers",
+)
+
+ddk_module(
+    name = "child1",
+    srcs = ["child1.c"],
+    out = "child1.ko",
+    kernel_build = "@kleaf//common:kernel_aarch64",
+    deps = [
+        ":parent1",
+    ],
+)
+
+kernel_module_group(
     name = "ddk_prebuilt_module_sample",
-    src = "my_ddk_module.ko",
-    module_symvers = "my_ddk_module_Module.symvers",
+    srcs = [
+        ":child1",
+        ":parent1",
+    ],
 )
