@@ -733,7 +733,6 @@ def _kernel_module_impl(ctx):
             rsync -aL {module_symvers} ${{COMMON_OUT_DIR}}/{module_symvers_restore_path}
         """.format(
             module_symvers = module_symvers.path,
-            internal_module_symvers_name = ctx.attr.internal_module_symvers_name,
             module_symvers_restore_path = module_symvers_restore_path,
         )
         setup += """
