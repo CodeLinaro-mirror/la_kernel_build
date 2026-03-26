@@ -152,6 +152,16 @@ def _env_for_recursive_bazel_calls() -> dict[str, str]:
     return env
 
 
+def _find_repo(curdir: pathlib.Path) -> pathlib.Path | None:
+    """Find repo installation."""
+    while curdir.parent != curdir:  # is not root
+        maybe_dot_repo = curdir / ".repo"
+        if maybe_dot_repo.is_dir():
+            return curdir
+        curdir = curdir.parent
+    return None
+
+
 def main(
         checkpatch_args: list[str],
         dist_dir: pathlib.Path,
@@ -165,16 +175,37 @@ def main(
             logging.info("Did not identify a presubmit build. Exiting.")
             return 0
 
+    repo_root_s = os.environ.get("KLEAF_REPO_MANIFEST", ":").split(":")[0]
+    if repo_root_s:
+        repo_root = pathlib.Path(repo_root_s).resolve()
+    else:
+        repo_root = _find_repo(pathlib.Path(".").resolve())
+
+    if not repo_root:
+        logging.error(
+            "Unable to determine repo root. Please specify --repo_manifest.")
+        return 1
+
+    workspace_dir = pathlib.Path(os.environ["BUILD_WORKSPACE_DIRECTORY"])
+
     targets: list[(list[str], str, str)] = []
     with change_info.open() as change_info_file:
         for change in json.load(change_info_file).get("changes"):
             project_name = change["project"]
             project_path = pathlib.Path(change["projectPath"])
+
+            realpath = repo_root / project_path
+            if realpath.is_relative_to(workspace_dir):
+                package_path = realpath.relative_to(workspace_dir)
+            else:
+                logging.info("Skipping %s because it is not in the workspace.", project_path)
+                continue
+
             # Only interested in the git SHA of the CL at the time of the
             # build. The SHA is specified by the "latestRevision" field.
             revision = change["latestRevision"]
 
-            path_targets = _find_checkpatch_targets(bazel_wrapper, project_path)
+            path_targets = _find_checkpatch_targets(bazel_wrapper, package_path)
             if not path_targets:
                 logging.info(
                     "Skipping %s because no checkpatch() target is found.", project_path)

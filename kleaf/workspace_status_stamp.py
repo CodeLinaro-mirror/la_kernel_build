@@ -194,7 +194,7 @@ def list_project_shas() -> dict[pathlib.Path, str | None]:
     repo_root_s, repo_manifest = os.environ.get(
         "KLEAF_REPO_MANIFEST", ":").split(":")
     if repo_root_s:
-        repo_root = pathlib.Path(repo_root_s)
+        repo_root = pathlib.Path(repo_root_s).resolve()
     else:
         repo_root = _find_repo(pathlib.Path(".").resolve())
 
