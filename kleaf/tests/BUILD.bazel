@@ -53,3 +53,17 @@ bzl_library(
         "@bazel_skylib//lib:shell",
     ],
 )
+
+bzl_library(
+    name = "runtime_protection_presence_test/symbol_presence_test_bzl_lib",
+    srcs = [
+        "runtime_protection_presence_test/symbol_presence_test.bzl",
+    ],
+    visibility = ["//build/kernel/kleaf:__subpackages__"],
+    deps = [
+        "//build/kernel/kleaf:hermetic_tools_def",
+        "//build/kernel/kleaf/impl",
+        # TODO: b/401193617 -- Delete when VARS is no longer needed.
+        "@kernel_toolchain_info//:dict",
+    ],
+)
