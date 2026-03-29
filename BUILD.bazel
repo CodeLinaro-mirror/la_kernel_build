@@ -201,6 +201,12 @@ executable_dispatcher(
     visibility = ["//visibility:private"],
 )
 
+executable_dispatcher(
+    name = "zstd",
+    src = "@zstd//:zstd_cli",
+    visibility = ["//visibility:private"],
+)
+
 # List of the above that goes into the hermetic toolchain,
 # where label.name is the tool name
 _SPECIAL_TOOLS_SAME_NAME = [
@@ -224,6 +230,7 @@ _SPECIAL_TOOLS_SAME_NAME = [
     ":unzip",
     ":xzcat",
     ":zipinfo",
+    ":zstd",
 ]
 
 # External tools that requires no special handling and goes into the hermetic toolchain,

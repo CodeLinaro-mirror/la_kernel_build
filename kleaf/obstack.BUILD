@@ -26,7 +26,7 @@ cc_library(
     copts = [
         "-Wall",
         "-Werror",
-        "-Iexternal/+_repo_rules+obstack/android",
+        "-I{}/android".format(package_relative_label(":obstack").workspace_root or "."),
     ],
     strip_include_prefix = "include",
     visibility = ["//visibility:public"],

@@ -44,6 +44,8 @@ _SYSROOT_TRIPLE_LEVEL_FILES = [
     "crtbegin_dynamic.o",
     "crtbegin_static.o",
     "crtend_android.o",
+    "crtbegin_so.o",
+    "crtend_so.o",
 ]
 
 filegroup(
