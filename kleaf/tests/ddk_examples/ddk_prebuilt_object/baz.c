@@ -12,20 +12,6 @@
  * GNU General Public License for more details.
  *
  */
+void baz(void);
 
-#include <linux/module.h>
-
-extern void foo(void);
-extern void bar(void);
-extern void baz(void);
-
-void module_func(void) {
-    foo();
-    bar();
-    baz();
-}
-
-MODULE_DESCRIPTION("A test module for Kleaf testing purposes");
-MODULE_AUTHOR("Hong, Yifan <elsk@google.com>");
-MODULE_LICENSE("GPL v2");
-MODULE_VERSION("FAKE");
+void baz(void) {}
