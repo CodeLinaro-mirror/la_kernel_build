@@ -397,6 +397,13 @@ if [ "${COPY_NEEDED}" == "1" ]; then
       cp ${ANDROID_KP_OUT_DIR}/dist/modules.load ${ANDROID_KERNEL_OUT}/modules.load
     fi
 
+    if [ -f "${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist" ]; then
+      VENDOR_RAMDISK_MODULES_DIR="${ANDROID_PRODUCT_OUT}/vendor_ramdisk/lib/modules"
+      mkdir -p "${VENDOR_RAMDISK_MODULES_DIR}"
+      cp "${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist" \
+        "${VENDOR_RAMDISK_MODULES_DIR}/modules.blocklist"
+    fi
+
     unprotected_dlkm_kos=$(mktemp)
     if [ -e ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.unprotectedlist ]; then
       cat ${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.unprotectedlist | \
@@ -666,6 +673,17 @@ fi
 if [ "${USE_TECHPACK_BUILD}" == "1" -a "${RECOMPILE_KERNEL}" == "1" ] \
       && [ -e ${ANDROID_KERNEL_OUT}/vendor_dlkm ]; then
   touch ${ANDROID_KERNEL_OUT}/techpack.built
+fi
+
+# Source must be vendor_dlkm.modules.blocklist only.
+if [ -f "${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist" ]; then
+  VENDOR_RAMDISK_MODULES_DIR="${ANDROID_PRODUCT_OUT}/vendor_ramdisk/lib/modules"
+  if [ -d "${VENDOR_RAMDISK_MODULES_DIR}" ]; then
+    mkdir -p "${VENDOR_RAMDISK_MODULES_DIR}"
+    cp "${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist" \
+      "${VENDOR_RAMDISK_MODULES_DIR}/modules.blocklist"
+    echo "  Copied vendor_dlkm.modules.blocklist to vendor_ramdisk"
+  fi
 fi
 
 # remove bazel dir to avoid build issues
