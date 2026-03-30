@@ -40,6 +40,8 @@
 
 ### [Kunit with Kleaf](tests/kunit_examples/README.md)
 
+### [Bug template](docs/bug_template.md)
+
 ## Advanced topics
 
 ### [Handling SCM version](docs/scmversion.md)
