@@ -1566,13 +1566,11 @@ def _gen_symvers_step(ctx, all_output_names_minus_modules, kbuild_mixed_tree_ret
     # outs.
     if "vmlinux.symvers" in all_output_names_minus_modules:
         cmd += """
-            if [[ ! -f ${OUT_DIR}/vmlinux.symvers ]]; then
-                if [[ ! -f ${OUT_DIR}/Module.symvers ]]; then
-                    echo "ERROR: Can't generate vmlinux.symvers because Kbuild did not generate Module.symvers." >&2
-                    exit 1
-                fi
-                grep "\\<vmlinux\\s\\+EXPORT" ${OUT_DIR}/Module.symvers > ${OUT_DIR}/vmlinux.symvers
+            if [[ ! -f ${OUT_DIR}/Module.symvers ]]; then
+                echo "ERROR: Can't generate vmlinux.symvers because Kbuild did not generate Module.symvers." >&2
+                exit 1
             fi
+            grep "\\<vmlinux\\s\\+EXPORT" ${OUT_DIR}/Module.symvers > ${OUT_DIR}/vmlinux.symvers
         """
 
     # After 6.13, for mixed builds, Kbuild only generates modules-only.symvers. Manually
@@ -1585,13 +1583,11 @@ def _gen_symvers_step(ctx, all_output_names_minus_modules, kbuild_mixed_tree_ret
             if file.basename == "vmlinux.symvers"
         ]
         cmd += """
-            if [[ ! -f ${{OUT_DIR}}/Module.symvers ]]; then
-                if [[ ! -f ${{OUT_DIR}}/modules-only.symvers ]]; then
-                    echo "ERROR: Can't generate Module.symvers because Kbuild did not generate modules-only.symvers." >&2
-                    exit 1
-                fi
-                cat {symvers_srcs} ${{OUT_DIR}}/modules-only.symvers > ${{OUT_DIR}}/Module.symvers
+            if [[ ! -f ${{OUT_DIR}}/modules-only.symvers ]]; then
+                echo "ERROR: Can't generate Module.symvers because Kbuild did not generate modules-only.symvers." >&2
+                exit 1
             fi
+            cat {symvers_srcs} ${{OUT_DIR}}/modules-only.symvers > ${{OUT_DIR}}/Module.symvers
         """.format(
             symvers_srcs = " ".join([file.path for file in symvers_srcs]),
         )
