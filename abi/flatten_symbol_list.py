@@ -15,11 +15,12 @@
 # limitations under the License.
 #
 
+"""Convert a KMI symbol list in libabigail format to a raw list."""
+
 import configparser
 import sys
 
 def main():
-    """Convert a KMI symbol list in libabigail format to a raw list."""
     if sys.stdin.isatty():
         print("ERROR: missing KMI symbol list on the standard input")
         return 1
