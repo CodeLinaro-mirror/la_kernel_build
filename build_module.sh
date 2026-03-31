@@ -328,7 +328,8 @@ for EXT_MOD in ${EXT_MODULES}; do
     fi
   done
   if [[ "$TARGET_BOARD_PLATFORM" = "gen4" ||
-	  "$TARGET_BOARD_PLATFORM" = "gen5" ]]; then
+	  "$TARGET_BOARD_PLATFORM" = "gen5" ||
+	  "$TARGET_BOARD_PLATFORM" = "auto_gen" ]]; then
      btgt="autogvm"
   elif [ "$TARGET_BOARD_PLATFORM" = "msmnile_au" ]; then
      btgt="gen3auto"
