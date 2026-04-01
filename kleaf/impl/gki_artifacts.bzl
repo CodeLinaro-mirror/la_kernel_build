@@ -76,11 +76,10 @@ def _gki_artifacts_impl(ctx):
 
         images.append(image)
         size = ctx.attr.boot_img_sizes.get(size_key)
-        if not size:
-            fail("""{}: Missing key "{}" in boot_img_sizes for image {}.""".format(ctx.label, size_key, image.basename))
-        size_cmd += """
-            export BUILD_GKI_BOOT_IMG{var_name}_SIZE={size}
-        """.format(var_name = var_name, size = size)
+        if size:
+            size_cmd += """
+                export BUILD_GKI_BOOT_IMG{var_name}_SIZE={size}
+            """.format(var_name = var_name, size = size)
 
     # b/283225390: boot images with --gcov may overflow the boot image size
     #   check when adding AVB hash footer.
