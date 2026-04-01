@@ -876,10 +876,12 @@ function make_dtbo() {
 
 # gki_get_boot_img_size_flag <compression method>.
 # The function echoes the flag name and value of the preconfigured
-# size variable based on the input compression method.
+# size variable based on the input compression method, and fallbacks
+# to use dynamic partition if no size information is available.
 #   - (empty): echo --partition_size ${BUILD_GKI_BOOT_IMG_SIZE}
 #   -      gz: echo --partition_size ${BUILD_GKI_BOOT_IMG_GZ_SIZE}
 #   -     lz4: echo --partition_size ${BUILD_GKI_BOOT_IMG_LZ4_SIZE}
+#   - (fallback): echo --dynamic_partition_size
 function gki_get_boot_img_size_flag() {
   local compression
 
@@ -891,11 +893,10 @@ function gki_get_boot_img_size_flag() {
   fi
 
   if [ -z "${!boot_size_var}" ]; then
-    echo "ERROR: ${boot_size_var} is not set." >&2
-    exit 1
+    echo "--dynamic_partition_size"
+  else
+    echo "--partition_size ${!boot_size_var}"
   fi
-
-  echo "--partition_size ${!boot_size_var}"
 }
 
 # gki_add_avb_footer <image> <partition_size_flag> <security_patch_level>
