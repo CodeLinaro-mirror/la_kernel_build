@@ -1895,7 +1895,7 @@ kernel_build(<a href="#kernel_build-name">name</a>, <a href="#kernel_build-outs"
              <a href="#kernel_build-generated_headers_for_module">generated_headers_for_module</a>, <a href="#kernel_build-defconfig">defconfig</a>, <a href="#kernel_build-pre_defconfig_fragments">pre_defconfig_fragments</a>,
              <a href="#kernel_build-post_defconfig_fragments">post_defconfig_fragments</a>, <a href="#kernel_build-defconfig_fragments">defconfig_fragments</a>, <a href="#kernel_build-check_defconfig">check_defconfig</a>, <a href="#kernel_build-page_size">page_size</a>,
              <a href="#kernel_build-pack_module_env">pack_module_env</a>, <a href="#kernel_build-sanitizers">sanitizers</a>, <a href="#kernel_build-ddk_module_defconfig_fragments">ddk_module_defconfig_fragments</a>, <a href="#kernel_build-ddk_module_headers">ddk_module_headers</a>, <a href="#kernel_build-kcflags">kcflags</a>,
-             <a href="#kernel_build-clang_autofdo_profile">clang_autofdo_profile</a>, <a href="#kernel_build-generate_out_targets">generate_out_targets</a>, <a href="#kernel_build-kwargs">**kwargs</a>)
+             <a href="#kernel_build-clang_autofdo_profile">clang_autofdo_profile</a>, <a href="#kernel_build-generate_out_targets">generate_out_targets</a>, <a href="#kernel_build-pahole">pahole</a>, <a href="#kernel_build-kwargs">**kwargs</a>)
 </pre>
 
 Defines a kernel build target with all dependent targets.
@@ -1960,6 +1960,7 @@ For example, if name is `"kernel_aarch64"`:
 | <a id="kernel_build-kcflags"></a>kcflags |  Extra `KCFLAGS`. Empty by default.<br><br>To add common KCFLAGS, you must explicitly set it to `COMMON_KCFLAGS` (see `//build/kernel/kleaf:constants.bzl`).   |  `None` |
 | <a id="kernel_build-clang_autofdo_profile"></a>clang_autofdo_profile |  Path to an AutoFDO profile, For example: <pre><code>  clang_autofdo_profile = "//toolchain/pgo-profiles/kernel:aarch64/android16-6.12/kernel.afdo"</code></pre>   |  `None` |
 | <a id="kernel_build-generate_out_targets"></a>generate_out_targets |  [Nonconfigurable](https://bazel.build/docs/configurable-attributes). Default is `None`. If `None`, for each of the attributes `outs`, `module_outs`, `implicit_outs` and `module_implicit_outs`, generate labels for each item in the attribute if it is not a `select()` expression.<br><br>If True, generate labels for `outs`, `module_outs`, `implicit_outs` and `module_implicit_outs`.<br><br>If False, don't generate labels for these attributes.<br><br>This cannot be set to `True` if any of `outs`, `module_outs`, `implicit_outs` or `module_implicit_outs` is a `select()` expression.<br><br>The default value may be changed to False in the future.   |  `None` |
+| <a id="kernel_build-pahole"></a>pahole |  pahole tool to use for generating BTF.   |  `None` |
 | <a id="kernel_build-kwargs"></a>kwargs |  Additional attributes to the internal rule, e.g. [`visibility`](https://docs.bazel.build/versions/main/visibility.html). See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 
