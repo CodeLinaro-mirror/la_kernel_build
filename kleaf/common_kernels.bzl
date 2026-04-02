@@ -87,7 +87,8 @@ def common_kernel(
         kcflags = None,
         system_dlkm_extra_archive_files = None,
         clang_autofdo_profile = None,
-        generated_headers_for_module = None):
+        generated_headers_for_module = None,
+        pahole = None):
     """Macro for an Android Common Kernel.
 
     The following targets are declared as public API:
@@ -165,6 +166,7 @@ def common_kernel(
         system_dlkm_extra_archive_files: [system_dlkm_image.internal_extra_archive_files](#system_dlkm_image-internal_extra_archive_files)
         clang_autofdo_profile: See [kernel_build.clang_autofdo_profile](kernel.md#kernel_build-clang_autofdo_profile)
         generated_headers_for_module: See [kernel_build.generated_headers_for_module](kernel.md#kernel_build-generated_headers_for_module)
+        pahole: pahole tool to use for generating BTF.
     """
 
     native.alias(
@@ -236,6 +238,7 @@ def common_kernel(
         clang_autofdo_profile = clang_autofdo_profile,
         generated_headers_for_module = generated_headers_for_module,
         generate_out_targets = not modules_superset,
+        pahole = pahole,
     )
 
     if not modules_superset:
