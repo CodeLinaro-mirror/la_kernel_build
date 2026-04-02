@@ -444,6 +444,10 @@ def _kernel_env_impl(ctx):
     setup_transitive_tools = [
         toolchains.all_files,
         hermetic_tools.deps,
+
+        # We need to preserve the depset of runfiles for pahole to be available
+        # in the kernel_config rule, hence add pahole to transitive tools.
+        ctx.attr.pahole[DefaultInfo].default_runfiles.files,
     ]
 
     setup_inputs = [
@@ -645,11 +649,20 @@ def _get_env_setup_cmds(ctx):
         # Set libclang.so location for use by bindgen for Rust
         LIBCLANG_PATH=$(dirname $(which clang))/../lib
         export LIBCLANG_PATH
+
+        # Set pahole location for use by kernel_build for BTF generation
+        if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+            export TOOL_ARGS="${{TOOL_ARGS}} PAHOLE=${{ROOT_DIR}}/{pahole_short}"
+        else
+            export TOOL_ARGS="${{TOOL_ARGS}} PAHOLE=${{ROOT_DIR}}/{pahole}"
+        fi
     """.format(
         get_make_jobs_cmd = status.get_volatile_status_cmd(ctx, "MAKE_JOBS"),
         get_make_keep_going_cmd = status.get_volatile_status_cmd(ctx, "MAKE_KEEP_GOING"),
         kernel_build_workspace_root = ctx.label.workspace_root,
         kernel_build_label = str(ctx.label).removesuffix("_env"),
+        pahole = ctx.executable.pahole.path,
+        pahole_short = ctx.executable.pahole.short_path,
     )
 
     return struct(
@@ -753,6 +766,12 @@ kernel_env = rule(
         ),
         "make_goals": attr.string_list(doc = "`MAKE_GOALS`"),
         "kcflags": attr.string_list(),
+        "pahole": attr.label(
+            executable = True,
+            cfg = "exec",
+            default = Label("//build/kernel:pahole"),
+            doc = "Label to pahole executable",
+        ),
         "clang_autofdo_profile": attr.label(allow_single_file = True),
         "_build_utils_sh": attr.label(
             allow_single_file = True,
