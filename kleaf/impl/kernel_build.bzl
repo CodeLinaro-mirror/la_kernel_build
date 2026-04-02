@@ -144,6 +144,7 @@ def kernel_build(
         kcflags = None,
         clang_autofdo_profile = None,
         generate_out_targets = None,
+        pahole = None,
         **kwargs):
     """Defines a kernel build target with all dependent targets.
 
@@ -655,6 +656,7 @@ def kernel_build(
           ```
             clang_autofdo_profile = "//toolchain/pgo-profiles/kernel:aarch64/android16-6.12/kernel.afdo"
           ```
+        pahole: pahole tool to use for generating BTF.
         **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
@@ -763,6 +765,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         post_defconfig_fragments = post_defconfig_fragments_inherited + post_defconfig_fragments_non_inherited,
         kcflags = kcflags,
         clang_autofdo_profile = clang_autofdo_profile,
+        pahole = pahole,
         **internal_kwargs
     )
 
