@@ -43,6 +43,13 @@ new_kleaf_local_repository(
 )
 
 new_kleaf_local_repository(
+    name = "dwarves",
+    build_file = "build/kernel/kleaf/dwarves.BUILD",
+    mandatory = False,
+    path = "external/dwarves",
+)
+
+new_kleaf_local_repository(
     name = "libcap",
     build_file = "build/kernel/kleaf/libcap.BUILD",
     path = "external/libcap",

@@ -170,6 +170,12 @@ executable_dispatcher(
 )
 
 executable_dispatcher(
+    name = "pahole",
+    src = "//prebuilts/kernel-build-tools:pahole",
+    visibility = ["//visibility:public"],
+)
+
+executable_dispatcher(
     name = "xzcat",
     src = "//prebuilts/build-tools:xz",
     visibility = ["//visibility:private"],
@@ -262,7 +268,6 @@ _SIMPLE_TOOLS_SAME_NAME = [
     "//prebuilts/kernel-build-tools:mke2fs",
     "//prebuilts/kernel-build-tools:mkfs.erofs",
     "//prebuilts/kernel-build-tools:mkuserimg_mke2fs",
-    "//prebuilts/kernel-build-tools:pahole",
     "//prebuilts/kernel-build-tools:simg2img",
     "//prebuilts/kernel-build-tools:tune2fs",
     "//prebuilts/kernel-build-tools:ufdt_apply_overlay",

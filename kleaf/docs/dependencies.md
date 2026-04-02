@@ -10,7 +10,6 @@ Use the `dependency_graph` macro to create a diagram of dependencies between
  using a [Graphviz Server](https://graphviz.org/about/#viewers) or using the
 [CLI](https://graphviz.org/doc/info/command.html) as follows.
 
-<!-- TODO: After the change adding these targets land, reference the code here. -->
 Provide the `kernel_build` and a list of `kernel_module`'s to analyze:
 
 For example:

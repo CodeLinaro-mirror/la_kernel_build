@@ -874,13 +874,15 @@ function make_dtbo() {
   )
 }
 
-# gki_get_boot_img_size <compression method>.
-# The function echoes the value of the preconfigured size variable
-# based on the input compression method.
-#   - (empty): echo ${BUILD_GKI_BOOT_IMG_SIZE}
-#   -      gz: echo ${BUILD_GKI_BOOT_IMG_GZ_SIZE}
-#   -     lz4: echo ${BUILD_GKI_BOOT_IMG_LZ4_SIZE}
-function gki_get_boot_img_size() {
+# gki_get_boot_img_size_flag <compression method>.
+# The function echoes the flag name and value of the preconfigured
+# size variable based on the input compression method, and fallbacks
+# to use dynamic partition if no size information is available.
+#   - (empty): echo --partition_size ${BUILD_GKI_BOOT_IMG_SIZE}
+#   -      gz: echo --partition_size ${BUILD_GKI_BOOT_IMG_GZ_SIZE}
+#   -     lz4: echo --partition_size ${BUILD_GKI_BOOT_IMG_LZ4_SIZE}
+#   - (fallback): echo --dynamic_partition_size
+function gki_get_boot_img_size_flag() {
   local compression
 
   if [ -z "$1" ]; then
@@ -891,14 +893,13 @@ function gki_get_boot_img_size() {
   fi
 
   if [ -z "${!boot_size_var}" ]; then
-    echo "ERROR: ${boot_size_var} is not set." >&2
-    exit 1
+    echo "--dynamic_partition_size"
+  else
+    echo "--partition_size ${!boot_size_var}"
   fi
-
-  echo "${!boot_size_var}"
 }
 
-# gki_add_avb_footer <image> <partition_size> <security_patch_level>
+# gki_add_avb_footer <image> <partition_size_flag> <security_patch_level>
 function gki_add_avb_footer() {
   local spl_date="$3"
   local additional_props=""
@@ -907,7 +908,7 @@ function gki_add_avb_footer() {
   fi
 
   avbtool add_hash_footer --image "$1" \
-    --partition_name boot --partition_size "$2" \
+    --partition_name boot $2 \
     ${additional_props}
 }
 
@@ -1013,7 +1014,7 @@ function build_gki_boot_images() {
       local spl_date=$(printf "%d-%02d-05\n" ${spl_year} ${spl_month})
 
       gki_add_avb_footer "${boot_image_path}" \
-        "$(gki_get_boot_img_size "${compression}")" "${spl_date}"
+        "$(gki_get_boot_img_size_flag "${compression}")" "${spl_date}"
       gki_dry_run_certify_bootimg "${boot_image_path}" \
         "${GKI_ARTIFACTS_INFO_FILE}" "${spl_date}"
     fi

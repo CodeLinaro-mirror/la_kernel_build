@@ -144,6 +144,7 @@ def kernel_build(
         kcflags = None,
         clang_autofdo_profile = None,
         generate_out_targets = None,
+        pahole = None,
         **kwargs):
     """Defines a kernel build target with all dependent targets.
 
@@ -655,6 +656,7 @@ def kernel_build(
           ```
             clang_autofdo_profile = "//toolchain/pgo-profiles/kernel:aarch64/android16-6.12/kernel.afdo"
           ```
+        pahole: pahole tool to use for generating BTF.
         **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
@@ -763,6 +765,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         post_defconfig_fragments = post_defconfig_fragments_inherited + post_defconfig_fragments_non_inherited,
         kcflags = kcflags,
         clang_autofdo_profile = clang_autofdo_profile,
+        pahole = pahole,
         **internal_kwargs
     )
 
@@ -1551,23 +1554,20 @@ def _gen_symvers_step(ctx, all_output_names_minus_modules, kbuild_mixed_tree_ret
         all_output_names_minus_modules: all non-module output names in *outs
         kbuild_mixed_tree_ret: from _create_kbuild_mixed_tree
     """
-    inputs = []
-    cmd = """
-            if ! grep -q "\\bmodules\\b" <<< "{make_goals}"; then
-                # Workaround as this file is required, hence just produce a placeholder.
-                touch ${{OUT_DIR}}/Module.symvers
-            fi
-    """.format(
-        make_goals = " ".join(ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals),
-    )
+    make_goals = ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals
 
-    # After 6.13, Kbuild no longer generates vmlinux.symvers. Manually generates this by
-    # filtering vmlinux lines from Module.symvers if the caller is requesting vmlinux.symvers in
-    # outs.
-    if "vmlinux.symvers" in all_output_names_minus_modules:
+    inputs = []
+    cmd = ""
+
+    # Handle GKI case
+    # See Makefile.modpost. If KBUILD_MODULES=y and there is vmlinux.o, then modpost generates
+    # Module.symvers. Manually generates vmlinux.symvers by filtering vmlinux lines from
+    # Module.symvers.
+    if "modules" in make_goals and "vmlinux.symvers" in all_output_names_minus_modules:
         cmd += """
-            if [[ ! -f ${OUT_DIR}/vmlinux.symvers ]]; then
-                if [[ ! -f ${OUT_DIR}/Module.symvers ]]; then
+            # GKI: Generate vmlinux.symvers by filtering "vmlinux" lines from Module.symvers
+            if [ -f ${OUT_DIR}/vmlinux.o ]; then
+                if [ ! -f ${OUT_DIR}/Module.symvers ]; then
                     echo "ERROR: Can't generate vmlinux.symvers because Kbuild did not generate Module.symvers." >&2
                     exit 1
                 fi
@@ -1575,27 +1575,44 @@ def _gen_symvers_step(ctx, all_output_names_minus_modules, kbuild_mixed_tree_ret
             fi
         """
 
-    # After 6.13, for mixed builds, Kbuild only generates modules-only.symvers. Manually
-    # concatenate it with vmlinux.symvers to form Module.symvers.
-    if "Module.symvers" in all_output_names_minus_modules and kbuild_mixed_tree_ret.base_kernel_files:  # is mixed build
+    # List of vmlinux.symvers from base_kernel_files.
+    base_kernel_vmlinux_symvers_srcs = []
+    if kbuild_mixed_tree_ret.base_kernel_files:
         # This to_list() is acceptable because GKI's outs/module_outs is a small list
-        symvers_srcs = [
+        base_kernel_vmlinux_symvers_srcs = [
             file
             for file in kbuild_mixed_tree_ret.base_kernel_files.to_list()
             if file.basename == "vmlinux.symvers"
         ]
+
+    # Handle mixed build case. See Makefile.modpost.
+    # If vmlinux.o is not in $OUT_DIR, and vmlinux.symvers is in $OUT_DIR, then modpost generates
+    # modules-only.symvers, but NOT Module.symvers.
+    if "vmlinux" not in make_goals and "modules" in make_goals and base_kernel_vmlinux_symvers_srcs:
         cmd += """
-            if [[ ! -f ${{OUT_DIR}}/Module.symvers ]]; then
-                if [[ ! -f ${{OUT_DIR}}/modules-only.symvers ]]; then
+            # Mixed build: Module.symvers = vmlinux.symvers + modules-only.symvers
+            if [ ! -f ${{OUT_DIR}}/vmlinux.o ]; then
+                if [ ! -f ${{OUT_DIR}}/modules-only.symvers ]; then
                     echo "ERROR: Can't generate Module.symvers because Kbuild did not generate modules-only.symvers." >&2
                     exit 1
                 fi
-                cat {symvers_srcs} ${{OUT_DIR}}/modules-only.symvers > ${{OUT_DIR}}/Module.symvers
+                cat {vmlinux_symvers_srcs} ${{OUT_DIR}}/modules-only.symvers > ${{OUT_DIR}}/Module.symvers
             fi
         """.format(
-            symvers_srcs = " ".join([file.path for file in symvers_srcs]),
+            vmlinux_symvers_srcs = " ".join([file.path for file in base_kernel_vmlinux_symvers_srcs]),
         )
-        inputs += symvers_srcs
+        inputs += base_kernel_vmlinux_symvers_srcs
+
+    # If Module.symvers is requested in outs, and "modules" is not in make_goals, there
+    # is a big chance that modpost has not run (though other make_goals could also trigger
+    # modpost). In that case, leniently generate an empty Module.symvers file.
+    if "modules" not in make_goals and "Module.symvers" in all_output_names_minus_modules:
+        cmd += """
+            # Non-modules build: always touch Module.symvers.
+            if [ ! -f ${OUT_DIR}/Module.symvers ]; then
+                : > ${OUT_DIR}/Module.symvers
+            fi
+        """
 
     return struct(
         inputs = inputs,
