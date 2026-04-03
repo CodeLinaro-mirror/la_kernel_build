@@ -172,7 +172,7 @@ executable_dispatcher(
 executable_dispatcher(
     name = "pahole",
     src = "//prebuilts/kernel-build-tools:pahole",
-    visibility = ["//visibility:public"],
+    visibility = [":__subpackages__"],
 )
 
 executable_dispatcher(
@@ -380,7 +380,10 @@ hermetic_tools(
     symlinks = {
         tool: package_relative_label(tool).name
         for tool in _TOOLS_SAME_NAME
-    },
+    } | select({
+        "//build/kernel/kleaf:pahole_from_sources_is_true": {},
+        "//conditions:default": {":pahole": "pahole"},
+    }),
     visibility = ["//visibility:public"],
 )
 
