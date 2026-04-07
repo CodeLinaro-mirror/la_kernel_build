@@ -106,8 +106,6 @@ ROOT_DIR=${MYDIR%build/kernel/android}
 ROOT_DIR=${ROOT_DIR%/}
 echo "  kernel platform root: $ROOT_DIR"
 
-TECHPACK_BUILD=0
-
 ################################################################################
 # Discover where to put Android output
 if [ -z "${ANDROID_KERNEL_OUT}" ]; then
