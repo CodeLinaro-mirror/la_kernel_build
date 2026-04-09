@@ -22,6 +22,7 @@ visibility("//build/kernel/kleaf/...")
 def _checkpatch_impl(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
     script_file = ctx.actions.declare_file("{}.sh".format(ctx.attr.name))
+    strict_flag = "--strict" if ctx.attr.strict else ""
     script = """#!/bin/bash -e
         # git is not part of hermetic tools. Work around it.
         GIT=$(command -v git)
@@ -33,13 +34,14 @@ def _checkpatch_impl(ctx):
             --dir {dir} \\
             "$@" \\
             --checkpatch_pl $(realpath -e {checkpatch_pl}) \\
-            --git ${{GIT}}
+            --git ${{GIT}} {strict_flag}
     """.format(
         run_setup = hermetic_tools.run_setup,
         checkpatch_pl = ctx.file.checkpatch_pl.short_path,
         checkpatch_sh = ctx.executable._checkpatch_sh.short_path,
         ignorelist = ctx.file.ignorelist.short_path,
         dir = paths.join(ctx.label.workspace_root, ctx.label.package),
+        strict_flag = strict_flag,
     )
 
     ctx.actions.write(script_file, script, is_executable = True)
@@ -86,6 +88,9 @@ checkpatch = rule(
             executable = True,
             cfg = "exec",
             default = "//build/kernel/kleaf/impl:checkpatch",
+        ),
+        "strict": attr.bool(
+            doc = "Adds --strict to checkpatch invocation",
         ),
     },
     toolchains = [hermetic_toolchain.type],
