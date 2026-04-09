@@ -32,7 +32,7 @@ def _pahole_impl(name, deps, visibility):
         out = "config.h",
         content = [
             "#define DWARVES_MAJOR_VERSION 1",
-            "#define DWARVES_MINOR_VERSION 27",
+            "#define DWARVES_MINOR_VERSION 31",
             "#define HAVE_DWFL_MODULE_BUILD_ID 1",
             "#define HAVE_BPF_BTF_TYPE_TAG_RECURSIVE 1",
             "#define HAVE_BPF_BTF_FLOAT 1",
