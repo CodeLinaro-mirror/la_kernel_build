@@ -13,11 +13,14 @@
 # limitations under the License.
 
 load("@bazel_skylib//rules:select_file.bzl", "select_file")
+load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
     "@kleaf//build/kernel/kleaf:kernel.bzl",
     "ddk_module",
     "ddk_prebuilt_module",
+    "initramfs",
     "kernel_module_group",
+    "kernel_modules_install",
 )
 
 select_file(
@@ -32,6 +35,12 @@ select_file(
     subpath = "parent_Module.symvers",
 )
 
+select_file(
+    name = "parent_modules_order",
+    srcs = "//build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_module/parent",
+    subpath = "modules.order",
+)
+
 ddk_prebuilt_module(
     name = "parent",
     src = ":parent_ko",
@@ -39,7 +48,9 @@ ddk_prebuilt_module(
         "//build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_module/parent:parent_hdrs",
     ],
     includes = ["."],
+    kernel_release = "6.19.0-mainline-maybe-dirty-4k",
     module_symvers = ":parent_symvers",
+    modules_order = ":parent_modules_order",
 )
 
 ddk_module(
@@ -53,9 +64,34 @@ ddk_module(
 )
 
 kernel_module_group(
-    name = "ddk_prebuilt_module_sample",
+    name = "ddk_prebuilt_module_sample_group",
     srcs = [
         ":child",
         ":parent",
     ],
+)
+
+kernel_modules_install(
+    name = "ddk_prebuilt_module_sample_install",
+    kernel_modules = [
+        ":ddk_prebuilt_module_sample_group",
+    ],
+)
+
+write_file(
+    name = "vendor_ramdisk_modules_list",
+    out = "vendor_ramdisk.modules",
+    content = [
+        "extra/build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_module/child.ko",
+        "extra/build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_module/parent.ko",
+    ],
+)
+
+initramfs(
+    name = "ddk_prebuilt_module_sample_initramfs",
+    kernel_modules_install = ":ddk_prebuilt_module_sample_install",
+    modules_list = ":vendor_ramdisk_modules_list",
+    ramdisk_compression = "lz4",
+    trim_unused_modules = True,
+    vendor_boot_name = "vendor_kernel_boot",
 )
