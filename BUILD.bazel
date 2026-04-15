@@ -177,7 +177,7 @@ executable_dispatcher(
 
 executable_dispatcher(
     name = "xzcat",
-    src = "//prebuilts/build-tools:xz",
+    src = ":xz",
     visibility = ["//visibility:private"],
 )
 
