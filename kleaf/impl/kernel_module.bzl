@@ -765,6 +765,9 @@ def _kernel_module_impl(ctx):
         default_info_files.append(check_no_remaining)
     if module_symvers:
         default_info_files.append(module_symvers)
+    if modules_order:
+        default_info_files.append(modules_order)
+
     return [
         # Sync list of infos with kernel_module_group.
         DefaultInfo(
