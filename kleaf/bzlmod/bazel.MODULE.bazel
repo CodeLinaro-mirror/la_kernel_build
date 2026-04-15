@@ -32,7 +32,6 @@ kleaf_local_repository = use_repo_rule(
 new_kleaf_local_repository(
     name = "argp-standalone",
     build_file = "build/kernel/kleaf/argp-standalone.BUILD",
-    mandatory = False,
     path = "external/argp-standalone",
 )
 
@@ -45,7 +44,6 @@ new_kleaf_local_repository(
 new_kleaf_local_repository(
     name = "dwarves",
     build_file = "build/kernel/kleaf/dwarves.BUILD",
-    mandatory = False,
     path = "external/dwarves",
 )
 
@@ -70,7 +68,6 @@ new_kleaf_local_repository(
 new_kleaf_local_repository(
     name = "obstack",
     build_file = "build/kernel/kleaf/obstack.BUILD",
-    mandatory = False,
     path = "external/obstack",
 )
 
