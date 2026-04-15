@@ -27,6 +27,7 @@ ddk_module(
     srcs = ["parent.c"],
     out = "parent.ko",
     kernel_build = "@kleaf//common:kernel_aarch64",
+    tags = ["manual"],
     deps = [":parent_hdrs"],
 )
 
