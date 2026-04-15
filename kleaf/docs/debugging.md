@@ -57,6 +57,7 @@ development cycle. Usually, these flags should not be set on a release build.
 *   `--nokmi_symbol_list_strict_mode`: Disable KMI symbol list check.
 *   `--nokmi_symbol_list_violations_check`: Disable KMI symbol list violations
     check.
+*   `--noclippy`: Disables additional lints in Rust.
 
 **NOTE**: In addition to `--nokmi_symbol_list_strict_mode` and
 `--nokmi_symbol_list_violations_check` the following list of

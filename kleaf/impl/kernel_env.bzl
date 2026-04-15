@@ -338,6 +338,11 @@ def _kernel_env_impl(ctx):
     else:
         set_clang_autofdo_profile_cmd = ""
 
+    if ctx.attr._clippy[BuildSettingInfo].value:
+        command += """
+            export CLIPPY=1
+        """
+
     command += """
           export KCFLAGS="${{KCFLAGS}}"{quoted_space_and_extra_kcflags}
           {set_kernel_dir_cmd}
@@ -792,6 +797,9 @@ kernel_env = rule(
         ),
         "_autoload_build_config_constants": attr.label(
             default = "//build/kernel/kleaf:autoload_build_config_constants",
+        ),
+        "_clippy": attr.label(
+            default = "//build/kernel/kleaf:clippy",
         ),
     } | _kernel_env_additional_attrs(),
     toolchains = [hermetic_toolchain.type],
