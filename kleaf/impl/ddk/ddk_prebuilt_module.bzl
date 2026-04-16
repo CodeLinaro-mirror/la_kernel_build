@@ -22,6 +22,7 @@ load(
     "DdkHeadersInfo",
     "DdkLibraryInfo",
     "GcovInfo",
+    "KernelBuildUnameInfo",
     "KernelCmdsInfo",
     "KernelModuleInfo",
     "KernelModuleSetupInfo",
@@ -128,7 +129,7 @@ def _ddk_prebuilt_module_impl(ctx):
     modules_staging_dws = copy_prebuilts_to_staging(
         hermetic_tools,
         [ctx.file.src, ctx.file.modules_order],
-        ctx.attr.kernel_release,
+        ctx.attr.kernel_build[KernelBuildUnameInfo].kernel_release,
         ext_mod,
     )
     _kernel_module_info = KernelModuleInfo(
@@ -202,9 +203,13 @@ ddk_prebuilt_module = rule(
         "linux_includes": attr.string_list(
             doc = "[ddk_headers.hdrs](#ddk_headers-linux_includes)",
         ),
-        "kernel_release": attr.string(
-            doc = "See https://source.android.com/docs/core/architecture/kernel/gki-versioning#kernel-release",
+        "kernel_build": attr.label(
+            doc = "The [`kernel_build`](#kernel_build).",
             mandatory = True,
+            # The minimum requirement is KernelBuildUnameInfo provider to
+            #  get the kernel_release value [0].
+            # https://source.android.com/docs/core/architecture/kernel/gki-versioning#kernel-release
+            providers = [KernelBuildUnameInfo],
         ),
     },
     subrules = [
