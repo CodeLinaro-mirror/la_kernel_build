@@ -48,7 +48,7 @@ ddk_prebuilt_module(
         "//build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_module/parent:parent_hdrs",
     ],
     includes = ["."],
-    kernel_build = "@kleaf//common:kernel_aarch64",
+    kernel_release = "6.19.0-mainline-maybe-dirty-4k",
     module_symvers = ":parent_symvers",
     modules_order = ":parent_modules_order",
 )
