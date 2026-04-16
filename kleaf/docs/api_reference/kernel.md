@@ -156,7 +156,8 @@ semantically identical to the original `ddk_headers` definition.
 <pre>
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_prebuilt_module")
 
-ddk_prebuilt_module(<a href="#ddk_prebuilt_module-name">name</a>, <a href="#ddk_prebuilt_module-src">src</a>, <a href="#ddk_prebuilt_module-hdrs">hdrs</a>, <a href="#ddk_prebuilt_module-config">config</a>, <a href="#ddk_prebuilt_module-includes">includes</a>, <a href="#ddk_prebuilt_module-linux_includes">linux_includes</a>, <a href="#ddk_prebuilt_module-module_symvers">module_symvers</a>)
+ddk_prebuilt_module(<a href="#ddk_prebuilt_module-name">name</a>, <a href="#ddk_prebuilt_module-src">src</a>, <a href="#ddk_prebuilt_module-hdrs">hdrs</a>, <a href="#ddk_prebuilt_module-config">config</a>, <a href="#ddk_prebuilt_module-includes">includes</a>, <a href="#ddk_prebuilt_module-kernel_release">kernel_release</a>, <a href="#ddk_prebuilt_module-linux_includes">linux_includes</a>,
+                    <a href="#ddk_prebuilt_module-module_symvers">module_symvers</a>, <a href="#ddk_prebuilt_module-modules_order">modules_order</a>)
 </pre>
 
 Wraps ddk_module prebuilt files so it can be used in [ddk_module.deps](#ddk_module-deps).
@@ -186,8 +187,10 @@ ddk_prebuilt_module(
 | <a id="ddk_prebuilt_module-hdrs"></a>hdrs |  [ddk_headers.hdrs](#ddk_headers-hdrs)   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="ddk_prebuilt_module-config"></a>config |  A [ddk_config](#ddk_config).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="ddk_prebuilt_module-includes"></a>includes |  [ddk_headers.hdrs](#ddk_headers-includes)   | List of strings | optional |  `[]`  |
+| <a id="ddk_prebuilt_module-kernel_release"></a>kernel_release |  See https://source.android.com/docs/core/architecture/kernel/gki-versioning#kernel-release   | String | required |  |
 | <a id="ddk_prebuilt_module-linux_includes"></a>linux_includes |  [ddk_headers.hdrs](#ddk_headers-linux_includes)   | List of strings | optional |  `[]`  |
 | <a id="ddk_prebuilt_module-module_symvers"></a>module_symvers |  Module.symvers file.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="ddk_prebuilt_module-modules_order"></a>modules_order |  modules.order file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
 <a id="ddk_prebuilt_object"></a>
