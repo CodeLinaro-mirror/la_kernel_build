@@ -142,6 +142,27 @@ def _find_repo(curdir: pathlib.Path) -> pathlib.Path | None:
     return None
 
 
+def _get_package_path(path: pathlib.Path) -> pathlib.Path | None:
+    """Get package path from project path"""
+    workspace_dir = pathlib.Path(os.environ["BUILD_WORKSPACE_DIRECTORY"])
+    repo_root_s = os.environ.get("KLEAF_REPO_MANIFEST", ":").split(":")[0]
+    if repo_root_s:
+        repo_root = pathlib.Path(repo_root_s).resolve()
+    else:
+        repo_root = _find_repo(workspace_dir)
+
+    if not repo_root:
+        logging.error(
+            "Unable to determine repo root. Please specify --repo_manifest.")
+        return None
+
+    realpath = repo_root / path
+    if realpath.is_relative_to(workspace_dir):
+        return realpath.relative_to(workspace_dir)
+
+    return None
+
+
 def _invoke_using_applied_prop(dist_dir: pathlib.Path) -> int:
     applied_prop = dist_dir / "applied.prop"
     applied_prop_dict: dict[pathlib.Path, list[str]] = \
@@ -154,19 +175,6 @@ def _invoke_using_applied_prop(dist_dir: pathlib.Path) -> int:
             path, git_sha1 = line.split(maxsplit=2)
             applied_prop_dict[pathlib.Path(path)].append(git_sha1)
 
-    repo_root_s = os.environ.get("KLEAF_REPO_MANIFEST", ":").split(":")[0]
-    if repo_root_s:
-        repo_root = pathlib.Path(repo_root_s).resolve()
-    else:
-        repo_root = _find_repo(pathlib.Path(".").resolve())
-
-    if not repo_root:
-        logging.error(
-            "Unable to determine repo root. Please specify --repo_manifest.")
-        return 1
-
-    workspace_dir = pathlib.Path(os.environ["BUILD_WORKSPACE_DIRECTORY"])
-
     targets: list[(list[str], str)] = []
     for path, git_sha1_list in applied_prop_dict.items():
         if len(git_sha1_list) > 1:
@@ -174,10 +182,8 @@ def _invoke_using_applied_prop(dist_dir: pathlib.Path) -> int:
                           applied_prop, path)
             return 1
 
-        realpath = repo_root / path
-        if realpath.is_relative_to(workspace_dir):
-            package_path = realpath.relative_to(workspace_dir)
-        else:
+        package_path = _get_package_path(path)
+        if not package_path:
             logging.info("Skipping %s because it is not in the workspace.", path)
             continue
 
@@ -223,29 +229,14 @@ def _invoke_using_change_info_json(
     dist_dir: pathlib.Path,
     change_info: pathlib.Path
 ) -> int:
-    repo_root_s = os.environ.get("KLEAF_REPO_MANIFEST", ":").split(":")[0]
-    if repo_root_s:
-        repo_root = pathlib.Path(repo_root_s).resolve()
-    else:
-        repo_root = _find_repo(pathlib.Path(".").resolve())
-
-    if not repo_root:
-        logging.error(
-            "Unable to determine repo root. Please specify --repo_manifest.")
-        return 1
-
-    workspace_dir = pathlib.Path(os.environ["BUILD_WORKSPACE_DIRECTORY"])
-
     targets: list[(list[str], str, str)] = []
     with change_info.open() as change_info_file:
         for change in json.load(change_info_file).get("changes"):
             project_name = change["project"]
             project_path = pathlib.Path(change["projectPath"])
 
-            realpath = repo_root / project_path
-            if realpath.is_relative_to(workspace_dir):
-                package_path = realpath.relative_to(workspace_dir)
-            else:
+            package_path = _get_package_path(project_path)
+            if not package_path:
                 logging.info("Skipping %s because it is not in the workspace.", project_path)
                 continue
 
