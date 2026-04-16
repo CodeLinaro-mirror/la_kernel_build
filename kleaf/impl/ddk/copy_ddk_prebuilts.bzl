@@ -1,4 +1,4 @@
-# Copyright (C) 2025 The Android Open Source Project
+# Copyright (C) 2026 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ def _copy_prebuilts_to_staging_impl(
         subrule_ctx,
         hermetic_tools,
         files,
-        kernel_release,
+        kernel_release_file,
         ext_mod):
     """Copies multiple prebuilt files into a staging directory structure.
 
@@ -64,26 +64,27 @@ def _copy_prebuilts_to_staging_impl(
         subrule_ctx: The context of the subrule.
         hermetic_tools: A struct containing tools for hermetic execution.
         files: A list of files to copy.
-        kernel_release: The kernel release string.
+        kernel_release_file: The kernel release file.
         ext_mod: The name of the external module.
     Returns:
         A directory_with_structure representing the staging area.
     """
     modules_staging_dws = dws.make(subrule_ctx, "{}/staging".format(subrule_ctx.label.name))
     command = hermetic_tools.setup + """
-        mkdir -p {modules_staging_dir}/lib/modules/{kernel_release}/extra/{ext_mod}
-        cp -aL {files} {modules_staging_dir}/lib/modules/{kernel_release}/extra/{ext_mod}
+        kernel_release=$(cat {kernel_release_file})
+        mkdir -p {modules_staging_dir}/lib/modules/${{kernel_release}}/extra/{ext_mod}
+        cp -aL {files} {modules_staging_dir}/lib/modules/${{kernel_release}}/extra/{ext_mod}
     """.format(
         files = " ".join([f.path for f in files]),
         modules_staging_dir = modules_staging_dws.directory.path,
-        kernel_release = kernel_release,
+        kernel_release_file = kernel_release_file.path,
         directory = modules_staging_dws.directory.path,
         ext_mod = ext_mod,
     )
     command += dws.record(modules_staging_dws)
     subrule_ctx.actions.run_shell(
         command = command,
-        inputs = files,
+        inputs = files + [kernel_release_file],
         outputs = [] + dws.files(modules_staging_dws),
         tools = hermetic_tools.deps,
         mnemonic = "CopyDdkPrebuiltToStaging",
