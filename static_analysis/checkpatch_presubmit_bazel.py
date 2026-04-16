@@ -162,6 +162,27 @@ def _find_repo(curdir: pathlib.Path) -> pathlib.Path | None:
     return None
 
 
+def _get_package_path(path: pathlib.Path) -> pathlib.Path | None:
+    """Get package path from project path"""
+    workspace_dir = pathlib.Path(os.environ["BUILD_WORKSPACE_DIRECTORY"])
+    repo_root_s = os.environ.get("KLEAF_REPO_MANIFEST", ":").split(":")[0]
+    if repo_root_s:
+        repo_root = pathlib.Path(repo_root_s).resolve()
+    else:
+        repo_root = _find_repo(workspace_dir)
+
+    if not repo_root:
+        logging.error(
+            "Unable to determine repo root. Please specify --repo_manifest.")
+        return None
+
+    realpath = repo_root / path
+    if realpath.is_relative_to(workspace_dir):
+        return realpath.relative_to(workspace_dir)
+
+    return None
+
+
 def main(
         checkpatch_args: list[str],
         dist_dir: pathlib.Path,
@@ -175,29 +196,14 @@ def main(
             logging.info("Did not identify a presubmit build. Exiting.")
             return 0
 
-    repo_root_s = os.environ.get("KLEAF_REPO_MANIFEST", ":").split(":")[0]
-    if repo_root_s:
-        repo_root = pathlib.Path(repo_root_s).resolve()
-    else:
-        repo_root = _find_repo(pathlib.Path(".").resolve())
-
-    if not repo_root:
-        logging.error(
-            "Unable to determine repo root. Please specify --repo_manifest.")
-        return 1
-
-    workspace_dir = pathlib.Path(os.environ["BUILD_WORKSPACE_DIRECTORY"])
-
     targets: list[(list[str], str, str)] = []
     with change_info.open() as change_info_file:
         for change in json.load(change_info_file).get("changes"):
             project_name = change["project"]
             project_path = pathlib.Path(change["projectPath"])
 
-            realpath = repo_root / project_path
-            if realpath.is_relative_to(workspace_dir):
-                package_path = realpath.relative_to(workspace_dir)
-            else:
+            package_path = _get_package_path(project_path)
+            if not package_path:
                 logging.info("Skipping %s because it is not in the workspace.", project_path)
                 continue
 
