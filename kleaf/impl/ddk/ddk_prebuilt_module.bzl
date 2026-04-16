@@ -29,11 +29,7 @@ load(
     "ModuleSymversFileInfo",
     "ModuleSymversInfo",
 )
-load(
-    ":ddk/copy_ddk_prebuilts.bzl",
-    "copy_ddk_prebuilt",
-    "copy_prebuilts_to_staging",
-)
+load(":ddk/copy_ddk_prebuilt_step.bzl", "copy_ddk_prebuilt_step")
 load(":ddk/ddk_config/ddk_config_info_subrule.bzl", "empty_ddk_config_info")
 load(":ddk/ddk_headers.bzl", "ddk_headers_common_impl")
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
@@ -55,12 +51,11 @@ def _ddk_prebuilt_module_impl(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
 
     out_stem = ctx.file.src.basename.removesuffix("." + ctx.file.src.extension)
-    ext_mod = paths.join(ctx.label.repo_name, ctx.label.package)
     all_files = []
     infos = []
 
     # Required output
-    module_ko = copy_ddk_prebuilt(
+    module_ko = copy_ddk_prebuilt_step(
         hermetic_tools,
         ctx.file.src,
         "{}/{}.ko".format(ctx.label.name, out_stem),
@@ -70,18 +65,20 @@ def _ddk_prebuilt_module_impl(ctx):
 
     # ModuleSymversFileInfo
     if ctx.file.module_symvers:
-        module_symvers = copy_ddk_prebuilt(
+        module_symvers = copy_ddk_prebuilt_step(
             hermetic_tools,
             ctx.file.module_symvers,
             "{}/{}_Module.symvers".format(ctx.label.name, out_stem),
             "ModuleSymvers",
         )
         module_symvers_name = module_symvers.basename
+        ext_mod = paths.join(ctx.label.repo_name, ctx.label.package)
         module_symvers_restore_path = paths.join(ext_mod, module_symvers_name)
         setup_command = """
         (
             # Create directories if not present.
             mkdir -p ${{ROOT_DIR}}/{ext_mod}
+            ext_mod_rel=$(realpath ${{ROOT_DIR}}/{ext_mod} --relative-to ${{KERNEL_DIR}})
             # Restore Modules.symvers
             mkdir -p $(dirname ${{COMMON_OUT_DIR}}/{module_symvers_restore_path})
             rsync -aL {module_symvers} ${{COMMON_OUT_DIR}}/{module_symvers_restore_path}
@@ -118,30 +115,17 @@ def _ddk_prebuilt_module_impl(ctx):
     else:
         infos.append(_empty_ddk_headers_info)
 
-    # Recreate modules_install
-    modules_order = copy_ddk_prebuilt(
-        hermetic_tools,
-        ctx.file.modules_order,
-        "{}/modules.order".format(ctx.label.name),
-        "ModulesOrder",
-    )
-    modules_staging_dws = copy_prebuilts_to_staging(
-        hermetic_tools,
-        [ctx.file.src, ctx.file.modules_order],
-        ctx.attr.kernel_release,
-        ext_mod,
-    )
-    _kernel_module_info = KernelModuleInfo(
-        kernel_build_infos = None,
-        modules_staging_dws_depset = depset([modules_staging_dws]),
-        kernel_uapi_headers_dws_depset = depset(),
-        files = depset([module_ko]),
-        packages = depset([ext_mod]),
-        label = ctx.label,
-        modules_order = depset([modules_order]),
-    )
-
     infos.append(DefaultInfo(files = depset(all_files)))
+
+    _empty_kernel_module_info = KernelModuleInfo(
+        kernel_build_infos = None,
+        modules_staging_dws_depset = depset(),
+        kernel_uapi_headers_dws_depset = depset(),
+        files = depset(),
+        packages = depset(),
+        label = ctx.label,
+        modules_order = depset(),
+    )
 
     # Add empty but neccesary infos for kernel_module_group
     infos.extend([
@@ -149,8 +133,8 @@ def _ddk_prebuilt_module_impl(ctx):
         _empty_ddk_library_info,
         _empty_gcov_info,
         _empty_kernel_cmds_info,
+        _empty_kernel_module_info,
         _empty_kernel_unstripped_modules_info,
-        _kernel_module_info,
     ])
     return infos
 
@@ -183,11 +167,6 @@ ddk_prebuilt_module = rule(
             allow_single_file = True,
             doc = "Module.symvers file.",
         ),
-        "modules_order": attr.label(
-            allow_single_file = True,
-            mandatory = True,
-            doc = "modules.order file.",
-        ),
         "config": attr.label(
             doc = "A [ddk_config](#ddk_config).",
             providers = [DdkConfigInfo],
@@ -202,14 +181,9 @@ ddk_prebuilt_module = rule(
         "linux_includes": attr.string_list(
             doc = "[ddk_headers.hdrs](#ddk_headers-linux_includes)",
         ),
-        "kernel_release": attr.string(
-            doc = "See https://source.android.com/docs/core/architecture/kernel/gki-versioning#kernel-release",
-            mandatory = True,
-        ),
     },
     subrules = [
-        copy_ddk_prebuilt,
-        copy_prebuilts_to_staging,
+        copy_ddk_prebuilt_step,
         empty_ddk_config_info,
     ],
     toolchains = [hermetic_toolchain.type],
