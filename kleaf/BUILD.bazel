@@ -409,7 +409,7 @@ bool_flag(
 # If true, build pahole from sources
 bool_flag(
     name = "pahole_from_sources",
-    build_setting_default = False,
+    build_setting_default = True,
     visibility = ["//visibility:private"],
 )
 
