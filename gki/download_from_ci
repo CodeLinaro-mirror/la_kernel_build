@@ -103,6 +103,10 @@ def parse_args():
       action="store_true",
       help="update 16k kernel prebuilts in Android platform (set $ANDROID_BUILD_TOP)")
   update_group.add_argument(
+      "--update-tv-gki",
+      action="store_true",
+      help="update TV GKI kernel prebuilts in Android platform (set $ANDROID_BUILD_TOP)")
+  update_group.add_argument(
       "--update-u-boot",
       action="store_true",
       help="update U-Boot prebuilts in Android platform (set $ANDROID_BUILD_TOP)")
@@ -127,6 +131,7 @@ def parse_args():
   if any((
     _args.update_gki,
     _args.update_16k,
+    _args.update_tv_gki,
     _args.update_u_boot,
     _args.update_microdroid)):
     if _args.build_target is not None:
@@ -485,6 +490,18 @@ def update_androidx_virtual_device_modules(gitlog, output_dir, version):
   commit_prebuilts(arm64_mods_dir, gitlog)
   commit_prebuilts(x86_64_mods_dir, gitlog)
 
+def update_androidx_virtual_device_modules_tv(gitlog, output_dir, version):
+  mods_dir = os.path.join(output_dir, "kernel", "prebuilts", "tv", "common-modules",
+                          "virtual-device")
+  ver_mods_dir = os.path.join(mods_dir, version)
+  arm64_mods_dir = os.path.join(ver_mods_dir, "arm64")
+
+  clean_download_dir(arm64_mods_dir)
+
+  download_kernel_modules("virtual_device_aarch64_tv", arm64_mods_dir, fetch_initramfs=True)
+
+  commit_prebuilts(arm64_mods_dir, gitlog)
+
 def update_androidx_cf(gitlog, output_dir, version):
   i686_cf_dirname = version + "-i686"
   rockpi_cf_dirname = version + "-arm64-rockpi"
@@ -553,6 +570,26 @@ def update_androidx(output_dir, version, android_version):
 
   if android_version >= 15:
     update_androidx_trusty_modules(gitlog, output_dir, version)
+
+def update_androidx_tv(output_dir, version, android_version):
+  arm64_dir = os.path.join(output_dir, "kernel", "prebuilts", "tv", version, "arm64")
+
+  arm64_kernel = os.path.join(arm64_dir, "kernel-" + version)
+  (old_version, old_sha) = get_binary_kernel_version(arm64_kernel)
+
+  # arm64 GKI kernels and kernel modules
+  clean_download_dir(arm64_dir)
+  download_kernel("kernel_aarch64_tv", version, arm64_dir, fetch_system_dlkm=True)
+  download_kernel_modules("kernel_aarch64_tv", arm64_dir)
+  get_abi_definition("kernel_aarch64", arm64_dir)
+
+  write_prebuilt_info(arm64_dir)
+  (new_version, new_sha) = get_binary_kernel_version(arm64_kernel)
+  gitlog = get_git_log(old_sha, new_sha)
+  gitlog = ""
+  commit_prebuilts(arm64_dir, gitlog)
+
+  update_androidx_virtual_device_modules_tv(gitlog, output_dir, version)
 
 def update_android_mainline_riscv64(output_dir):
   # Although we don't update the x86_64 kernel, we use it's path to compute the
@@ -662,6 +699,14 @@ def update_gki():
     update_android_mainline_riscv64(output_dir)
   else:
     update_androidx(output_dir, get_build_kernel_version(data), get_android_version(branch))
+
+def update_tv_gki():
+    data = get_build_info(["kernel_aarch64_tv"])
+    branch = json.loads(data)["branch"]
+
+    output_dir = os.environ["ANDROID_BUILD_TOP"]
+
+    update_androidx_tv(output_dir, get_build_kernel_version(data), get_android_version(branch))
 
 def download_u_boot(target, output_dir):
   if not os.path.isdir(output_dir):
@@ -814,6 +859,10 @@ def main():
 
   if _args.update_16k:
     update_16k()
+    return
+
+  if _args.update_tv_gki:
+    update_tv_gki()
     return
 
   if _args.update_u_boot:
