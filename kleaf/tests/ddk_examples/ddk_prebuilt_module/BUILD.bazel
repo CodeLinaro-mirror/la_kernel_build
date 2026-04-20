@@ -12,35 +12,50 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_module", "ddk_prebuilt_module", "kernel_module_group")
+load("@bazel_skylib//rules:select_file.bzl", "select_file")
+load(
+    "@kleaf//build/kernel/kleaf:kernel.bzl",
+    "ddk_module",
+    "ddk_prebuilt_module",
+    "kernel_module_group",
+)
 
-# TODO: umendez - Add ddk_module rule here to generate the artifacts.
-# For now before running this test, generate them using the sample from ddk_config_deps:
-#  tools/bazel build //build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/parent1:parent1
-#  cp bazel-bin/build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/parent1/parent1/parent1.ko build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_module/
-#  cp bazel-bin/build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/parent1/parent1/parent1_Module.symvers build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_module/
+select_file(
+    name = "parent_ko",
+    srcs = "//build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_module/parent",
+    subpath = "parent.ko",
+)
+
+select_file(
+    name = "parent_symvers",
+    srcs = "//build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_module/parent",
+    subpath = "parent_Module.symvers",
+)
+
 ddk_prebuilt_module(
-    name = "parent1",
-    src = "parent1.ko",
-    hdrs = ["parent1.h"],
+    name = "parent",
+    src = ":parent_ko",
+    hdrs = [
+        "//build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_module/parent:parent_hdrs",
+    ],
     includes = ["."],
-    module_symvers = "parent1_Module.symvers",
+    module_symvers = ":parent_symvers",
 )
 
 ddk_module(
-    name = "child1",
-    srcs = ["child1.c"],
-    out = "child1.ko",
+    name = "child",
+    srcs = ["child.c"],
+    out = "child.ko",
     kernel_build = "@kleaf//common:kernel_aarch64",
     deps = [
-        ":parent1",
+        ":parent",
     ],
 )
 
 kernel_module_group(
     name = "ddk_prebuilt_module_sample",
     srcs = [
-        ":child1",
-        ":parent1",
+        ":child",
+        ":parent",
     ],
 )

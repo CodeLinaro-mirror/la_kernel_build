@@ -14,15 +14,11 @@
  */
 
 #include <linux/module.h>
-#include "parent1.h"
+#include "parent.h"
 
-void child1_func(void);
+void parent_func(void) {}
 
-void child1_func(void) {
-    parent1_func();
-}
-
-EXPORT_SYMBOL(child1_func);
+EXPORT_SYMBOL(parent_func);
 
 MODULE_DESCRIPTION("A test module for DDK testing purposes");
 MODULE_LICENSE("GPL v2");
