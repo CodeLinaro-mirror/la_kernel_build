@@ -146,15 +146,17 @@ def _kernel_toolchains_impl(ctx):
         export -f kleaf_internal_append_one_ldflags
 
         function kleaf_internal_eval_ldflags() {{
-            local relative_root="$(realpath -m "${{ROOT_DIR}}" --relative-to "${{OUT_DIR}}")"
-            local relative_depth="${{relative_root//[^\\/]/}}"
+            local relative_to_output="$(realpath ${{ROOT_DIR}} --relative-to ${{OUT_DIR}})"
+            local relative_to_output_prefix="${{relative_to_output%%[!./]*}}"
+            local relative_to_output_suffix="${{relative_to_output#${{relative_to_output_prefix}}}}"
+            local relative_depth="${{relative_to_output_prefix//[^\\/]/}}"
             # This comes from the maximum path seen so far (e.g.):
             #   arch/arm64/kernel/pi/relacheck and arch/arm64/kvm/hyp/nvhe/gen-hyprel
             local max_depth=$((${{#relative_depth}} + 7))
             local backtrack=""
             for depth in $(seq 1 ${{max_depth}}); do
                 backtrack="${{backtrack}}.."
-                kleaf_internal_append_one_ldflags "${{backtrack}}"
+                kleaf_internal_append_one_ldflags "${{backtrack}}/${{relative_to_output_suffix}}"
                 backtrack="${{backtrack}}/"
             done
         }}
