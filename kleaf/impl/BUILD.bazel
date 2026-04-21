@@ -55,7 +55,7 @@ bzl_library(
         "compile_commands_utils.bzl",
         "config_utils.bzl",
         "constants.bzl",
-        "ddk/copy_ddk_prebuilt_step.bzl",
+        "ddk/copy_ddk_prebuilts.bzl",
         "ddk/ddk_conditional_filegroup.bzl",
         "ddk/ddk_config.bzl",
         "ddk/ddk_config/create_kconfig_ext_step.bzl",
