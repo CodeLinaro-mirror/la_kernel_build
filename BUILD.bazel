@@ -213,6 +213,12 @@ executable_dispatcher(
     visibility = ["//visibility:private"],
 )
 
+executable_dispatcher(
+    name = "bindgen",
+    src = "//prebuilts/clang-tools:bindgen",
+    visibility = ["//visibility:public"],
+)
+
 # List of the above that goes into the hermetic toolchain,
 # where label.name is the tool name
 _SPECIAL_TOOLS_SAME_NAME = [
