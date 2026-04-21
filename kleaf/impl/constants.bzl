@@ -20,6 +20,7 @@ visibility("//build/kernel/kleaf/...")
 DEFAULT_IMAGES = [
     "Image",
     "Image.lz4",
+    "Image.lzma",
     "Image.gz",
     "Image.zst",
 ]
