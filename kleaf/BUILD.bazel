@@ -719,6 +719,13 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
+# Set CLIPPY=1 for kernel and module builds.
+bool_flag(
+    name = "clippy",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
 # Tools visible to all packages that uses kernel_build.
 # Implementation detail of kernel_build; do not use directly.
 sh_binary(

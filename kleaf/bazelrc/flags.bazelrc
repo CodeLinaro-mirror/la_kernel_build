@@ -81,6 +81,8 @@ build --flag_alias=noexperimental_optimize_ddk_config_actions=no@kleaf//build/ke
 build --flag_alias=optimize_ddk_config_actions=@kleaf//build/kernel/kleaf:optimize_ddk_config_actions
 build --flag_alias=nooptimize_ddk_config_actions=no@kleaf//build/kernel/kleaf:optimize_ddk_config_actions
 build --flag_alias=incompatible_autoload_build_config_constants=@kleaf//build/kernel/kleaf:autoload_build_config_constants
+build --flag_alias=clippy=@kleaf//build/kernel/kleaf:clippy
+build --flag_alias=noclippy=no@kleaf//build/kernel/kleaf:clippy
 
 # flags that control the distribution
 build --flag_alias=kbuild_symtypes=@kleaf//build/kernel/kleaf:kbuild_symtypes
