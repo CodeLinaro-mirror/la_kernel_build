@@ -610,8 +610,6 @@ class BazelWrapper(KleafHelpPrinter):
             # Control Network access - with no internet by default.
             kleaf_repo / "build/kernel/kleaf/bazelrc/network.bazelrc",
             kleaf_repo / "build/kernel/kleaf/bazelrc/docs.bazelrc",
-            # Makes it possible to build //test/dittosuite
-            kleaf_repo / "build/kernel/kleaf/bazelrc/ditto.bazelrc",
             # Experimental bzlmod support
             kleaf_repo / "build/kernel/kleaf/bazelrc/bzlmod.bazelrc",
 
@@ -625,16 +623,14 @@ class BazelWrapper(KleafHelpPrinter):
         if override_module_path.is_relative_to(self.workspace_dir):
             override_module_path = (pathlib.Path("%workspace%") /
                 override_module_path.relative_to(self.workspace_dir))
-        # dittosuite is a special dependency that is not available in
-        # any registry, hence for docs generation keep it's override.
+        # Here lie special dependencies that are not available in
+        # any registry, hence for docs generation keep their override.
         docs_override = override_module_path if override_module in (
-            "dittosuite",
             "gbl",
          ) else ""
         bazelrc.write(textwrap.dedent(f"""\
             common --override_module={override_module}={override_module_path}
             common:docs --override_module={override_module}={docs_override}
-            common:ditto --override_module={override_module}=
         """))
 
     def _build_final_args(self) -> list[str]:

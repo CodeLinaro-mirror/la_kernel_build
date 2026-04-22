@@ -164,12 +164,6 @@ bazel_dep(
     version = "1.8.1",
 )
 
-# For --config=ditto
-bazel_dep(
-    name = "dittosuite",
-    version = "0.0.0",
-)
-
 bazel_dep(
     name = "gbl",
     dev_dependency = True,
