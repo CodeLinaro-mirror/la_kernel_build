@@ -688,3 +688,36 @@ fi
 
 # remove bazel dir to avoid build issues
 rm -rf ${ANDROID_BUILD_TOP}/kernel_platform/out/bazel
+
+# Remove bazel-cache for incremental builds for Desktop OS
+if [ "${RECOMPILE_MODULE}" == "1" ] && [ "${DESKTOPOS_PREBUILT}" == "1" ]; then
+    KP_OUT_DIR="${ANDROID_BUILD_TOP}/bazel-cache/"
+
+    if [ -d "${KP_OUT_DIR}" ]; then
+        echo "Cleaning Bazel Cache for incremental builds..."
+        chmod -R 0755 "${KP_OUT_DIR}"
+
+        # Remove METADATA and TEST_MAPPING files inside Bazel Cache
+        find "${KP_OUT_DIR}" \( -name METADATA -o -name TEST_MAPPING \) -delete
+    fi
+fi
+
+# Genarate fit image for Desktop Image
+if [ "${DESKTOPOS_PREBUILT}" == "1" ]; then
+    TOP="${ANDROID_BUILD_TOP}"
+    ITS="${TOP}/vendor/google/desktop/dev/kernel/build_fit_image_desktop/generate-its-script.sh"
+
+    # Run fdtoverlay to generate new dtb
+    fdtoverlay -v -i "${ANDROID_KERNEL_OUT}/dtbs/x1e80100.dtb" \
+      "${ANDROID_KERNEL_OUT}/dtbs/x1e80100-crd-overlay.dtbo" \
+        -o "${ANDROID_KERNEL_OUT}/dtbs/x1e80100-crd.dtb"
+
+    # Generate FIT image using script and dtc
+    "${ITS}" -a arm64 -c lz4 -d "${ANDROID_KERNEL_OUT}/dtbs" \
+      "${ANDROID_KERNEL_OUT}/Image" x1e80100-crd.dtb \
+        | dtc -I dts -O dtb -p 1024 > "${ANDROID_KERNEL_OUT}/Image.fit"
+
+    # Move Image.fit to Image
+    mv "${ANDROID_KERNEL_OUT}/Image.fit" \
+      "${ANDROID_KERNEL_OUT}/Image"
+fi
