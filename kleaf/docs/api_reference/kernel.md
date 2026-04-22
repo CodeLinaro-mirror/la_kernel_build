@@ -503,7 +503,7 @@ gki_artifacts(<a href="#gki_artifacts-name">name</a>, <a href="#gki_artifacts-ar
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="gki_artifacts-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="gki_artifacts-arch"></a>arch |  `ARCH`.   | String | required |  |
-| <a id="gki_artifacts-boot_img_sizes"></a>boot_img_sizes |  A dictionary, with key is the compression algorithm, and value is the size of the boot image.<br><br>For example: <pre><code>{&#10;    "":    str(64 * 1024 * 1024), # For Image and boot.img&#10;    "lz4": str(64 * 1024 * 1024), # For Image.lz4 and boot-lz4.img&#10;}</code></pre>   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
+| <a id="gki_artifacts-boot_img_sizes"></a>boot_img_sizes |  A dictionary, with key is the compression algorithm, and value is the size of the boot image.<br><br>For example: <pre><code>{&#10;    "":    str(64 * 1024 * 1024), # For Image and boot.img&#10;    "lz4": str(64 * 1024 * 1024), # For Image.lz4 and boot-lz4.img&#10;}</code></pre>   | <a href="https://bazel.build/rules/lib/core/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 | <a id="gki_artifacts-gki_kernel_cmdline"></a>gki_kernel_cmdline |  `GKI_KERNEL_CMDLINE`.   | String | optional |  `""`  |
 | <a id="gki_artifacts-kernel_build"></a>kernel_build |  The [`kernel_build`](kernel.md#kernel_build) that provides all `Image` and `Image.*`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="gki_artifacts-mkbootimg"></a>mkbootimg |  path to the `mkbootimg` tool; `MKBOOTIMG_PATH`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@kleaf//build/kernel:mkbootimg"`  |
@@ -661,7 +661,7 @@ It can be used in the `base_kernel` attribute of a [`kernel_build`](#kernel_buil
 | <a id="kernel_filegroup-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="kernel_filegroup-deps"></a>deps |  A list of additional labels that participates in implementing the providers.<br><br>This usually contains a list of prebuilts.<br><br>Unlike srcs, these labels are NOT added to the [`DefaultInfo`](https://docs.bazel.build/versions/main/skylark/lib/DefaultInfo.html)   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="kernel_filegroup-srcs"></a>srcs |  The list of labels that are members of this file group.<br><br>This usually contains a list of prebuilts, e.g. `vmlinux`, `Image.lz4`, `kernel-headers.tar.gz`, etc.<br><br>Not to be confused with [`kernel_srcs`](#kernel_filegroup-kernel_srcs).   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="kernel_filegroup-outs"></a>outs |  Keys: from `_kernel_build.outs`. Values: path under `$OUT_DIR`.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
+| <a id="kernel_filegroup-outs"></a>outs |  Keys: from `_kernel_build.outs`. Values: path under `$OUT_DIR`.   | <a href="https://bazel.build/rules/lib/core/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
 | <a id="kernel_filegroup-all_module_names"></a>all_module_names |  `module_outs` and `module_implicit_outs` of the original [`kernel_build`](#kernel_build) target.   | List of strings | optional |  `[]`  |
 | <a id="kernel_filegroup-check_post_defconfig_fragments"></a>check_post_defconfig_fragments |  See [kernel_build.check_defconfig](#kernel_build-check_defconfig).   | String | optional |  `"match"`  |
 | <a id="kernel_filegroup-check_pre_defconfig_fragments"></a>check_pre_defconfig_fragments |  See [kernel_build.check_defconfig](#kernel_build-check_defconfig).   | String | optional |  `"match"`  |
@@ -677,7 +677,7 @@ It can be used in the `base_kernel` attribute of a [`kernel_build`](#kernel_buil
 | <a id="kernel_filegroup-generated_headers_for_module_archive"></a>generated_headers_for_module_archive |  Archive from `kernel_build.generated_headers_for_module` that contains generated headers to be restored to $OUT_DIR to build external modules.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="kernel_filegroup-gki_artifacts"></a>gki_artifacts |  A list of files that were built from the [`gki_artifacts`](#gki_artifacts) target. The `gki-info.txt` file should be part of that list.<br><br>If `kernel_release` is set, this attribute has no effect.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="kernel_filegroup-images"></a>images |  A label providing files similar to a [`kernel_images`](#kernel_images) target.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
-| <a id="kernel_filegroup-internal_outs"></a>internal_outs |  Keys: from `_kernel_build.internal_outs`. Values: path under `$OUT_DIR`.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
+| <a id="kernel_filegroup-internal_outs"></a>internal_outs |  Keys: from `_kernel_build.internal_outs`. Values: path under `$OUT_DIR`.   | <a href="https://bazel.build/rules/lib/core/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
 | <a id="kernel_filegroup-kernel_release"></a>kernel_release |  A file providing the kernel release string. This is preferred over `gki_artifacts`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="kernel_filegroup-kernel_uapi_headers"></a>kernel_uapi_headers |  The label pointing to `kernel-uapi-headers.tar.gz`.<br><br>This attribute should be set to the `kernel-uapi-headers.tar.gz` artifact built by the [`kernel_build`](#kernel_build) macro if the `kernel_filegroup` rule were a `kernel_build`.<br><br>Setting this attribute allows [`merged_kernel_uapi_headers`](#merged_kernel_uapi_headers) to work properly when this `kernel_filegroup` is set to the `base_kernel`.<br><br>For example: <pre><code>kernel_filegroup(&#10;    name = "kernel_aarch64_prebuilts",&#10;    srcs = [&#10;        "vmlinux",&#10;        # ...&#10;    ],&#10;    kernel_uapi_headers = "kernel-uapi-headers.tar.gz",&#10;)&#10;&#10;kernel_build(&#10;    name = "tuna",&#10;    base_kernel = ":kernel_aarch64_prebuilts",&#10;    # ...&#10;)&#10;&#10;merged_kernel_uapi_headers(&#10;    name = "tuna_merged_kernel_uapi_headers",&#10;    kernel_build = "tuna",&#10;    # ...&#10;)</code></pre>   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="kernel_filegroup-module_env_archive"></a>module_env_archive |  Archive from `kernel_build.pack_module_env` that contains necessary source files to build external modules.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
@@ -2240,5 +2240,74 @@ A kunit test.
 | <a id="kunit_test-modules"></a>modules |  list of modules to be installed for kunit test   |  none |
 | <a id="kunit_test-deps"></a>deps |  dependencies for kunit test runner   |  none |
 | <a id="kunit_test-kwargs"></a>kwargs |  additional arguments for py_test   |  none |
+
+
+<a id="kernel_build_output"></a>
+
+## kernel_build_output
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_build_output")
+
+kernel_build_output(*, <a href="#kernel_build_output-name">name</a>, <a href="#kernel_build_output-out">out</a>, <a href="#kernel_build_output-kernel_build">kernel_build</a>, <a href="#kernel_build_output-visibility">visibility</a>)
+</pre>
+
+Picks an output file from kernel_build.
+
+When `generate_out_targets = False` for a kernel_build, especially
+when its `*outs` attributes are set to a select() expression, the
+`<kernel_build_name>/<out>` label is not created. These attributes are:
+
+*   outs
+*   module_outs
+*   module_implicit_outs
+*   implicit_outs
+
+To create the proper label, use this helper macro.
+
+Example:
+
+```
+kernel_build(
+    name = "foo",
+    generate_out_targets = False,
+    module_outs = select({
+        ":my_config_setting": ["some_module.ko"],
+        "//conditions:default": [],
+    }) + [
+        "common_module.ko",
+    ],
+)
+```
+
+Because `module_outs` is a select expression, the macro cannot
+infer its value during macro expansion. To create labels to these
+in-tree modules, declare the following:
+
+```
+kernel_build_output(
+    name = "foo/some_module.ko",
+    kernel_build = ":foo",
+    out = "some_module.ko",
+)
+kernel_build_output(
+    name = "foo/common_module.ko",
+    kernel_build = ":foo",
+    out = "common_module.ko",
+)
+```
+
+In the above example, if `:my_config_setting` does not apply, the
+`foo/some_module.ko` target will not contain any files.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="kernel_build_output-name"></a>name |  A unique name for this macro instance. Normally, this is also the name for the macro's main or only target. The names of any other targets that this macro might create will be this name with a string suffix.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="kernel_build_output-out"></a>out |  -   | String | required |  |
+| <a id="kernel_build_output-kernel_build"></a>kernel_build |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="kernel_build_output-visibility"></a>visibility |  The visibility to be passed to this macro's exported targets. It always implicitly includes the location where this macro is instantiated, so this attribute only needs to be explicitly set if you want the macro's targets to be additionally visible somewhere else.   | <a href="https://bazel.build/concepts/labels">List of labels</a>; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  |
 
 
