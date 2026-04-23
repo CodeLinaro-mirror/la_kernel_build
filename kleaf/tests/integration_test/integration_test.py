@@ -1380,6 +1380,17 @@ class QuickIntegrationHostTest(KleafIntegrationTestBase):
         # It should be fine to call the same command subsequently.
         self._check_call("run", args)
 
+    def test_config_local_with_output_root(self):
+        """Test --config=local works with --output_root.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = pathlib.Path(tmp)
+            self._check_call(
+                startup_options=[f"--output_root={output_root.absolute()}"],
+                command="build",
+                command_args=[f"//{self._common()}:kernel_aarch64_config"] +
+                _LOCAL)
+
 
 class ScmversionIntegrationTest(KleafIntegrationTestBase):
 
