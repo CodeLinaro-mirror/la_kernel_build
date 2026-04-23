@@ -110,7 +110,13 @@ ddk_prebuilt_object = rule(
         ),
         "cmd": attr.label(
             allow_single_file = True,
-            doc = "The .cmd file, e.g. `.foo.o.cmd`. If missing, an empty file is provided.",
+            doc = """The .cmd file, e.g. `.foo.o.cmd`. If missing, an empty file is provided.
+
+                Note: If `cmd` is provided, and the outer `ddk_module` has `MODULE_VERSION()`, then
+                sources of the prebuilt must also be provided to the `ddk_module` with a
+                `ddk_headers` targets. For details, see
+                [kleaf/tests/ddk_examples/ddk_prebuilt_object/README.md](../../tests/ddk_examples/ddk_prebuilt_object/README.md).
+            """,
         ),
         "config": attr.string(
             doc = """If set, name of the config with the `CONFIG_` prefix.
