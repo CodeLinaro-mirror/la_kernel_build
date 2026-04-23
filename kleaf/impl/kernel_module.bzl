@@ -753,6 +753,7 @@ def _kernel_module_impl(ctx):
     else:
         ddk_headers_info = DdkHeadersInfo(include_infos = depset(), files = depset())
 
+    output_group_args = {}
     if ctx.attr.internal_ddk_config:
         ddk_config_info = ctx.attr.internal_ddk_config[DdkConfigInfo]
     else:
@@ -771,6 +772,9 @@ def _kernel_module_impl(ctx):
         default_info_files.append(check_no_remaining)
     if module_symvers:
         default_info_files.append(module_symvers)
+    if modules_order:
+        output_group_args["modules.order"] = depset([modules_order])
+
     return [
         # Sync list of infos with kernel_module_group.
         DefaultInfo(
@@ -778,6 +782,7 @@ def _kernel_module_impl(ctx):
             # For kernel_module_test
             runfiles = ctx.runfiles(files = output_files),
         ),
+        OutputGroupInfo(**output_group_args),
         KernelModuleSetupInfo(
             inputs = depset(setup_deps),
             setup = setup,
