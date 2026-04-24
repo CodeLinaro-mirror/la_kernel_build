@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("//build/kernel/kleaf:kernel.bzl", "kernel_build")
+load("//build/kernel/kleaf/tests/utils:pass_analysis_test.bzl", "pass_analysis_test")
 load(":kernel_config_option_test.bzl", "kernel_config_option_test_suite")
 load(":kernel_defconfig_fragments_test.bzl", "kernel_defconfig_fragments_test")
 
@@ -20,6 +22,21 @@ load(":kernel_defconfig_fragments_test.bzl", "kernel_defconfig_fragments_test")
 kernel_config_option_test_suite(name = "kernel_config_option_test_suite")
 
 kernel_defconfig_fragments_test(name = "kernel_defconfig_fragments_test")
+
+# b/505894708: Test that check_defconfig=minimized works when defconfig is inherited.
+kernel_build(
+    name = "minimized_works_with_inherited_defconfig_kernel",
+    outs = ["fake"],
+    base_kernel = "//common:kernel_aarch64",
+    check_defconfig = "minimized",
+    make_goals = ["fake"],
+    tags = ["manual"],
+)
+
+pass_analysis_test(
+    name = "minimized_works_with_inherited_defconfig",
+    target_under_test = ":minimized_works_with_inherited_defconfig_kernel",
+)
 
 test_suite(
     name = "kernel_config_test",
