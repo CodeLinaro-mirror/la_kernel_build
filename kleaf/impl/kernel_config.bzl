@@ -63,6 +63,7 @@ _DefconfigFragmentsListInfo = provider(
 def _check_defconfig_minimized_impl(
         subrule_ctx,
         defconfig_info,
+        base_kernel_defconfig_info,
         pre_defconfig_fragment_files,
         check_defconfig_attr_value):
     """Checks that defconfig matches the result of savedefconfig. """
@@ -74,18 +75,35 @@ def _check_defconfig_minimized_impl(
             tools = [],
         )
 
-    if not defconfig_info or not defconfig_info.file or pre_defconfig_fragment_files:
+    my_defconfig_file = defconfig_info.file if defconfig_info else None
+    base_defconfig_file = base_kernel_defconfig_info.file if base_kernel_defconfig_info else None
+
+    # Unlike _set_up_defconfig, we intentionally ignore the $DEFCONFIG from build configs because
+    # it is deprecated and we want to encourage people to set defconfig properly.
+    if not my_defconfig_file and not base_defconfig_file:
         # A good string repr of kernel_build.defconfig
         defconfig = None
         if defconfig_info:
             defconfig = defconfig_info.file.path if defconfig_info.file else defconfig_info.make_target
 
-        fail("""{kernel_build_label}: check_defconfig="minimized" requires the following:
-- defconfig is set and not phony_defconfig (but it is {defconfig})
-- pre_defconfig_fragments is not set (but it is {pre_defconfig_fragment_files})
+        # A good string repr of base_kernel's kernel_build.defconfig
+        base_defconfig = None
+        if base_kernel_defconfig_info:
+            base_defconfig = base_kernel_defconfig_info.file.path if base_kernel_defconfig_info.file else base_kernel_defconfig_info.make_target
+
+        fail("""{kernel_build_label}: check_defconfig="minimized" requires either of the following:
+- defconfig is set and not phony_defconfig (but it is {defconfig});
+- OR base_kernel has defconfig set and not phony_defconfig (but it is {base_defconfig})
 """.format(
             kernel_build_label = subrule_ctx.label.name.removesuffix("_config"),
             defconfig = defconfig,
+            base_defconfig = base_defconfig,
+        ))
+
+    if pre_defconfig_fragment_files:
+        fail("""{kernel_build_label}: check_defconfig="minimized" requires pre_defconfig_fragments is empty, but it is
+{pre_defconfig_fragment_files}
+""".format(
             pre_defconfig_fragment_files = [file.path for file in pre_defconfig_fragment_files],
         ))
 
@@ -96,7 +114,7 @@ def _check_defconfig_minimized_impl(
         fi
 
         kleaf_internal_check_defconfig_minimized {}
-    """.format(defconfig_info.file.path)
+    """.format((my_defconfig_file or base_defconfig_file).path)
     return StepInfo(
         inputs = depset(),
         cmd = cmd,
@@ -745,6 +763,7 @@ def _build_out_dir(
     check_defconfig_minimized_ret = _check_defconfig_minimized(
         check_defconfig_attr_value = defconfig_fragments_info.check_pre_defconfig_fragments,
         defconfig_info = defconfig_info,
+        base_kernel_defconfig_info = base_kernel_utils.get_base_defconfig_info(ctx),
         pre_defconfig_fragment_files = defconfig_fragments_list_info.pre_list,
     )
     step_returns.append(check_defconfig_minimized_ret)
