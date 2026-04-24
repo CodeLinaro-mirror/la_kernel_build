@@ -1320,6 +1320,21 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
             _, stderr = process.communicate()
             self.assertEqual(0, process.returncode, stderr)
 
+    def test_check_dot_config_against_inherited_defconfig(self):
+        """Tests that check_defconfig=match checks against inherited defconfig.
+
+        See b/505894708"""
+        self._check_call("test", [
+            "//build/kernel/kleaf/tests/integration_test/check_defconfig_test:gki_defconfig_has_39_test",
+        ])
+        stderr = self._check_errors("build", [
+            "//build/kernel/kleaf/tests/integration_test/check_defconfig_test:match_against_inhertied_defconfig_kernel_config",
+        ])
+        self.assertIn(
+            "ERROR: CONFIG_ARM64_VA_BITS_39: actual '', expected 'y' from common/arch/arm64/configs/gki_defconfig",
+            stderr
+        )
+
 
 class QuickIntegrationHostTest(KleafIntegrationTestBase):
     """Similar to QuickIntegrationTest but with host dependencies."""
