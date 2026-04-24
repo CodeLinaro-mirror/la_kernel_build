@@ -431,6 +431,7 @@ def _set_up_defconfig_impl(subrule_ctx, defconfig_info, base_kernel_defconfig_in
         elif [[ -n "${{DEFCONFIG}}" ]]; then
             echo "WARNING: DEFCONFIG is deprecated; use kernel_build(defconfig=) instead." >&2
             # Preserve its value
+            KLEAF_INTERNAL_USE_LEGACY_DEFCONFIG_VAR=1
         elif [[ -n "{base_kernel_defconfig_file}" ]] || [[ -n "{base_kernel_defconfig_make_target}" ]]; then
             kleaf_handle_defconfig_info "{base_kernel_defconfig_file}" "{base_kernel_defconfig_make_target}"
         fi
@@ -575,6 +576,7 @@ def _check_dot_config_against_defconfig_impl(
         _subrule_ctx,
         check_defconfig_attr_value,
         defconfig_info,
+        base_kernel_defconfig_info,
         pre_defconfig_fragment_files,
         post_defconfig_fragment_files):
     """Checks .config against defconfig and fragments."""
@@ -592,9 +594,13 @@ def _check_dot_config_against_defconfig_impl(
     tools = []
     outputs = []
 
-    if (defconfig_info and defconfig_info.file) or pre_defconfig_fragment_files or post_defconfig_fragment_files:
+    my_defconfig_file = defconfig_info.file if defconfig_info else None
+    base_defconfig_file = base_kernel_defconfig_info.file if base_kernel_defconfig_info else None
+
+    if my_defconfig_file or base_defconfig_file or pre_defconfig_fragment_files or post_defconfig_fragment_files:
         check_defconfig_step = config_utils.create_check_defconfig_step(
-            defconfig = defconfig_info.file if defconfig_info else None,
+            defconfig = my_defconfig_file,
+            base_defconfig = base_defconfig_file,
             pre_defconfig_fragments = pre_defconfig_fragment_files,
             post_defconfig_fragments = post_defconfig_fragment_files,
         )
@@ -776,6 +782,7 @@ def _build_out_dir(
             _check_dot_config_against_defconfig(
                 check_defconfig_attr_value = defconfig_fragments_info.check_pre_defconfig_fragments,
                 defconfig_info = defconfig_info,
+                base_kernel_defconfig_info = base_kernel_utils.get_base_defconfig_info(ctx),
                 pre_defconfig_fragment_files = defconfig_fragments_list_info.pre_list,
                 post_defconfig_fragment_files = [],
             ),
@@ -797,6 +804,7 @@ def _build_out_dir(
         _check_dot_config_against_defconfig(
             check_defconfig_attr_value = defconfig_fragments_info.check_post_defconfig_fragments,
             defconfig_info = DefconfigInfo(file = None, make_target = None),
+            base_kernel_defconfig_info = DefconfigInfo(file = None, make_target = None),
             pre_defconfig_fragment_files = [],
             post_defconfig_fragment_files = defconfig_fragments_list_info.post_list,
         ),

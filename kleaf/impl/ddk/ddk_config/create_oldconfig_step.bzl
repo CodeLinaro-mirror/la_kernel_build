@@ -81,6 +81,7 @@ def _create_oldconfig_step_in_shell_impl(
     if defconfig_files:
         check_defconfig_step = config_utils.create_check_defconfig_step(
             defconfig = None,
+            base_defconfig = None,
             pre_defconfig_fragments = [],
             post_defconfig_fragments = defconfig_files,
         )
