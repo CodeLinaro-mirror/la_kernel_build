@@ -195,6 +195,7 @@ kernel_modules_install(
         "srcs": attr.label_list(
             doc = "List of [`kernel_module`](#kernel_module)s or [`ddk_module`](#ddk_module)s.",
             providers = [
+                CompileCommandsInfo,
                 DdkLibraryInfo,
                 DdkHeadersInfo,
                 DefaultInfo,
