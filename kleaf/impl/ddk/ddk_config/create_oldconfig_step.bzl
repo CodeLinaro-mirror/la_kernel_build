@@ -97,10 +97,7 @@ def _create_oldconfig_step_in_shell_impl(
         )
 
     return StepInfo(
-        inputs = depset(
-            defconfig_files,
-            transitive = transitive_inputs,
-        ),
+        inputs = depset(transitive = transitive_inputs),
         cmd = cmd,
         tools = tools,
         outputs = outputs,

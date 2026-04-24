@@ -604,7 +604,7 @@ def _check_dot_config_against_defconfig_impl(
 
     return StepInfo(
         cmd = check_defconfig_step.cmd if check_defconfig_step else "",
-        inputs = depset(post_defconfig_fragment_files, transitive = transitive_inputs),
+        inputs = depset(transitive = transitive_inputs),
         outputs = outputs,
         tools = tools,
     )
