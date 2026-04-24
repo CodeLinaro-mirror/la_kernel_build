@@ -113,8 +113,15 @@ def _create_check_defconfig_step_impl(
         pre_arg = pre_arg,
         post_arg = post_arg,
     )
+
+    inputs = []
+    if defconfig:
+        inputs.append(defconfig)
+    inputs += pre_defconfig_fragments
+    inputs += post_defconfig_fragments
+
     return StepInfo(
-        inputs = depset(post_defconfig_fragments),
+        inputs = depset(inputs),
         outputs = [],
         tools = [_check_config],
         cmd = cmd,
