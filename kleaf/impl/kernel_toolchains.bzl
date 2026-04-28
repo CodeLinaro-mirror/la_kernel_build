@@ -14,6 +14,7 @@
 
 """Helper for `kernel_env` to get toolchains for different platforms."""
 
+load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@kernel_toolchain_info//:dict.bzl", "VARS")
 load(
@@ -171,9 +172,9 @@ def _kernel_toolchains_impl(ctx):
         quoted_userldflags = _quote_sanitize_flags(target.ldflags),
         userldexpr = target.ldexpr,
     )
-
     rust_env = _get_rust_env(
         rust_tools = ctx.attr._rust_tools,
+        bindgen = ctx.attr._bindgen,
         host_libc = exec.libc,
         exec_glibc_info = ctx.attr.exec_glibc_toolchain[KernelPlatformToolchainInfo],
     )
@@ -193,7 +194,7 @@ def _kernel_toolchains_impl(ctx):
         host_sysroot = exec.sysroot,
     )
 
-def _get_rust_env_impl(_subrule_ctx, rust_tools, host_libc, exec_glibc_info):
+def _get_rust_env_impl(_subrule_ctx, rust_tools, bindgen, host_libc, exec_glibc_info):
     if not rust_tools:
         return _RustEnvInfo(
             inputs = depset(),
@@ -210,7 +211,7 @@ def _get_rust_env_impl(_subrule_ctx, rust_tools, host_libc, exec_glibc_info):
     rust_files_list = rust_files_depset.to_list()
 
     rustc = utils.find_file("rustc", rust_files_list, "rust tools", required = True)
-    bindgen = utils.find_file("bindgen", rust_files_list, "rust tools", required = True)
+    bindgen_file = bindgen[DefaultInfo].files_to_run.executable
 
     if host_libc == "musl":
         target = "x86_64-unknown-linux-musl"
@@ -225,7 +226,7 @@ def _get_rust_env_impl(_subrule_ctx, rust_tools, host_libc, exec_glibc_info):
     #   e.g. $OUT_DIR/scripts/generate_rust_targets
     # If this ever changes, edit kleaf_internal_eval_rust_flags and add more levels.
     cmd = """
-        export PATH="${{PATH}}:${{ROOT_DIR}}/"{quoted_rust_bin}":${{ROOT_DIR}}/"{quoted_clangtools_bin}
+        export PATH="${{PATH}}:${{ROOT_DIR}}/"{quoted_rust_bin}":${{ROOT_DIR}}/"{quoted_clangtools_bin}":${{ROOT_DIR}}/"{quoted_clangtools_bin_short}
         export HOSTRUSTFLAGS="--target {target}"
         export PROCMACROLDFLAGS={quoted_proc_macro_ldflags}
 
@@ -246,12 +247,13 @@ def _get_rust_env_impl(_subrule_ctx, rust_tools, host_libc, exec_glibc_info):
     """.format(
         target = target,
         quoted_rust_bin = shell.quote(rustc.dirname),
-        quoted_clangtools_bin = shell.quote(bindgen.dirname),
+        quoted_clangtools_bin = shell.quote(bindgen_file.dirname),
+        quoted_clangtools_bin_short = shell.quote(paths.dirname(bindgen_file.short_path)),
         quoted_proc_macro_ldflags = _quote_sanitize_flags(exec_glibc_info.ldflags),
     )
 
     return _RustEnvInfo(
-        inputs = depset(transitive = [rust_files_depset, exec_glibc_info.all_files]),
+        inputs = depset(transitive = [rust_files_depset, exec_glibc_info.all_files, bindgen[DefaultInfo].default_runfiles.files]),
         cmd = cmd,
     )
 
@@ -264,9 +266,7 @@ def _get_rust_tools(rust_toolchain_version):
         return []
     rust_binaries = "@prebuilt_rust//%s:binaries" % rust_toolchain_version
 
-    bindgen = "//prebuilts/clang-tools:linux-x86/bin/bindgen"
-
-    return [Label(rust_binaries), Label(bindgen)]
+    return [Label(rust_binaries)]
 
 kernel_toolchains = rule(
     doc = """Helper for `kernel_env` to get toolchains for different platforms.""",
@@ -289,6 +289,11 @@ kernel_toolchains = rule(
             default = VARS.get("RUSTC_VERSION", ""),
         ),
         "_rust_tools": attr.label_list(default = _get_rust_tools, allow_files = True),
+        "_bindgen": attr.label(
+            default = "//build/kernel:bindgen",
+            cfg = "exec",
+            allow_files = True,
+        ),
         # This is not used, but the dependency ensures that if
         # --noincompatible_kernel_use_resolved_toolchains is specified, an error message is printed.
         "_kernel_use_resolved_toolchains": attr.label(
