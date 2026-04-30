@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Allow scl files
-common --experimental_enable_scl_dialect
-
 # Lock down the PATH variable in actions to /usr/bin and /usr/local/bin.
 build --incompatible_strict_action_env
 
@@ -26,9 +23,6 @@ build --experimental_ui_max_stdouterr_bytes=-1
 
 # Make output directories writable so `rm -rf out/` works.
 build --experimental_writable_outputs
-
-# Use subrule()
-common --experimental_rule_extension_api
 
 # Control auto-load modules
 common --incompatible_autoload_externally=+@rules_cc,@rules_python,@rules_shell,-@rules_android,-@rules_java,-@protobuf,-@com_google_protobuf
