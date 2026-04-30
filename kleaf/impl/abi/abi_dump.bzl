@@ -166,3 +166,50 @@ abi_dump = rule(
     cfg = with_vmlinux_transition,
     toolchains = [hermetic_toolchain.type],
 )
+
+def _filter_module(module):
+    if module.extension == "ko":
+        return module.path
+    return None
+
+def _dump_modules_abi_subrule_impl(
+        subrule_ctx,
+        unstripped_dir,
+        *,
+        _stg):
+    """Runs an action to extract the ABI from modules under a directory."""
+
+    modules_abi = subrule_ctx.actions.declare_file(
+        "{}/abi.stg".format(subrule_ctx.label.name),
+    )
+
+    stg_args = subrule_ctx.actions.args()
+    stg_args.add("--files", "'*.h'")
+    stg_args.add("--output", modules_abi)
+    stg_args.add_all(
+        "--elf",
+        [unstripped_dir],
+        expand_directories = True,
+        map_each = _filter_module,
+    )
+    subrule_ctx.actions.run(
+        inputs = depset(transitive = [depset([unstripped_dir])]),
+        executable = _stg,
+        outputs = [modules_abi],
+        arguments = [stg_args],
+        mnemonic = "DumpModulesAbi",
+        progress_message = "Running stg on %{label}",
+    )
+    return modules_abi
+
+dump_modules_abi = subrule(
+    implementation = _dump_modules_abi_subrule_impl,
+    attrs = {
+        "_stg": attr.label(
+            default = "//build/kernel/kleaf/impl:stg",
+            allow_single_file = True,
+            cfg = "exec",
+            executable = True,
+        ),
+    },
+)
