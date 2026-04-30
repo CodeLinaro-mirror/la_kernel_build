@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Validates and filters kernel symbol lists."""
+
 import argparse
 import os
 import re

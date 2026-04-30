@@ -15,6 +15,8 @@
 # limitations under the License.
 #
 
+"""Extracts exported and undefined symbols from kernel binaries."""
+
 import argparse
 import collections
 import functools
