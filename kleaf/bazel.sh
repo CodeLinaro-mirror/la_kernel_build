@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Wrapper script for launching Bazel with Kleaf configurations.
+
 # Use host readlink. b/348003050
 MYPATH=$(readlink -f "$0")
 MYDIR=${MYPATH%/*}

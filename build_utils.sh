@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Common shell utility functions for kernel build tasks.
+
 # $1 directory of kernel modules ($1/lib/modules/x.y)
 # $2 flags to pass to depmod
 # $3 kernel version

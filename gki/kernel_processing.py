@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Common logic for kernel image processing."""
+
 import dataclasses
 import datetime
 import re
