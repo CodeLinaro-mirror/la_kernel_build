@@ -1222,7 +1222,7 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_module")
 ddk_module(<a href="#ddk_module-name">name</a>, <a href="#ddk_module-kernel_build">kernel_build</a>, <a href="#ddk_module-srcs">srcs</a>, <a href="#ddk_module-deps">deps</a>, <a href="#ddk_module-hdrs">hdrs</a>, <a href="#ddk_module-textual_hdrs">textual_hdrs</a>, <a href="#ddk_module-includes">includes</a>, <a href="#ddk_module-conditional_srcs">conditional_srcs</a>,
            <a href="#ddk_module-crate_root">crate_root</a>, <a href="#ddk_module-linux_includes">linux_includes</a>, <a href="#ddk_module-out">out</a>, <a href="#ddk_module-local_defines">local_defines</a>, <a href="#ddk_module-copts">copts</a>, <a href="#ddk_module-removed_copts">removed_copts</a>, <a href="#ddk_module-asopts">asopts</a>, <a href="#ddk_module-linkopts">linkopts</a>,
            <a href="#ddk_module-config">config</a>, <a href="#ddk_module-kconfig">kconfig</a>, <a href="#ddk_module-defconfig">defconfig</a>, <a href="#ddk_module-generate_btf">generate_btf</a>, <a href="#ddk_module-autofdo_profile">autofdo_profile</a>, <a href="#ddk_module-debug_info_for_profiling">debug_info_for_profiling</a>,
-           <a href="#ddk_module-kwargs">**kwargs</a>)
+           <a href="#ddk_module-support_ftrace">support_ftrace</a>, <a href="#ddk_module-kwargs">**kwargs</a>)
 </pre>
 
 Defines a DDK (Driver Development Kit) module.
@@ -1524,6 +1524,7 @@ $(LINUXINCLUDE)
 | <a id="ddk_module-generate_btf"></a>generate_btf |  Allows generation of BTF type information for the module. See [kernel_module.generate_btf](#kernel_module-generate_btf)   |  `None` |
 | <a id="ddk_module-autofdo_profile"></a>autofdo_profile |  Label to an AutoFDO profile.   |  `None` |
 | <a id="ddk_module-debug_info_for_profiling"></a>debug_info_for_profiling |  If true, enables extra debug information to be emitted to make profile matching during AutoFDO more accurate.   |  `None` |
+| <a id="ddk_module-support_ftrace"></a>support_ftrace |  Default to `True`. If `False`, removes ftrace flags from the compile command.   |  `None` |
 | <a id="ddk_module-kwargs"></a>kwargs |  Additional attributes to the internal rule. See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 

@@ -563,6 +563,9 @@ def _makefiles_impl(ctx):
         args.add("--localversion-file", localversion_file)
         inputs.append(localversion_file)
 
+    if ctx.attr.module_support_ftrace:
+        args.add("--support-ftrace")
+
     ctx.actions.run(
         mnemonic = "DdkMakefiles",
         inputs = depset(inputs, transitive = [submodule_makefiles, module_srcs_ret.gen_srcs_depset]),
@@ -665,6 +668,10 @@ makefiles = rule(
         "module_autofdo_profile": attr.label(allow_single_file = True),
         "module_debug_info_for_profiling": attr.bool(),
         "module_pkvm_el2": attr.bool(),
+        "module_support_ftrace": attr.bool(
+            doc = "Whether to support ftrace. If false, removes ftrace flags.",
+            default = True,
+        ),
         "top_level_makefile": attr.bool(),
         "kbuild_has_linux_include": attr.bool(
             doc = "Whether to add LINUXINCLUDE to Kbuild",
