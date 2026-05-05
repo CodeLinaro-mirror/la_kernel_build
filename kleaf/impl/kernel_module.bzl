@@ -24,6 +24,7 @@ load(
     "//build/kernel/kleaf/artifact_tests:kernel_test.bzl",
     "kernel_module_test",
 )
+load(":abi/abi_dump.bzl", "dump_modules_abi")
 load(":cache_dir.bzl", "cache_dir")
 load(
     ":common_providers.bzl",
@@ -768,6 +769,13 @@ def _kernel_module_impl(ctx):
     if modules_order:
         output_group_args["modules.order"] = depset([modules_order])
 
+    # Generate an ABI dump for DDK modules, available on demand.
+    if ctx.attr.internal_collect_unstripped_modules:
+        modules_abi = dump_modules_abi(
+            unstripped_dir = unstripped_dir,
+        )
+        output_group_args["abi.stg"] = depset([modules_abi])
+
     return [
         # Sync list of infos with kernel_module_group.
         DefaultInfo(
@@ -913,6 +921,7 @@ _kernel_module = rule(
     } | _kernel_module_additional_attrs() | gcov_attrs(),
     toolchains = [hermetic_toolchain.type],
     subrules = [
+        dump_modules_abi,
         empty_ddk_config_info,
         stamp.ext_mod_get_localversion_file,
     ],
