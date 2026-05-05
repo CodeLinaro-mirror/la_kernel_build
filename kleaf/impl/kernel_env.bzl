@@ -657,10 +657,11 @@ def _get_env_setup_cmds(ctx):
 
         # Set pahole location for use by kernel_build for BTF generation
         if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
-            export TOOL_ARGS="${{TOOL_ARGS}} PAHOLE=${{ROOT_DIR}}/{pahole_short}"
+            export PAHOLE=${{ROOT_DIR}}/{pahole_short}
         else
-            export TOOL_ARGS="${{TOOL_ARGS}} PAHOLE=${{ROOT_DIR}}/{pahole}"
+            export PAHOLE=${{ROOT_DIR}}/{pahole}
         fi
+        export TOOL_ARGS="${{TOOL_ARGS}} PAHOLE=${{PAHOLE}}"
     """.format(
         get_make_jobs_cmd = status.get_volatile_status_cmd(ctx, "MAKE_JOBS"),
         get_make_keep_going_cmd = status.get_volatile_status_cmd(ctx, "MAKE_KEEP_GOING"),
