@@ -566,6 +566,8 @@ def _makefiles_impl(ctx):
     if ctx.attr.module_support_ftrace:
         args.add("--support-ftrace")
 
+    args.add("--gcov", ctx.attr.module_gcov)
+
     ctx.actions.run(
         mnemonic = "DdkMakefiles",
         inputs = depset(inputs, transitive = [submodule_makefiles, module_srcs_ret.gen_srcs_depset]),
@@ -671,6 +673,11 @@ makefiles = rule(
         "module_support_ftrace": attr.bool(
             doc = "Whether to support ftrace. If false, removes ftrace flags.",
             default = True,
+        ),
+        "module_gcov": attr.string(
+            doc = "Whether to use gcov",
+            values = ["inherit", "always", "never"],
+            default = "inherit",
         ),
         "top_level_makefile": attr.bool(),
         "kbuild_has_linux_include": attr.bool(
