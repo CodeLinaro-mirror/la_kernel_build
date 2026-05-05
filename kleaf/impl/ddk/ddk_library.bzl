@@ -38,6 +38,7 @@ def ddk_library(
         autofdo_profile = None,
         debug_info_for_profiling = None,
         pkvm_el2 = None,
+        support_ftrace = None,
         **kwargs):
     """**EXPERIMENTAL**. A library that may be used by a DDK module.
 
@@ -70,6 +71,7 @@ def ddk_library(
         autofdo_profile: see [`ddk_module.autofdo_profile`](#ddk_module-autofdo_profile)
         debug_info_for_profiling: see [`ddk_module.debug_info_for_profiling`](#ddk_module-debug_info_for_profiling)
         pkvm_el2: **EXPERIMENTAL**. If True, builds EL2 hypervisor code.
+        support_ftrace: see [`ddk_module.support_ftrace`](#ddk_module-support_ftrace)
 
             If True:
             - The output list is the fixed `["kvm_nvhe.o"]`, plus relevant .o.cmd files
@@ -100,6 +102,7 @@ def ddk_library(
         module_autofdo_profile = autofdo_profile,
         module_debug_info_for_profiling = debug_info_for_profiling,
         module_pkvm_el2 = pkvm_el2,
+        module_support_ftrace = support_ftrace,
         top_level_makefile = True,
         kbuild_has_linux_include = True,
         target_type = "library",
