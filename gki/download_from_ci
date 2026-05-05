@@ -39,6 +39,7 @@ BASE_URL = "https://ci.android.com/builds/submitted/{build_id}/{target}/latest/r
 ARM_TARGETS = ["u-boot_qemu_arm"]
 ARM64_TARGETS = ["kernel_aarch64",
                  "kernel_aarch64_16k",
+                 "kernel_crashdump_aarch64",
                  "kernel_debug_aarch64",
                  "kernel_microdroid_aarch64",
                  "kernel_rockpi4",
@@ -52,6 +53,7 @@ X86_TARGETS = ["kernel_virt_i686"]
 X86_64_TARGETS = ["kernel_x86_64",
                   "kernel_debug_x86_64",
                   "kernel_microdroid_x86_64",
+                  "kernel_crashdump_x86_64",
                   "u-boot_crosvm_x86_64",
                   "u-boot_crosvm_locked_x86_64",
                   "u-boot_qemu_x86_64"]
@@ -770,6 +772,19 @@ def update_u_boot():
   else:
     print("Unknown u-boot branch %s for build" % branch)
 
+def download_kdump_kernel(target, version, output_dir):
+  if not os.path.isdir(output_dir):
+    os.makedirs(output_dir)
+
+  build_uses_bzImage = target in X86_64_TARGETS or target in X86_TARGETS
+  filename = "bzImage" if build_uses_bzImage else "Image"
+
+  url_base = BASE_URL.format(build_id=_args.build_id, target=target)
+  download(url_base, output_dir, filename)
+
+  dest_kernel = os.path.join(output_dir, "kernel-" + version)
+  shutil.move(os.path.join(output_dir, filename), dest_kernel)
+
 def update_microdroid_kernel():
   url_base = BASE_URL.format(build_id=_args.build_id, target="kernel_microdroid_aarch64")
   url = os.path.join(url_base, "BUILD_INFO")
@@ -780,8 +795,8 @@ def update_microdroid_kernel():
 
   short_branch = branch.removeprefix("aosp_kernel-common-")
   output_dir = os.environ["ANDROID_BUILD_TOP"]
-  base_dir = os.path.join(output_dir, "packages", "modules", "Virtualization",
-                          "guest", "kernel", short_branch)
+  virt_root = os.path.join(output_dir, "packages", "modules", "Virtualization")
+  base_dir = os.path.join(virt_root, "guest", "kernel", short_branch)
 
   for arch in "arm64", "arm64_16k", "x86_64":
     arch_suffix = arch.replace("arm64", "aarch64")
@@ -797,9 +812,14 @@ def update_microdroid_kernel():
     download_kernel("kernel_microdroid_" + arch_suffix, version, directory)
     write_prebuilt_info(directory)
 
+    if arch != "arm64_16k":
+      kdump_dir = os.path.join(virt_root, "guest", "kdump", "kernel", arch)
+      os.makedirs(kdump_dir, exist_ok=True)
+      download_kdump_kernel("kernel_crashdump_" + arch_suffix, version, kdump_dir)
+
   (_, new_sha) = get_binary_kernel_version(kernel)
   gitlog = get_git_log(old_sha, new_sha)
-  commit_prebuilts(base_dir, gitlog)
+  commit_prebuilts(virt_root, gitlog)
 
 
 def main():
