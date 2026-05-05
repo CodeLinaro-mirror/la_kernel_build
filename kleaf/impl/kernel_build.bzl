@@ -19,6 +19,7 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("@bazel_skylib//rules:select_file.bzl", "select_file")
 load(
     "//build/kernel/kleaf/artifact_tests:kernel_test.bzl",
     "kernel_build_test",
@@ -924,9 +925,14 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
 
     if generate_vmlinux_btf:
         btf_name = name + "_btf"
+        select_file(
+            name = name + "_vmlinux_output",
+            srcs = name,
+            subpath = "vmlinux",
+        )
         btf(
             name = btf_name,
-            vmlinux = name + "/vmlinux",
+            vmlinux = name + "_vmlinux_output",
             env = env_target_name,
             **kwargs
         )

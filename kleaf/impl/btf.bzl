@@ -34,7 +34,7 @@ def _btf_impl(ctx):
     command = ctx.attr.env[KernelEnvInfo].setup + """
               mkdir -p {out_dir}
               cp -Lp {vmlinux} {btf}
-              pahole -J {btf}
+              ${{PAHOLE}} -J {btf}
               llvm-strip --strip-debug {btf}
     """.format(
         vmlinux = ctx.file.vmlinux.path,
