@@ -616,6 +616,7 @@ def ddk_module(
         internal_mnemonic = "DDK module",
         # Don't ask Kbuild to stamp it
         internal_follow_stamp_flag = False,
+        internal_collect_unstripped_modules = True,
         **kwargs
     )
 
