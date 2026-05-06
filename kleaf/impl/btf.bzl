@@ -14,40 +14,53 @@
 
 """Builds vmlinux.btf."""
 
-load(":common_providers.bzl", "KernelEnvInfo")
+load("@rules_cc//cc:action_names.bzl", "ACTION_NAMES")
+load("@rules_cc//cc:defs.bzl", "cc_common")
+load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cpp_toolchain", "use_cc_toolchain")
+load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_toolchain")
 load(":debug.bzl", "debug")
 
 visibility("//build/kernel/kleaf/...")
 
 def _btf_impl(ctx):
-    inputs = [
-        ctx.file.vmlinux,
-    ]
-    transitive_inputs = [ctx.attr.env[KernelEnvInfo].inputs]
-    tools = ctx.attr.env[KernelEnvInfo].tools
     out_file = ctx.actions.declare_file("{}/vmlinux.btf".format(ctx.label.name))
-    out_dir = out_file.dirname
 
-    # We need KernelEnvInfo for llvm-strip.
-    # TODO(b/272164611): We can get it from the clang toolchain; then we can use
-    #  hermetic tools.
-    command = ctx.attr.env[KernelEnvInfo].setup + """
+    # Set up environment from hermetic tools.
+    hermetic_tools = hermetic_toolchain.get(ctx)
+    command = hermetic_tools.setup
+
+    # Retrieve llvm-strip from clang toolchain.
+    cc_toolchain = find_cpp_toolchain(ctx)
+    feature_configuration = cc_common.configure_features(
+        ctx = ctx,
+        cc_toolchain = cc_toolchain,
+        requested_features = ctx.features,
+    )
+    strip = cc_common.get_tool_for_action(
+        feature_configuration = feature_configuration,
+        action_name = ACTION_NAMES.strip,
+    )
+
+    # Create output directory and run pahole.
+    command += """
               mkdir -p {out_dir}
               cp -Lp {vmlinux} {btf}
-              ${{PAHOLE}} -J {btf}
-              llvm-strip --strip-debug {btf}
+              {pahole} -J {btf}
+              {strip} --strip-debug {btf}
     """.format(
         vmlinux = ctx.file.vmlinux.path,
+        pahole = ctx.executable.pahole.path,
         btf = out_file.path,
-        out_dir = out_dir,
+        out_dir = out_file.dirname,
+        strip = strip,
     )
 
     debug.print_scripts(ctx, command)
     ctx.actions.run_shell(
         mnemonic = "Btf",
-        inputs = depset(inputs, transitive = transitive_inputs),
+        inputs = [ctx.file.vmlinux],
         outputs = [out_file],
-        tools = tools,
+        tools = [cc_toolchain.all_files, hermetic_tools.deps, ctx.executable.pahole],
         progress_message = "Building vmlinux.btf %{label}",
         command = command,
     )
@@ -61,10 +74,15 @@ btf = rule(
             mandatory = True,
             allow_single_file = True,
         ),
-        "env": attr.label(
-            mandatory = True,
-            providers = [KernelEnvInfo],
+        "_cc_toolchain": attr.label(default = "//build/kernel/kleaf/impl:kernel_toolchains"),
+        "pahole": attr.label(
+            executable = True,
+            cfg = "exec",
+            default = Label(":pahole"),
+            doc = "Label to pahole executable",
         ),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
     },
+    toolchains = [hermetic_toolchain.type] + use_cc_toolchain(),
+    fragments = ["cpp"],
 )
