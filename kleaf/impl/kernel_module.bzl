@@ -494,7 +494,14 @@ def _kernel_module_impl(ctx):
         )
 
     module_strip_flag = "INSTALL_MOD_STRIP="
-    if ctx.attr.kernel_build[KernelBuildExtModuleInfo].strip_modules:
+
+    # Value is None, inherit from kernel_build
+    if ctx.attr.internal_strip_modules_f != ctx.attr.internal_strip_modules_t:
+        if ctx.attr.kernel_build[KernelBuildExtModuleInfo].strip_modules:
+            module_strip_flag += "1"
+
+        # Value is True, always strip
+    elif ctx.attr.internal_strip_modules_t:
         module_strip_flag += "1"
 
     modpost_warn = debug.modpost_warn(ctx)
@@ -890,6 +897,20 @@ _kernel_module = rule(
         "internal_mnemonic": attr.string(
             default = "external kernel module",
             doc = "Descriptive string for the mnemonic",
+        ),
+        "internal_strip_modules_t": attr.bool(
+            doc = """See [kernel_build.strip_modules](#kernel_build-strip_modules).
+
+            Controls whether debug information is stripped from the generated module.
+            """,
+            default = True,
+        ),
+        "internal_strip_modules_f": attr.bool(
+            doc = """See [kernel_build.strip_modules](#kernel_build-strip_modules).
+
+            Controls whether debug information is stripped from the generated module.
+            """,
+            default = False,
         ),
         "generate_btf": attr.bool(
             default = False,

@@ -266,7 +266,7 @@ function create_modules_staging() {
   fi
 
   if [ "${DO_NOT_STRIP_MODULES}" = "1" ]; then
-    # strip debug symbols off initramfs modules
+    # strip debug symbols off modules
     find ${dest_dir} -type f -name "*.ko" \
       -exec ${OBJCOPY:-${CROSS_COMPILE}objcopy} --strip-debug {} \;
   fi
