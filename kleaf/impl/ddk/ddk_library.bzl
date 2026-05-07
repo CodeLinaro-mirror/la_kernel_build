@@ -71,13 +71,13 @@ def ddk_library(
         autofdo_profile: see [`ddk_module.autofdo_profile`](#ddk_module-autofdo_profile)
         debug_info_for_profiling: see [`ddk_module.debug_info_for_profiling`](#ddk_module-debug_info_for_profiling)
         pkvm_el2: **EXPERIMENTAL**. If True, builds EL2 hypervisor code.
-        support_ftrace: see [`ddk_module.support_ftrace`](#ddk_module-support_ftrace)
 
             If True:
             - The output list is the fixed `["kvm_nvhe.o"]`, plus relevant .o.cmd files
             - The generated Makefile is modified to build EL2 hypervisor code.
 
             Note: This is only supported in selected branches.
+        support_ftrace: see [`ddk_module.support_ftrace`](#ddk_module-support_ftrace)
         **kwargs: Additional attributes to the internal rule.
             See complete list
             [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
