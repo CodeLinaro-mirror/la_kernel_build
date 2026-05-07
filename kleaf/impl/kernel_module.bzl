@@ -482,7 +482,7 @@ def _kernel_module_impl(ctx):
              # Restore Makefile and Kbuild
                cp -r {ddk_makefiles}/* {ext_mod}/
 
-             # Replace env var in cflags/asflags files
+             # Replace env var in cflags/asflags/.cmd files
              # find -exec sed is error-prone due to readdir() issues, so save it to a
              # variable first.
              # No need to parse .ldflags because we don't write $(ROOT_DIR) to .ldflags;
@@ -490,6 +490,11 @@ def _kernel_module_impl(ctx):
             (
                 files=$(find {ext_mod} -name '*.cflags_shipped' -o -name '*.asflags_shipped')
                 sed -i'' -e 's:$(ROOT_DIR):'"${{ROOT_DIR}}"':g' ${{files}}
+
+                files=$(find {ext_mod} -name '*.cmd_shipped')
+                if [ -n "${{files}}" ]; then
+                    sed -i'' -e 's:$(srctree):'"${{ROOT_DIR}}/${{KERNEL_DIR}}"':g' ${{files}}
+                fi
             )
         """.format(
             ddk_makefiles = ctx.file.internal_ddk_makefiles_dir.path,
@@ -736,7 +741,6 @@ def _kernel_module_impl(ctx):
             rsync -aL {module_symvers} ${{COMMON_OUT_DIR}}/{module_symvers_restore_path}
         """.format(
             module_symvers = module_symvers.path,
-            internal_module_symvers_name = ctx.attr.internal_module_symvers_name,
             module_symvers_restore_path = module_symvers_restore_path,
         )
         setup += """
