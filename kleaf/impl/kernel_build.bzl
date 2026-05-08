@@ -461,9 +461,9 @@ def kernel_build(
           If the value is `"false"`; or the value is `"auto"` and
           `--kbuild_symtypes` is not specified, then `KBUILD_SYMTYPES=`.
         strip_modules: If `None` or not specified, default is `False`.
-          If set to `True`, debug information for distributed modules is stripped.
 
-          This corresponds to negated value of `DO_NOT_STRIP_MODULES` in `build.config`.
+          If set to `True`, debug information for distributed modules is stripped via
+          the `INSTALL_MOD_STRIP` [flag](https://docs.kernel.org/kbuild/makefiles.html#kbuild-variables).
         module_signing_key: A label referring to a module signing key.
 
           This is to allow for dynamic setting of `CONFIG_MODULE_SIG_KEY` from Bazel.
@@ -2494,7 +2494,10 @@ _kernel_build = rule(
                 `additional_kmi_symbol_lists`. Must be 0 or 1 file.""",
             allow_files = True,
         ),
-        "strip_modules": attr.bool(default = False, doc = "if set, debug information won't be kept for distributed modules.  Note, modules will still be stripped when copied into the ramdisk."),
+        "strip_modules": attr.bool(
+            default = False,
+            doc = "if set, debug information won't be kept for distributed modules.",
+        ),
         "src_kmi_symbol_list": attr.label(allow_single_file = True),
         "pack_module_env": attr.bool(default = False, doc = "Create `<name>_module_scripts.tar.gz`."),
         "sanitizers": attr.string_list(
