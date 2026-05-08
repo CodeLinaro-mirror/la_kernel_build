@@ -933,7 +933,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         btf(
             name = btf_name,
             vmlinux = name + "_vmlinux_output",
-            env = env_target_name,
+            pahole = pahole,
             **kwargs
         )
 
