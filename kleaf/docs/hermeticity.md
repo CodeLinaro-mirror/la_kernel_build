@@ -176,8 +176,9 @@ Accessing the CC tools is possible for custom rules too. The following shows an
 example on how to access the `strip` tool from the resolved toolchain.
 
 ```python
-load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
+load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cpp_toolchain", "use_cc_toolchain")
 load("@rules_cc//cc:action_names.bzl", "ACTION_NAMES")
+load("@rules_cc//cc:defs.bzl", "cc_common")
 load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_toolchain")
 
 def _strip_version_impl(ctx):
@@ -190,7 +191,7 @@ def _strip_version_impl(ctx):
     command = hermetic_tools.setup
 
     # Retrieve default resolved CC toolchain.
-    cc_toolchain = find_cpp_toolchain(ctx, mandatory = False)
+    cc_toolchain = find_cpp_toolchain(ctx)
     feature_configuration = cc_common.configure_features(
         ctx = ctx,
         cc_toolchain = cc_toolchain,
@@ -220,7 +221,7 @@ strip_version = rule(
     attrs = {
         "_cc_toolchain": attr.label(default = "//build/kernel/kleaf/impl:kernel_toolchains"),
     },
-    toolchains = [hermetic_toolchain.type] + use_cpp_toolchain(mandatory = False),
+    toolchains = [hermetic_toolchain.type] + use_cc_toolchain(),
     fragments = ["cpp"],
 )
 ```
