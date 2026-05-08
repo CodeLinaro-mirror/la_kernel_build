@@ -1223,7 +1223,7 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_module")
 ddk_module(<a href="#ddk_module-name">name</a>, <a href="#ddk_module-kernel_build">kernel_build</a>, <a href="#ddk_module-srcs">srcs</a>, <a href="#ddk_module-deps">deps</a>, <a href="#ddk_module-hdrs">hdrs</a>, <a href="#ddk_module-textual_hdrs">textual_hdrs</a>, <a href="#ddk_module-includes">includes</a>, <a href="#ddk_module-conditional_srcs">conditional_srcs</a>,
            <a href="#ddk_module-crate_root">crate_root</a>, <a href="#ddk_module-linux_includes">linux_includes</a>, <a href="#ddk_module-out">out</a>, <a href="#ddk_module-local_defines">local_defines</a>, <a href="#ddk_module-copts">copts</a>, <a href="#ddk_module-removed_copts">removed_copts</a>, <a href="#ddk_module-asopts">asopts</a>, <a href="#ddk_module-linkopts">linkopts</a>,
            <a href="#ddk_module-config">config</a>, <a href="#ddk_module-kconfig">kconfig</a>, <a href="#ddk_module-defconfig">defconfig</a>, <a href="#ddk_module-generate_btf">generate_btf</a>, <a href="#ddk_module-autofdo_profile">autofdo_profile</a>, <a href="#ddk_module-debug_info_for_profiling">debug_info_for_profiling</a>,
-           <a href="#ddk_module-support_ftrace">support_ftrace</a>, <a href="#ddk_module-kwargs">**kwargs</a>)
+           <a href="#ddk_module-support_ftrace">support_ftrace</a>, <a href="#ddk_module-strip_modules">strip_modules</a>, <a href="#ddk_module-kwargs">**kwargs</a>)
 </pre>
 
 Defines a DDK (Driver Development Kit) module.
@@ -1526,6 +1526,7 @@ $(LINUXINCLUDE)
 | <a id="ddk_module-autofdo_profile"></a>autofdo_profile |  Label to an AutoFDO profile.   |  `None` |
 | <a id="ddk_module-debug_info_for_profiling"></a>debug_info_for_profiling |  If true, enables extra debug information to be emitted to make profile matching during AutoFDO more accurate.   |  `None` |
 | <a id="ddk_module-support_ftrace"></a>support_ftrace |  Default to `True`. If `False`, removes ftrace flags from the compile command.   |  `None` |
+| <a id="ddk_module-strip_modules"></a>strip_modules |  See [kernel_build-strip_modules](#kernel_build-strip_modules). Controls whether debug information is stripped from the generated module, by default this is inherited from `kernel_build`, however it could be overriden with this attribute.   |  `None` |
 | <a id="ddk_module-kwargs"></a>kwargs |  Additional attributes to the internal rule. See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 
@@ -1947,7 +1948,7 @@ For example, if name is `"kernel_aarch64"`:
 | <a id="kernel_build-kmi_symbol_list_strict_mode"></a>kmi_symbol_list_strict_mode |  If `True`, add a build-time check between `[kmi_symbol_list] + additional_kmi_symbol_lists` and the KMI resulting from the build, to ensure they match 1-1.   |  `None` |
 | <a id="kernel_build-collect_unstripped_modules"></a>collect_unstripped_modules |  If `True`, provide all unstripped in-tree.   |  `None` |
 | <a id="kernel_build-kbuild_symtypes"></a>kbuild_symtypes |  The value of `KBUILD_SYMTYPES`.<br><br>This can be set to one of the following:<br><br>- `"true"` - `"false"` - `"auto"` - `None`, which defaults to `"auto"`<br><br>If the value is `"auto"`, it is determined by the `--kbuild_symtypes` flag.<br><br>If the value is `"true"`; or the value is `"auto"` and `--kbuild_symtypes` is specified, then `KBUILD_SYMTYPES=1`. **Note**: kernel build time can be significantly longer.<br><br>If the value is `"false"`; or the value is `"auto"` and `--kbuild_symtypes` is not specified, then `KBUILD_SYMTYPES=`.   |  `None` |
-| <a id="kernel_build-strip_modules"></a>strip_modules |  If `None` or not specified, default is `False`. If set to `True`, debug information for distributed modules is stripped.<br><br>This corresponds to negated value of `DO_NOT_STRIP_MODULES` in `build.config`.   |  `None` |
+| <a id="kernel_build-strip_modules"></a>strip_modules |  If `None` or not specified, default is `False`.<br><br>If set to `True`, debug information for distributed modules is stripped via the `INSTALL_MOD_STRIP` [flag](https://docs.kernel.org/kbuild/makefiles.html#kbuild-variables).   |  `None` |
 | <a id="kernel_build-module_signing_key"></a>module_signing_key |  A label referring to a module signing key.<br><br>This is to allow for dynamic setting of `CONFIG_MODULE_SIG_KEY` from Bazel.   |  `None` |
 | <a id="kernel_build-system_trusted_key"></a>system_trusted_key |  A label referring to a trusted system key.<br><br>This is to allow for dynamic setting of `CONFIG_SYSTEM_TRUSTED_KEY` from Bazel.   |  `None` |
 | <a id="kernel_build-modules_prepare_force_generate_headers"></a>modules_prepare_force_generate_headers |  For 6.12 and earlier: If `True` it forces generation of additional headers as part of modules_prepare. This is replaced by `generated_headers_for_module` on `base_kernel` for 6.13 and later.   |  `None` |

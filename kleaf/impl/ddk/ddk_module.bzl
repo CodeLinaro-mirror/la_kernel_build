@@ -45,6 +45,7 @@ def ddk_module(
         autofdo_profile = None,
         debug_info_for_profiling = None,
         support_ftrace = None,
+        strip_modules = None,
         **kwargs):
     """
     Defines a DDK (Driver Development Kit) module.
@@ -576,6 +577,9 @@ def ddk_module(
         debug_info_for_profiling: If true, enables extra debug information to be emitted to make
             profile matching during AutoFDO more accurate.
         support_ftrace: Default to `True`. If `False`, removes ftrace flags from the compile command.
+        strip_modules: See [kernel_build-strip_modules](#kernel_build-strip_modules).
+            Controls whether debug information is stripped from the generated module, by default
+            this is inherited from `kernel_build`, however it could be overriden with this attribute.
         **kwargs: Additional attributes to the internal rule.
           See complete list
           [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).
@@ -614,6 +618,8 @@ def ddk_module(
         internal_exclude_kernel_build_module_srcs = True,
         internal_ddk_config = name + "_config",
         internal_mnemonic = "DDK module",
+        internal_strip_modules_t = strip_modules,
+        internal_strip_modules_f = strip_modules,
         # Don't ask Kbuild to stamp it
         internal_follow_stamp_flag = False,
         internal_collect_unstripped_modules = True,
