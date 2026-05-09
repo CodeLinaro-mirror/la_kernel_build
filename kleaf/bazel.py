@@ -561,6 +561,7 @@ class BazelWrapper(KleafHelpPrinter):
             kleaf_repo / "build/kernel/kleaf/bazelrc/silent.bazelrc",
             kleaf_repo / "build/kernel/kleaf/bazelrc/gbl.bazelrc",
             kleaf_repo / "build/kernel/kleaf/bazelrc/stamp.bazelrc",
+            kleaf_repo / "build/kernel/kleaf/bazelrc/abfs.bazelrc",
         ]))
 
         workspace_status_common_sh = self._kleaf_repo_rel() / \
