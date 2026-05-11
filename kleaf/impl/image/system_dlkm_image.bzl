@@ -80,8 +80,6 @@ def _system_dlkm_image_impl(ctx):
         )
 
         extra_flags_cmd = """
-                     # Trick create_modules_staging to not strip, because they are already stripped and signed
-                       DO_NOT_STRIP_MODULES=
                      # Trick create_modules_staging to not look at external modules. They aren't related.
                        EXT_MODULES=
                        EXT_MODULES_MAKEFILE=
@@ -148,7 +146,7 @@ def _system_dlkm_image_impl(ctx):
                      SYSTEM_DLKM_GEN_FLATTEN_IMAGE={build_flatten_image}
                      SYSTEM_DLKM_EXTRA_ARCHIVE_FILES="{system_dlkm_extra_archive_files}"
                      {extra_flags_cmd}
-                     build_system_dlkm
+                     build_system_dlkm {strip_modules}
                    )
                  # Move output files into place
                    mv "${{DIST_DIR}}/{system_dlkm_img_name}" {system_dlkm_img}
@@ -187,6 +185,7 @@ def _system_dlkm_image_impl(ctx):
             system_dlkm_staging_archive = system_dlkm_staging_archive.path,
             system_dlkm_extra_archive_files = " ".join([file.path for file in ctx.files.internal_extra_archive_files]),
             out_modules_blocklist = out_modules_blocklist.path,
+            strip_modules = int(ctx.attr.strip_modules),
         )
 
     outputs += [
@@ -322,6 +321,12 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
             doc = """**Internal only; subject to change without notice.**
                 Extra files to be placed at the root of the archive.
             """,
+        ),
+        "strip_modules": attr.bool(
+            default = False,
+            doc = """If set, strips debug symbols off modules.
+                If not set, this rule does not perform stripping, and relies on the source
+                (e.g., `kernel_build`/`ddk_module`)'s `strip_modules` attribute.""",
         ),
     },
     subrules = [image_utils.build_modules_image],
