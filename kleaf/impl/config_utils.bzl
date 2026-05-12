@@ -47,10 +47,19 @@ n"))) for l in open(sys.argv[1])]' ${{fragment}} > ${{new_fragment}}
                 sanitized_fragments="${{sanitized_fragments}} ${{new_fragment}}"
             done
 
+            quiet_arg=""
+            if {quiet_requested}; then
+                if ${{KERNEL_DIR}}/scripts/kconfig/merge_config.sh -h 2>&1 | grep -q -- "-Q"; then
+                    quiet_arg="-Q"
+                else
+                    echo "WARNING: -Q is not supported by ${{KERNEL_DIR}}/scripts/kconfig/merge_config.sh; quiet mode disabled." >&2
+                fi
+            fi
+
             # Merge target defconfig into .config from kernel_build
             KCONFIG_CONFIG={base_expr}.tmp \\
                 ${{KERNEL_DIR}}/scripts/kconfig/merge_config.sh \\
-                    -m -r {quiet_arg} \\
+                    -m -r ${{quiet_arg}} \\
                     {base_expr} \\
                     ${{sanitized_fragments}} > /dev/null
             mv {base_expr}.tmp {base_expr}
@@ -58,7 +67,7 @@ n"))) for l in open(sys.argv[1])]' ${{fragment}} > ${{new_fragment}}
     """.format(
         base_expr = base_expr,
         defconfig_fragments_paths_expr = defconfig_fragments_paths_expr,
-        quiet_arg = "-Q" if quiet else "",
+        quiet_requested = "true" if quiet else "false",
     )
     return cmd
 
