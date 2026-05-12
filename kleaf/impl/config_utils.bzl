@@ -102,6 +102,13 @@ def _create_check_defconfig_step_impl(
             matter.
         _check_config: FilesToRunProvider for `check_config.py`.
     """
+
+    defconfig_arg = ""
+    if defconfig:
+        defconfig_arg = "--defconfig {}".format(defconfig.path)
+    elif base_defconfig:
+        defconfig_arg = "--defconfig {}".format(base_defconfig.path)
+
     pre_arg = ""
     if pre_defconfig_fragments:
         pre_arg = "--pre_defconfig_fragments {}".format(" ".join([fragment.path for fragment in pre_defconfig_fragments]))
@@ -110,30 +117,14 @@ def _create_check_defconfig_step_impl(
         post_arg = "--post_defconfig_fragments {}".format(" ".join([fragment.path for fragment in post_defconfig_fragments]))
 
     cmd = """
-        (
-            if [[ -n "{defconfig_file}" ]]; then
-                defconfig_arg="--defconfig {defconfig_file}"
-            elif [[ "${{KLEAF_INTERNAL_USE_LEGACY_DEFCONFIG_VAR}}" == "1" ]]; then
-                # Legacy $DEFCONFIG can't be checked because we don't know its actual path.
-                # It could be in $KERNEL_DIR/arch/$ARCH/configs/$DEFCONFIG, but it could also be
-                # a phony target.
-                echo "WARNING: Skipped checking ${{OUT_DIR}}/.config against ${{DEFCONFIG}}
-    because the path of ${{DEFCONFIG}} cannot be determined." >&2
-                defconfig_arg=""
-            elif [[ -n "{base_defconfig_file}" ]]; then
-                defconfig_arg="--defconfig {base_defconfig_file}"
-            fi
-
-            {check_config} \\
-                --dot_config ${{OUT_DIR}}/.config \\
-                ${{defconfig_arg}} \\
-                {pre_arg} \\
-                {post_arg} \\
-        )
+        {check_config} \\
+            --dot_config ${{OUT_DIR}}/.config \\
+            {defconfig_arg} \\
+            {pre_arg} \\
+            {post_arg} \\
     """.format(
         check_config = _check_config.executable.path,
-        defconfig_file = defconfig.path if defconfig else "",
-        base_defconfig_file = base_defconfig.path if base_defconfig else "",
+        defconfig_arg = defconfig_arg,
         pre_arg = pre_arg,
         post_arg = post_arg,
     )
@@ -141,7 +132,7 @@ def _create_check_defconfig_step_impl(
     inputs = []
     if defconfig:
         inputs.append(defconfig)
-    if base_defconfig:
+    elif base_defconfig:
         inputs.append(base_defconfig)
     inputs += pre_defconfig_fragments
     inputs += post_defconfig_fragments
