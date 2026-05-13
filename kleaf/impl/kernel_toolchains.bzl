@@ -226,7 +226,7 @@ def _get_rust_env_impl(_subrule_ctx, rust_tools, bindgen, host_libc, exec_glibc_
     #   e.g. $OUT_DIR/scripts/generate_rust_targets
     # If this ever changes, edit kleaf_internal_eval_rust_flags and add more levels.
     cmd = """
-        export PATH="${{PATH}}:${{ROOT_DIR}}/"{quoted_rust_bin}":${{ROOT_DIR}}/"{quoted_clangtools_bin}":${{ROOT_DIR}}/"{quoted_clangtools_bin_short}
+        export PATH="${{PATH}}:${{ROOT_DIR}}/"{quoted_rust_bin}":${{ROOT_DIR}}/"{quoted_rust_bin_short}":${{ROOT_DIR}}/"{quoted_clangtools_bin}":${{ROOT_DIR}}/"{quoted_clangtools_bin_short}
         export HOSTRUSTFLAGS="--target {target}"
         export PROCMACROLDFLAGS={quoted_proc_macro_ldflags}
 
@@ -247,6 +247,7 @@ def _get_rust_env_impl(_subrule_ctx, rust_tools, bindgen, host_libc, exec_glibc_
     """.format(
         target = target,
         quoted_rust_bin = shell.quote(rustc.dirname),
+        quoted_rust_bin_short = shell.quote(paths.dirname(rustc.short_path)),
         quoted_clangtools_bin = shell.quote(bindgen_file.dirname),
         quoted_clangtools_bin_short = shell.quote(paths.dirname(bindgen_file.short_path)),
         quoted_proc_macro_ldflags = _quote_sanitize_flags(exec_glibc_info.ldflags),
