@@ -372,7 +372,7 @@ def _defconfig_info_to_shell_variables(defconfig_info, is_run_env):
         inputs = inputs,
     )
 
-def _set_up_defconfig_impl(subrule_ctx, defconfig_info, base_kernel_defconfig_info, is_run_env):
+def _set_up_defconfig_impl(subrule_ctx, defconfig_info, base_kernel_defconfig_info, is_run_env, srcarch):
     """Sets up the value of DEFCONFIG.
 
     If kernel_build.defconfig is set:
@@ -445,7 +445,7 @@ def _set_up_defconfig_impl(subrule_ctx, defconfig_info, base_kernel_defconfig_in
         my_defconfig_make_target = my_vars.make_target,
         base_kernel_defconfig_file = base_vars.path,
         base_kernel_defconfig_make_target = base_vars.make_target,
-        set_src_arch_cmd = kernel_utils.set_src_arch_cmd(),
+        set_src_arch_cmd = kernel_utils.set_src_arch_cmd(srcarch),
         kernel_build_name = subrule_ctx.label.name.removesuffix("_config"),
     )
 
@@ -460,7 +460,7 @@ _set_up_defconfig = subrule(
     implementation = _set_up_defconfig_impl,
 )
 
-def _pre_defconfig_impl(_subrule_ctx, pre_defconfig_fragment_files, is_run_env):
+def _pre_defconfig_impl(_subrule_ctx, pre_defconfig_fragment_files, is_run_env, srcarch):
     cmd = ""
     if pre_defconfig_fragment_files:
         cmd += """
@@ -494,7 +494,7 @@ def _pre_defconfig_impl(_subrule_ctx, pre_defconfig_fragment_files, is_run_env):
                 {apply_pre_defconfig_fragments_cmd}
             )
         """.format(
-            set_src_arch_cmd = kernel_utils.set_src_arch_cmd(),
+            set_src_arch_cmd = kernel_utils.set_src_arch_cmd(srcarch),
             apply_pre_defconfig_fragments_cmd = apply_pre_defconfig_fragments_cmd,
         )
     return StepInfo(
@@ -753,10 +753,12 @@ def _build_out_dir(
             is_run_env = False,
             defconfig_info = defconfig_info,
             base_kernel_defconfig_info = base_kernel_utils.get_base_defconfig_info(ctx),
+            srcarch = ctx.attr.srcarch,
         ),
         _pre_defconfig(
             is_run_env = False,
             pre_defconfig_fragment_files = defconfig_fragments_list_info.pre_list,
+            srcarch = ctx.attr.srcarch,
         ),
         _call_make(goal = "${DEFCONFIG}"),
     ]
@@ -977,6 +979,7 @@ def _kernel_config_impl(ctx):
         defconfig_info = defconfig_info,
         base_kernel_defconfig_info = base_kernel_utils.get_base_defconfig_info(ctx),
         pre_defconfig_fragment_files = defconfig_fragments_list_info.pre_list,
+        srcarch = ctx.attr.srcarch,
     )
     config_script_runfiles = ctx.runfiles(
         files = main_action_ret.inputs,
@@ -1013,7 +1016,8 @@ def _get_config_script_impl(
         env_info,
         defconfig_info,
         base_kernel_defconfig_info,
-        pre_defconfig_fragment_files):
+        pre_defconfig_fragment_files,
+        srcarch):
     """Handles config.sh.
 
     Args:
@@ -1022,6 +1026,7 @@ def _get_config_script_impl(
         defconfig_info: the DefconfigInfo from attr defconfig
         base_kernel_defconfig_info: the DefconfigInfo from base_kernel
         pre_defconfig_fragment_files: list of files of pre_defconfig_fragments
+        srcarch: optional srcarch override
     """
     executable = subrule_ctx.actions.declare_file("{}/config.sh".format(subrule_ctx.label.name))
 
@@ -1030,10 +1035,12 @@ def _get_config_script_impl(
             is_run_env = True,
             defconfig_info = defconfig_info,
             base_kernel_defconfig_info = base_kernel_defconfig_info,
+            srcarch = srcarch,
         ),
         _pre_defconfig(
             is_run_env = True,
             pre_defconfig_fragment_files = pre_defconfig_fragment_files,
+            srcarch = srcarch,
         ),
         _call_make(goal = "${DEFCONFIG}"),
     ]
@@ -1058,7 +1065,7 @@ def _get_config_script_impl(
         export HOSTCFLAGS="${HOSTCFLAGS} --sysroot="
         export HOSTLDFLAGS="${HOSTLDFLAGS//-z nodefaultlib/} --sysroot="
     """
-    script += kernel_utils.set_src_arch_cmd()
+    script += kernel_utils.set_src_arch_cmd(srcarch)
     script += """
         menucommand="${1:-savedefconfig}"
         if ! [[ "${menucommand}" =~ .*config ]]; then
@@ -1291,6 +1298,9 @@ kernel_config = rule(
             # See documentation for kernel_build.check_defconfig.
             default = "",
             values = ["disabled", "minimized", "match"],
+        ),
+        "srcarch": attr.string(
+            doc = "Overrides SRCARCH",
         ),
         "_stamp_value": attr.label(default = "//build/kernel/kleaf/impl:stamp_value"),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),

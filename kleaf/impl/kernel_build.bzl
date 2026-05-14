@@ -116,6 +116,7 @@ def kernel_build(
         generate_vmlinux_btf = None,
         deps = None,
         arch = None,
+        srcarch = None,
         base_kernel = None,
         make_goals = None,
         kconfig_ext = None,
@@ -259,6 +260,8 @@ def kernel_build(
           This must be consistent to `ARCH` in build configs if the latter
           is specified. Otherwise, a warning / error may be raised.
 
+        srcarch: Value of `SRCARCH`. This is primary used to find defconfigs. Override this if
+            the makefile uses a different algorithm to infer `SRCARCH` (e.g. for u-boot).
         base_kernel: A label referring the base kernel build.
 
           If set, the list of files specified in the `DefaultInfo` of the rule specified in
@@ -811,6 +814,7 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         post_defconfig_fragments_non_inherited = post_defconfig_fragments_non_inherited,
         check_defconfig = check_defconfig,
         protected_module_names_list = protected_module_names_list,
+        srcarch = srcarch,
         **internal_kwargs
     )
 
