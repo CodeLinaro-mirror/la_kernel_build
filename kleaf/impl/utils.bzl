@@ -539,13 +539,19 @@ def _create_kernel_module_dep_info(kernel_module):
 
 # Cross compiler name is not always the same as the linux arch
 # ARCH is not always the same as the architecture dir (b/254348147)
-def _set_src_arch_cmd():
+def _set_src_arch_cmd(srcarch):
     """Returns a script that sets SRCARCH based on ARCH.
 
     This is where we find DEFCONFIG.
 
     The logic should be synced with common/Makefile.
+
+    Args:
+        srcarch: Value of `SRCARCH` override.
     """
+
+    if srcarch:
+        return "SRCARCH={}\n".format(shell.quote(srcarch))
 
     return """
         SRCARCH=${ARCH}
