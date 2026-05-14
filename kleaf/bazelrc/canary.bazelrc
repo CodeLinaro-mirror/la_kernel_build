@@ -21,5 +21,3 @@
 build:canary --kconfig_werror
 
 common:canary --pahole_from_sources
-
-common:canary --clippy

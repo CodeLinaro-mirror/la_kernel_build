@@ -722,7 +722,7 @@ config_setting(
 # Set CLIPPY=1 for kernel and module builds.
 bool_flag(
     name = "clippy",
-    build_setting_default = False,
+    build_setting_default = True,
     visibility = ["//visibility:public"],
 )
 
