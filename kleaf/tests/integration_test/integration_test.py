@@ -1391,6 +1391,22 @@ class QuickIntegrationHostTest(KleafIntegrationTestBase):
                 command_args=[f"//{self._common()}:kernel_aarch64_config"] +
                 _LOCAL)
 
+    def test_menuconfig(self):
+        """Test that bazel run //common:kernel_aarch64_config works."""
+        gki_defconfig_path = pathlib.Path(
+            f"{self._common()}/arch/arm64/configs/gki_defconfig")
+        old_content = gki_defconfig_path.read_text()
+
+        def cleanup():
+            new_content = gki_defconfig_path.read_text()
+            gki_defconfig_path.write_text(old_content)
+            self.assertEqual(new_content, old_content, f"{gki_defconfig_path} changed")
+        self.addCleanup(cleanup)
+
+        self._check_call(
+            command = "run",
+            command_args=[f"//{self._common()}:kernel_aarch64_config", "--", "olddefconfig"],
+        )
 
 class ScmversionIntegrationTest(KleafIntegrationTestBase):
 
