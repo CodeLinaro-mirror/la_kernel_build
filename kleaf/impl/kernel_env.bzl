@@ -391,12 +391,26 @@ def _kernel_env_impl(ctx):
             # Replace $PWD/<not out> with $KLEAF_REPO_DIR/$1
             sed "s|\\$PWD/{hermetic_base}|\\$PWD/\\$KLEAF_HERMETIC_BASE|g" | \\
             sed "s|\\$PWD/{bin_dir_and_workspace_root}|\\$PWD/\\$KLEAF_BIN_DIR_AND_WORKSPACE_ROOT|g" | \\
-            sed "s|{bin_dir_and_workspace_root}|\\$KLEAF_BIN_DIR_AND_WORKSPACE_ROOT|g" | \\
-            # List of packages that //build/kernel/... depends on. This excludes
-            # external/ because they are in different Bazel repositories.
-            sed "s|\\$PWD/build|\\$KLEAF_REPO_DIR/build|g" | \\
-            sed "s|\\$PWD/prebuilts|\\$KLEAF_REPO_DIR/prebuilts|g" \\
-            >> {out}
+            sed "s|{bin_dir_and_workspace_root}|\\$KLEAF_BIN_DIR_AND_WORKSPACE_ROOT|g" \\
+            > {out}.variables.tmp
+
+            # Continuing with replacing $PWD/<not out> with $KLEAF_REPO_DIR/$1
+            if [ -z "{kleaf_repo_workspace_root}" ]; then
+                # If @kleaf is the root package, we can't blindly replace $PWD with
+                # $KLEAF_REPO_WORKSPACE_ROOT, because it'll make the script unusable when it is
+                # sourced verbatim in DDKv2 workspace. Hence, we manually allowlist
+                # packages that //build/kernel/... depends on. This excludes
+                # external/ because they are in different Bazel repositories.
+                cat {out}.variables.tmp | \\
+                    sed "s|\\$PWD/build|\\$KLEAF_REPO_DIR/build|g" | \\
+                    sed "s|\\$PWD/prebuilts|\\$KLEAF_REPO_DIR/prebuilts|g" \\
+                    >> {out}
+            else
+                cat {out}.variables.tmp | \\
+                    sed "s|{kleaf_repo_workspace_root}|\\$KLEAF_REPO_WORKSPACE_ROOT|g" \\
+                    >> {out}
+            fi
+            rm {out}.variables.tmp
 
           echo >> {out}
 
@@ -419,6 +433,7 @@ def _kernel_env_impl(ctx):
         post_env_script = post_env_script.path,
         hermetic_base = hermetic_tools.internal_hermetic_base,
         bin_dir_and_workspace_root = bin_dir_and_workspace_root,
+        kleaf_repo_workspace_root = kleaf_repo_workspace_root,
     )
 
     progress_message_note = kernel_config_settings.get_progress_message_note(
@@ -523,16 +538,28 @@ def _get_env_setup_cmds(ctx):
     if ctx.attr._debug_annotate_scripts[BuildSettingInfo].value:
         pre_env += debug.trap()
 
+    # kleaf_repo_workspace_root: "" (if @kleaf is root); "external/kleaf+" (if @kleaf is not root)
     kleaf_repo_workspace_root = Label(":kernel_env.bzl").workspace_root
+
+    # kleaf_repo_workspace_root_short: "" (if @kleaf is root); "../kleaf+" (if @kleaf is not root)
+    if not ctx.file.setup_env.is_source:
+        fail("FATAL: the path calculation must be adjusted based on some source file")
+    kleaf_repo_workspace_root_short = ctx.file.setup_env.short_path.removesuffix("build/kernel/_setup_env.sh").removesuffix("/")
 
     # buildifier: disable=external-path
     pre_env += """
         # KLEAF_REPO_WORKSPACE_ROOT: workspace_root of the Kleaf repository. See Label.workspace_root.
         # This should be:
         # - Either an empty string if @kleaf is the root module;
-        # - or external/kleaf (or some variations of it) if @kleaf is a dependent module
+        # - or external/kleaf+ if @kleaf is a dependent module
         # This may be overridden by kernel_filegroup.
-        KLEAF_REPO_WORKSPACE_ROOT=${{KLEAF_REPO_WORKSPACE_ROOT:-{kleaf_repo_workspace_root}}}
+        if [ -z "${{KLEAF_REPO_WORKSPACE_ROOT}}" ]; then
+            if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+                KLEAF_REPO_WORKSPACE_ROOT="{kleaf_repo_workspace_root_short}"
+            else
+                KLEAF_REPO_WORKSPACE_ROOT="{kleaf_repo_workspace_root}"
+            fi
+        fi
 
         # hermetic_base for hermetic tools, relative to execroot. This is
         # handled separately from bin_dir because hermetic_tools has a transition
@@ -551,7 +578,7 @@ def _get_env_setup_cmds(ctx):
         #   if @kleaf is a dependent module
         # For `bazel run`:
         # - either . if @kleaf is the root module
-        # - or external/kleaf (or some variations of it) if @kleaf is a dependent module
+        # - or ../kleaf+ if @kleaf is a dependent module
         if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
             KLEAF_BIN_DIR_AND_WORKSPACE_ROOT="${{KLEAF_REPO_WORKSPACE_ROOT:-.}}"
         else
@@ -568,6 +595,7 @@ def _get_env_setup_cmds(ctx):
         run_hermetic_base = hermetic_tools.internal_run_hermetic_base,
         bin_dir = ctx.bin_dir.path,
         kleaf_repo_workspace_root = kleaf_repo_workspace_root,
+        kleaf_repo_workspace_root_short = kleaf_repo_workspace_root_short,
     )
 
     post_env = ""
