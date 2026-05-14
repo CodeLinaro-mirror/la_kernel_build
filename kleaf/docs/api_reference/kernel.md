@@ -149,6 +149,50 @@ semantically identical to the original `ddk_headers` definition.
 | <a id="ddk_headers_archive-srcs"></a>srcs |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 
 
+<a id="ddk_prebuilt_module"></a>
+
+## ddk_prebuilt_module
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_prebuilt_module")
+
+ddk_prebuilt_module(<a href="#ddk_prebuilt_module-name">name</a>, <a href="#ddk_prebuilt_module-src">src</a>, <a href="#ddk_prebuilt_module-hdrs">hdrs</a>, <a href="#ddk_prebuilt_module-config">config</a>, <a href="#ddk_prebuilt_module-includes">includes</a>, <a href="#ddk_prebuilt_module-kernel_build">kernel_build</a>, <a href="#ddk_prebuilt_module-linux_includes">linux_includes</a>, <a href="#ddk_prebuilt_module-module_symvers">module_symvers</a>,
+                    <a href="#ddk_prebuilt_module-modules_order">modules_order</a>)
+</pre>
+
+Wraps ddk_module prebuilt files so it can be used in [ddk_module.deps](#ddk_module-deps).
+
+Example:
+
+```
+# Optional
+ddk_config(
+    name = "foo_config",
+)
+ddk_prebuilt_module(
+    name = "foo",
+    src = "foo.ko",
+    module_symvers = "foo_Module.symvers",
+    config = ":foo_config", # Optional
+)
+```
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="ddk_prebuilt_module-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="ddk_prebuilt_module-src"></a>src |  The .ko file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="ddk_prebuilt_module-hdrs"></a>hdrs |  [ddk_headers.hdrs](#ddk_headers-hdrs)   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="ddk_prebuilt_module-config"></a>config |  A [ddk_config](#ddk_config).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="ddk_prebuilt_module-includes"></a>includes |  [ddk_headers.hdrs](#ddk_headers-includes)   | List of strings | optional |  `[]`  |
+| <a id="ddk_prebuilt_module-kernel_build"></a>kernel_build |  The [`kernel_build`](#kernel_build).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="ddk_prebuilt_module-linux_includes"></a>linux_includes |  [ddk_headers.hdrs](#ddk_headers-linux_includes)   | List of strings | optional |  `[]`  |
+| <a id="ddk_prebuilt_module-module_symvers"></a>module_symvers |  Module.symvers file.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="ddk_prebuilt_module-modules_order"></a>modules_order |  modules.order file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+
+
 <a id="ddk_prebuilt_object"></a>
 
 ## ddk_prebuilt_object
@@ -186,7 +230,7 @@ ddk_module(
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="ddk_prebuilt_object-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="ddk_prebuilt_object-src"></a>src |  The .o file, e.g. `foo.o`   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="ddk_prebuilt_object-cmd"></a>cmd |  The .cmd file, e.g. `.foo.o.cmd`. If missing, an empty file is provided.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="ddk_prebuilt_object-cmd"></a>cmd |  The .cmd file, e.g. `.foo.o.cmd`. If missing, an empty file is provided.<br><br>Note: If `cmd` is provided, and the outer `ddk_module` has `MODULE_VERSION()`, then sources of the prebuilt must also be provided to the `ddk_module` with a `ddk_headers` targets. For details, see [kleaf/tests/ddk_examples/ddk_prebuilt_object/README.md](../../tests/ddk_examples/ddk_prebuilt_object/README.md).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="ddk_prebuilt_object-config"></a>config |  If set, name of the config with the `CONFIG_` prefix. The prebuilt object is only linked when the given config matches `config_bool_value`.   | String | optional |  `""`  |
 | <a id="ddk_prebuilt_object-config_bool_value"></a>config_bool_value |  If `config` is set, and `config_bool_value == True`, the object is only included if the config is `y` or `m`. If `config` is set and `config_bool_value == False`, the object is only included if the config is not set.   | Boolean | optional |  `False`  |
 

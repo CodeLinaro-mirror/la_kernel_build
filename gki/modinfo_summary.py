@@ -17,6 +17,7 @@ import argparse
 import concurrent.futures
 import dataclasses
 import hashlib
+import itertools
 import pathlib
 import subprocess
 import xml_handler
@@ -51,7 +52,7 @@ class KernelModule:
         )
 
 
-def _get_module_hexdigest(module: pathlib.Path) -> str:
+def _get_module_hexdigest(module: pathlib.Path, verbose: bool) -> str:
     modinfo_name = subprocess.check_output(
         ["modinfo", "-F", "name", module], text=True
     ).strip()
@@ -66,14 +67,20 @@ def _get_module_hexdigest(module: pathlib.Path) -> str:
         author=modinfo_author,
         license=modinfo_license,
     )
+    if verbose:
+        kernel_module.print()
     return kernel_module.hexdigest()
 
 
-def _get_modules(directory: pathlib.Path) -> list[str]:
+def _get_modules(directory: pathlib.Path, verbose: bool) -> list[str]:
     module_hashes = set()
     with concurrent.futures.ProcessPoolExecutor() as executor:
         module_hashes = set(
-            executor.map(_get_module_hexdigest, directory.glob("**/*.ko"))
+            executor.map(
+                _get_module_hexdigest,
+                directory.glob("**/*.ko"),
+                itertools.repeat(verbose),
+            )
         )
 
     # Keep it deterministic and make it easy for searchs.
@@ -92,15 +99,21 @@ def load_arguments():
         type=pathlib.Path,
         help="Path to .xml file to store the result.",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="If enabled print additional info.",
+    )
     return parser.parse_args()
 
 
 def generate_report(
     directory: pathlib.Path,
     output: pathlib.Path,
+    verbose: bool,
 ) -> None:
 
-    module_hashes = _get_modules(directory)
+    module_hashes = _get_modules(directory, verbose)
     # Populate the XML document with information from modules.
     xml_handler.create_report(module_hashes, output)
 

@@ -14,18 +14,16 @@
  */
 
 #include <linux/module.h>
+#include "parent.h"
 
-extern void foo(void);
-extern void bar(void);
-extern void baz(void);
+void child_func(void);
 
-void module_func(void) {
-    foo();
-    bar();
-    baz();
+void child_func(void) {
+    parent_func();
 }
 
-MODULE_DESCRIPTION("A test module for Kleaf testing purposes");
-MODULE_AUTHOR("Hong, Yifan <elsk@google.com>");
+EXPORT_SYMBOL(child_func);
+
+MODULE_DESCRIPTION("A test module for DDK testing purposes");
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("FAKE");
+MODULE_AUTHOR("Hong, Yifan <elsk@google.com>");
