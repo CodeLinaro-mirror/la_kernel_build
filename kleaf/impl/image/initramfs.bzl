@@ -145,14 +145,12 @@ def _initramfs_impl(ctx):
                if [ "{trim_unused_modules}" == "1" ]; then
                    TRIM_UNUSED_MODULES=1
                fi
-             # Use `strip_modules` intead of relying on this.
-               unset DO_NOT_STRIP_MODULES
                mkdir -p {initramfs_staging_dir}
              # Build initramfs
                create_modules_staging "${{MODULES_LIST}}" {modules_staging_dir} \
                        {initramfs_staging_dir} "${{MODULES_BLOCKLIST}}" \
                        "${{MODULES_RECOVERY_LIST:-""}}" "${{MODULES_CHARGER_LIST:-""}}" "-e" \
-                       "${{MODULES_LOAD}}"
+                       "${{MODULES_LOAD}}" {strip_modules}
                modules_root_dir=$(readlink -e {initramfs_staging_dir}/lib/modules/*) || exit 1
                cp ${{modules_root_dir}}/modules.load {modules_load}
                {cp_vendor_boot_modules_load_cmd}
@@ -188,6 +186,7 @@ def _initramfs_impl(ctx):
         cp_modules_load_charger_cmd = cp_modules_load_charger_cmd,
         cp_vendor_boot_modules_load_charger_cmd = cp_vendor_boot_modules_load_charger_cmd,
         cp_modules_options_cmd = cp_modules_options_cmd,
+        strip_modules = int(ctx.attr.strip_modules),
     )
 
     default_info = image_utils.build_modules_image(
@@ -302,6 +301,12 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
             doc = """List of dev nodes description files which describes special device files
                 to be added to the vendor ramdisk. File format is as accepted by mkbootfs.
                 See `mkbootfs -h` for more details.""",
+        ),
+        "strip_modules": attr.bool(
+            default = False,
+            doc = """If set, strips debug symbols off modules.
+                If not set, this rule does not perform stripping, and relies on the source
+                (e.g., `kernel_build`/`ddk_module`)'s `strip_modules` attribute.""",
         ),
     },
     subrules = [image_utils.build_modules_image],

@@ -104,8 +104,6 @@ def _vendor_dlkm_image_impl(ctx):
         outputs.append(vendor_dlkm_flatten_modules_load)
 
     command += """
-            # Use `strip_modules` intead of relying on this.
-              unset DO_NOT_STRIP_MODULES
             # Build vendor_dlkm
               mkdir -p {vendor_dlkm_staging_dir}
               (
@@ -118,7 +116,7 @@ def _vendor_dlkm_image_impl(ctx):
                 VENDOR_DLKM_FS_TYPE={fs_type}
                 VENDOR_DLKM_STAGING_DIR={vendor_dlkm_staging_dir}
                 VENDOR_DLKM_GEN_FLATTEN_IMAGE={build_flatten_image}
-                build_vendor_dlkm {archive}
+                build_vendor_dlkm {archive} {strip_modules}
               )
             # Move output files into place
               mv "${{DIST_DIR}}/vendor_dlkm.img" {vendor_dlkm_img}
@@ -156,6 +154,7 @@ def _vendor_dlkm_image_impl(ctx):
         out_modules_blocklist = out_modules_blocklist.path,
         archive = "1" if ctx.attr.archive else "",
         vendor_dlkm_staging_archive = vendor_dlkm_staging_archive.path if ctx.attr.archive else None,
+        strip_modules = int(ctx.attr.strip_modules),
     )
 
     additional_inputs += ctx.files.etc_files
@@ -330,6 +329,12 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
             For example, if `base_kernel` of `kernel_build()` is `//common:kernel_aarch64`,
             then `base_system_dlkm_image` is `//common:kernel_aarch64_system_dlkm_image`.
         """),
+        "strip_modules": attr.bool(
+            default = False,
+            doc = """If set, strips debug symbols off modules.
+                If not set, this rule does not perform stripping, and relies on the source
+                (e.g., `kernel_build`/`ddk_module`)'s `strip_modules` attribute.""",
+        ),
     },
     subrules = [image_utils.build_modules_image],
 )

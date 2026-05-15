@@ -540,8 +540,8 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "initramfs")
 
 initramfs(<a href="#initramfs-name">name</a>, <a href="#initramfs-deps">deps</a>, <a href="#initramfs-create_modules_order">create_modules_order</a>, <a href="#initramfs-kernel_modules_install">kernel_modules_install</a>, <a href="#initramfs-modules_blocklist">modules_blocklist</a>,
           <a href="#initramfs-modules_charger_list">modules_charger_list</a>, <a href="#initramfs-modules_list">modules_list</a>, <a href="#initramfs-modules_load">modules_load</a>, <a href="#initramfs-modules_options">modules_options</a>, <a href="#initramfs-modules_recovery_list">modules_recovery_list</a>,
-          <a href="#initramfs-ramdisk_compression">ramdisk_compression</a>, <a href="#initramfs-ramdisk_compression_args">ramdisk_compression_args</a>, <a href="#initramfs-trim_unused_modules">trim_unused_modules</a>, <a href="#initramfs-vendor_boot_name">vendor_boot_name</a>,
-          <a href="#initramfs-vendor_ramdisk_dev_nodes">vendor_ramdisk_dev_nodes</a>)
+          <a href="#initramfs-ramdisk_compression">ramdisk_compression</a>, <a href="#initramfs-ramdisk_compression_args">ramdisk_compression_args</a>, <a href="#initramfs-strip_modules">strip_modules</a>, <a href="#initramfs-trim_unused_modules">trim_unused_modules</a>,
+          <a href="#initramfs-vendor_boot_name">vendor_boot_name</a>, <a href="#initramfs-vendor_ramdisk_dev_nodes">vendor_ramdisk_dev_nodes</a>)
 </pre>
 
 Build initramfs.
@@ -574,6 +574,7 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 | <a id="initramfs-modules_recovery_list"></a>modules_recovery_list |  A file containing a list of modules to load when booting into recovery.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="initramfs-ramdisk_compression"></a>ramdisk_compression |  If provided it specfies the format used for any ramdisks generated.If not provided a fallback value from build.config is used.   | String | optional |  `""`  |
 | <a id="initramfs-ramdisk_compression_args"></a>ramdisk_compression_args |  Command line arguments passed only to lz4 command to control compression level.   | String | optional |  `""`  |
+| <a id="initramfs-strip_modules"></a>strip_modules |  If set, strips debug symbols off modules. If not set, this rule does not perform stripping, and relies on the source (e.g., `kernel_build`/`ddk_module`)'s `strip_modules` attribute.   | Boolean | optional |  `False`  |
 | <a id="initramfs-trim_unused_modules"></a>trim_unused_modules |  If `True` then modules not mentioned in modules.load are removed from the initramfs. It defaults to `False`.   | Boolean | optional |  `False`  |
 | <a id="initramfs-vendor_boot_name"></a>vendor_boot_name |  Name of `vendor_boot` image.<br><br>* If `"vendor_boot"`, build `vendor_boot.img` * If `"vendor_kernel_boot"`, build `vendor_kernel_boot.img` * If `None`, skip building `vendor_boot`.   | String | optional |  `""`  |
 | <a id="initramfs-vendor_ramdisk_dev_nodes"></a>vendor_ramdisk_dev_nodes |  List of dev nodes description files which describes special device files to be added to the vendor ramdisk. File format is as accepted by mkbootfs. See `mkbootfs -h` for more details.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
@@ -1019,7 +1020,8 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "system_dlkm_image")
 
 system_dlkm_image(<a href="#system_dlkm_image-name">name</a>, <a href="#system_dlkm_image-deps">deps</a>, <a href="#system_dlkm_image-base">base</a>, <a href="#system_dlkm_image-build_flatten">build_flatten</a>, <a href="#system_dlkm_image-fs_types">fs_types</a>, <a href="#system_dlkm_image-internal_extra_archive_files">internal_extra_archive_files</a>,
-                  <a href="#system_dlkm_image-kernel_modules_install">kernel_modules_install</a>, <a href="#system_dlkm_image-modules_blocklist">modules_blocklist</a>, <a href="#system_dlkm_image-modules_list">modules_list</a>, <a href="#system_dlkm_image-modules_load">modules_load</a>, <a href="#system_dlkm_image-props">props</a>)
+                  <a href="#system_dlkm_image-kernel_modules_install">kernel_modules_install</a>, <a href="#system_dlkm_image-modules_blocklist">modules_blocklist</a>, <a href="#system_dlkm_image-modules_list">modules_list</a>, <a href="#system_dlkm_image-modules_load">modules_load</a>, <a href="#system_dlkm_image-props">props</a>,
+                  <a href="#system_dlkm_image-strip_modules">strip_modules</a>)
 </pre>
 
 Build system_dlkm partition image with signed GKI modules.
@@ -1047,6 +1049,7 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 | <a id="system_dlkm_image-modules_list"></a>modules_list |  An optional file containing the list of kernel modules which shall be copied into a system_dlkm partition image.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="system_dlkm_image-modules_load"></a>modules_load |  An optional file containing the list of kernel modules which shall be loaded.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="system_dlkm_image-props"></a>props |  A text file containing the properties to be used for creation of a `system_dlkm` image (filesystem, partition size, etc). If this is not set (and `build_system_dlkm` is), a default set of properties will be used which assumes an ext4 filesystem and a dynamic partition.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="system_dlkm_image-strip_modules"></a>strip_modules |  If set, strips debug symbols off modules. If not set, this rule does not perform stripping, and relies on the source (e.g., `kernel_build`/`ddk_module`)'s `strip_modules` attribute.   | Boolean | optional |  `False`  |
 
 
 <a id="unsparsed_image"></a>
@@ -1126,7 +1129,8 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "vendor_dlkm_image")
 
 vendor_dlkm_image(<a href="#vendor_dlkm_image-name">name</a>, <a href="#vendor_dlkm_image-deps">deps</a>, <a href="#vendor_dlkm_image-archive">archive</a>, <a href="#vendor_dlkm_image-base_system_dlkm_image">base_system_dlkm_image</a>, <a href="#vendor_dlkm_image-build_flatten">build_flatten</a>, <a href="#vendor_dlkm_image-create_modules_order">create_modules_order</a>,
                   <a href="#vendor_dlkm_image-dedup_dlkm_modules">dedup_dlkm_modules</a>, <a href="#vendor_dlkm_image-etc_files">etc_files</a>, <a href="#vendor_dlkm_image-fs_type">fs_type</a>, <a href="#vendor_dlkm_image-kernel_modules_install">kernel_modules_install</a>, <a href="#vendor_dlkm_image-modules_blocklist">modules_blocklist</a>,
-                  <a href="#vendor_dlkm_image-modules_list">modules_list</a>, <a href="#vendor_dlkm_image-modules_load">modules_load</a>, <a href="#vendor_dlkm_image-props">props</a>, <a href="#vendor_dlkm_image-system_dlkm_image">system_dlkm_image</a>, <a href="#vendor_dlkm_image-vendor_boot_modules_load">vendor_boot_modules_load</a>)
+                  <a href="#vendor_dlkm_image-modules_list">modules_list</a>, <a href="#vendor_dlkm_image-modules_load">modules_load</a>, <a href="#vendor_dlkm_image-props">props</a>, <a href="#vendor_dlkm_image-strip_modules">strip_modules</a>, <a href="#vendor_dlkm_image-system_dlkm_image">system_dlkm_image</a>,
+                  <a href="#vendor_dlkm_image-vendor_boot_modules_load">vendor_boot_modules_load</a>)
 </pre>
 
 Build vendor_dlkm image.
@@ -1158,6 +1162,7 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 | <a id="vendor_dlkm_image-modules_list"></a>modules_list |  An optional file containing the list of kernel modules which shall be copied into a `vendor_dlkm` partition image. Any modules passed into `MODULES_LIST` which become part of the `vendor_boot.modules.load` will be trimmed from the `vendor_dlkm.modules.load`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="vendor_dlkm_image-modules_load"></a>modules_load |  An optional file containing the list of kernel modules which shall be loaded.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="vendor_dlkm_image-props"></a>props |  A text file containing the properties to be used for creation of a `vendor_dlkm` image (filesystem, partition size, etc). If this is not set (and `build_vendor_dlkm` is), a default set of properties will be used which assumes an ext4 filesystem and a dynamic partition.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="vendor_dlkm_image-strip_modules"></a>strip_modules |  If set, strips debug symbols off modules. If not set, this rule does not perform stripping, and relies on the source (e.g., `kernel_build`/`ddk_module`)'s `strip_modules` attribute.   | Boolean | optional |  `False`  |
 | <a id="vendor_dlkm_image-system_dlkm_image"></a>system_dlkm_image |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="vendor_dlkm_image-vendor_boot_modules_load"></a>vendor_boot_modules_load |  File to `vendor_boot.modules.load`.<br><br>Modules listed in this file is stripped away from the `vendor_dlkm` image.<br><br>As a special case, you may also provide a [`initramfs`](#initramfs) target here, in which case the `vendor_boot.modules.load` of the initramfs is used.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 
