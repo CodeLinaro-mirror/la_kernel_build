@@ -132,6 +132,37 @@ def _run_checkpatch(
     ).returncode
 
 
+def _find_repo(curdir: pathlib.Path) -> pathlib.Path | None:
+    """Find repo installation."""
+    while curdir.parent != curdir:  # is not root
+        maybe_dot_repo = curdir / ".repo"
+        if maybe_dot_repo.is_dir():
+            return curdir
+        curdir = curdir.parent
+    return None
+
+
+def _get_package_path(path: pathlib.Path) -> pathlib.Path | None:
+    """Get package path from project path"""
+    workspace_dir = pathlib.Path(os.environ["BUILD_WORKSPACE_DIRECTORY"])
+    repo_root_s = os.environ.get("KLEAF_REPO_MANIFEST", ":").split(":")[0]
+    if repo_root_s:
+        repo_root = pathlib.Path(repo_root_s).resolve()
+    else:
+        repo_root = _find_repo(workspace_dir)
+
+    if not repo_root:
+        logging.error(
+            "Unable to determine repo root. Please specify --repo_manifest.")
+        return None
+
+    realpath = repo_root / path
+    if realpath.is_relative_to(workspace_dir):
+        return realpath.relative_to(workspace_dir)
+
+    return None
+
+
 def _invoke_using_applied_prop(dist_dir: pathlib.Path) -> int:
     applied_prop = dist_dir / "applied.prop"
     applied_prop_dict: dict[pathlib.Path, list[str]] = \
@@ -150,7 +181,13 @@ def _invoke_using_applied_prop(dist_dir: pathlib.Path) -> int:
             logging.error("Multiple git sha1 found in %s for %s",
                           applied_prop, path)
             return 1
-        path_targets = _find_checkpatch_targets(path)
+
+        package_path = _get_package_path(path)
+        if not package_path:
+            logging.info("Skipping %s because it is not in the workspace.", path)
+            continue
+
+        path_targets = _find_checkpatch_targets(package_path)
         if not path_targets:
             logging.info(
                 "Skipping %s because no checkpatch() target is found.", path)
@@ -197,11 +234,17 @@ def _invoke_using_change_info_json(
         for change in json.load(change_info_file).get("changes"):
             project_name = change["project"]
             project_path = pathlib.Path(change["projectPath"])
+
+            package_path = _get_package_path(project_path)
+            if not package_path:
+                logging.info("Skipping %s because it is not in the workspace.", project_path)
+                continue
+
             # Only interested in the git SHA of the CL at the time of the
             # build. The SHA is specified by the "latestRevision" field.
             revision = change["latestRevision"]
 
-            path_targets = _find_checkpatch_targets(project_path)
+            path_targets = _find_checkpatch_targets(package_path)
             if not path_targets:
                 logging.info(
                     "Skipping %s because no checkpatch() target is found.", project_path)
