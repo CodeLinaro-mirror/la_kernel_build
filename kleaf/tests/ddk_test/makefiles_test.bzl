@@ -164,6 +164,7 @@ def _get_top_level_file_impl(ctx):
         inputs = [ctx.file.target],
         tools = hermetic_tools.deps,
         command = command,
+        mnemonic = "GetTopLevelFile",
     )
     return DefaultInfo(
         files = depset([out]),
@@ -195,6 +196,8 @@ def _create_makefiles_artifact_test(
         hdrs = None,
         top_level_makefile = None,
         kernel_build = None,
+        support_ftrace = None,
+        target_type = None,
         expected_lines = None,
         expected_makefile_lines = None,
         expected_cflags_lines = None,
@@ -205,6 +208,7 @@ def _create_makefiles_artifact_test(
     makefiles(
         name = name + "_module_makefiles",
         kernel_build = kernel_build,
+        module_support_ftrace = support_ftrace,
         module_out = out,
         module_srcs = srcs,
         module_local_defines = local_defines,
@@ -217,6 +221,7 @@ def _create_makefiles_artifact_test(
         module_hdrs = hdrs,
         module_deps = deps,
         top_level_makefile = top_level_makefile,
+        target_type = target_type,
         tags = ["manual"],
     )
 
@@ -751,6 +756,38 @@ def _makefiles_cond_srcs_test(name):
         tests = tests,
     )
 
+def _makefiles_support_ftrace_tests(name):
+    """Tests for support_ftrace attribute."""
+    tests = []
+
+    _create_makefiles_artifact_test(
+        name = name + "_module",
+        out = "module.ko",
+        srcs = ["dep.c"],
+        support_ftrace = False,
+        expected_lines = [
+            "CFLAGS_REMOVE_dep.o += $(CC_FLAGS_FTRACE)",
+        ],
+    )
+    tests.append(name + "_module")
+
+    _create_makefiles_artifact_test(
+        name = name + "_library",
+        out = "fake.ko",
+        srcs = ["dep.c"],
+        support_ftrace = False,
+        target_type = "library",
+        expected_lines = [
+            "CFLAGS_REMOVE_dep.o += $(CC_FLAGS_FTRACE)",
+        ],
+    )
+    tests.append(name + "_library")
+
+    native.test_suite(
+        name = name,
+        tests = tests,
+    )
+
 def makefiles_test_suite(name):
     """Defines tests for `makefiles`.
 
@@ -1044,6 +1081,11 @@ def makefiles_test_suite(name):
         name = name + "_cond_srcs_test",
     )
     tests.append(name + "_cond_srcs_test")
+
+    _makefiles_support_ftrace_tests(
+        name = name + "_support_ftrace",
+    )
+    tests.append(name + "_support_ftrace")
 
     native.test_suite(
         name = name,
