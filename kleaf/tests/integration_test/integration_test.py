@@ -23,11 +23,11 @@ Example:
       -- --bazel-arg=--verbose_failures --bazel-arg=--announce_rc
 
     tools/bazel run //build/kernel/kleaf/tests/integration_test \\
-      -- QuickIntegrationTest.test_menuconfig_merge
+      -- QuickIntegrationTest.test_help
 
     tools/bazel run //build/kernel/kleaf/tests/integration_test \\
       -- --bazel-arg=--verbose_failures --bazel-arg=--announce_rc \\
-         QuickIntegrationTest.test_menuconfig_merge \\
+         QuickIntegrationTest.test_help \\
          --verbosity=2
 
     tools/bazel run //build/kernel/kleaf/tests/integration_test \\
@@ -1338,47 +1338,6 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
 
 class QuickIntegrationHostTest(KleafIntegrationTestBase):
     """Similar to QuickIntegrationTest but with host dependencies."""
-
-    def test_menuconfig_merge(self):
-        """Test that menuconfig works with a raw merge_config.sh in PRE_DEFCONFIG_CMDS.
-
-        See `menuconfig_merge_test/` for details.
-
-        See b/276889737 and b/274878805."""
-
-        args = [
-            "//build/kernel/kleaf/tests/integration_test/menuconfig_merge_test:menuconfig_merge_test_config",
-        ] + _FASTEST
-
-        output = self._check_output("run", args)
-
-        def matching_line(line): return re.match(
-            r"^Updating .*common/arch/arm64/configs/menuconfig_test_defconfig$",
-            line)
-        self.assertTrue(
-            any([matching_line(line) for line in output.splitlines()]))
-
-        # It should be fine to call the same command subsequently.
-        self._check_call("run", args)
-
-    def test_menuconfig_fragment(self):
-        """Test that menuconfig works with a FRAGMENT_CONFIG defined.
-
-        See `menuconfig_fragment_test/` for details.
-
-        See b/276889737 and b/274878805."""
-
-        args = [
-            "//build/kernel/kleaf/tests/integration_test/menuconfig_fragment_test:menuconfig_fragment_test_config",
-        ] + _FASTEST
-
-        output = self._check_output("run", args)
-
-        expected_line = f"Updated {os.environ['BUILD_WORKSPACE_DIRECTORY']}/build/kernel/kleaf/tests/integration_test/menuconfig_fragment_test/defconfig.fragment"
-        self.assertTrue(expected_line, output.splitlines())
-
-        # It should be fine to call the same command subsequently.
-        self._check_call("run", args)
 
     def test_config_local_with_output_root(self):
         """Test --config=local works with --output_root.

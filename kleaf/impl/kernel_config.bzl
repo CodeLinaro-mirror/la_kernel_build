@@ -429,9 +429,8 @@ def _set_up_defconfig_impl(subrule_ctx, defconfig_info, base_kernel_defconfig_in
         if [[ -n "{my_defconfig_file}" ]] || [[ -n "{my_defconfig_make_target}" ]]; then
             kleaf_handle_defconfig_info "{my_defconfig_file}" "{my_defconfig_make_target}"
         elif [[ -n "${{DEFCONFIG}}" ]]; then
-            echo "WARNING: DEFCONFIG is deprecated; use kernel_build(defconfig=) instead." >&2
-            # Preserve its value
-            KLEAF_INTERNAL_USE_LEGACY_DEFCONFIG_VAR=1
+            echo "ERROR: DEFCONFIG is deprecated; use kernel_build(defconfig=) instead." >&2
+            exit 1
         elif [[ -n "{base_kernel_defconfig_file}" ]] || [[ -n "{base_kernel_defconfig_make_target}" ]]; then
             kleaf_handle_defconfig_info "{base_kernel_defconfig_file}" "{base_kernel_defconfig_make_target}"
         fi
