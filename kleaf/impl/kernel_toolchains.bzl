@@ -15,6 +15,7 @@
 """Helper for `kernel_env` to get toolchains for different platforms."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@kernel_toolchain_info//:dict.bzl", "VARS")
 load(
@@ -112,10 +113,12 @@ def _kernel_toolchains_impl(ctx):
     all_files_transitive = [exec.all_files, target.all_files]
     target_arch = _get_target_arch(ctx)
 
-    quoted_bin_paths = [
+    quoted_bin_paths = sets.to_list(sets.make([
         _quote_prepend_cwd(exec.bin_path),
         _quote_prepend_cwd(target.bin_path),
-    ]
+        _quote_prepend_cwd(exec.bin_path_short),
+        _quote_prepend_cwd(target.bin_path_short),
+    ]))
 
     setup_env_var_cmd = """
         export PATH={quoted_bin_paths}:${{PATH}}
