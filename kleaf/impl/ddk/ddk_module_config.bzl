@@ -109,10 +109,15 @@ def _create_serialized_env_info_impl(subrule_ctx, out_dir, script_name, kernel_b
 
     # Overlay module-specific configs
     setup_script_cmd = """
-        . {pre_setup_script}
+        if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+            . {pre_setup_script_short}
+        else
+            . {pre_setup_script}
+        fi
         {restore_out_dir_cmd}
     """.format(
         pre_setup_script = kernel_build_serialized_env_info.setup_script.path,
+        pre_setup_script_short = kernel_build_serialized_env_info.setup_script.short_path,
         restore_out_dir_cmd = restore_out_dir_step.cmd,
     )
     setup_script = subrule_ctx.actions.declare_file(script_name)
