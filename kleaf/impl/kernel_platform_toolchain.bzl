@@ -131,6 +131,26 @@ def _kernel_platform_toolchain_impl(ctx):
     )
     bin_path = paths.dirname(compiler_executable)
 
+    # HACK: get_tool_for_action returns a str; this hack calculates its short_path without
+    #   the File object.
+    if ctx.attr._this.label.workspace_root:
+        # For source files in an external repository (when @kleaf is not the root),
+        # its path in runfiles should be ../kleaf+/prebuilts/clang/..., not
+        # external/kleaf+/prebuilts/clang/...
+        # However, get_tool_for_action() gives us a str, not a File, so we can't
+        # short_path directly. Calculate the short_path manually. This assumes the
+        # current file (kernel_platform_toolchain.bzl) is in the same repository (@kleaf)
+        # as the clang toolchain.
+        bin_path_rel = paths.relativize(bin_path, ctx.attr._this.label.workspace_root)
+
+        # https://github.com/bazelbuild/bazel/issues/3675: This is not the same as ctx.file._this.short_path
+        this_rel = paths.relativize(ctx.file._this.path, ctx.attr._this.label.workspace_root)
+        workspace_root_for_run = ctx.file._this.short_path.removesuffix(this_rel)
+        bin_path_short = paths.join(workspace_root_for_run, bin_path_rel)
+    else:
+        # If @kleaf is the root, using it directly is okay. For source files, path == short_path
+        bin_path_short = bin_path
+
     if should_print_platforms:
         # buildifier: disable=print
         print("{}: {}".format(ctx.label, cc_toolchain.toolchain_id))
@@ -143,6 +163,7 @@ def _kernel_platform_toolchain_impl(ctx):
         ldflags = link_command_line,
         ldexpr = ldexpr,
         bin_path = bin_path,
+        bin_path_short = bin_path_short,
         runpaths = [runpath.path for runpath in ctx.files.runpaths],
         sysroot = cc_toolchain.sysroot,
         libc = _get_libc(ctx),
@@ -167,6 +188,11 @@ kernel_platform_toolchain = rule(
         "_cc_toolchain": attr.label(default = "@bazel_tools//tools/cpp:optional_current_cc_toolchain"),
         "override_platform": attr.label(
             doc = "If set, force this target to use the given platform.",
+        ),
+        "_this": attr.label(
+            default = ":kernel_platform_toolchain.bzl",
+            allow_single_file = True,
+            doc = "This .bzl file, used as an anchor to get info about the @kleaf repository.",
         ),
     },
     toolchains = use_cpp_toolchain(mandatory = False),
