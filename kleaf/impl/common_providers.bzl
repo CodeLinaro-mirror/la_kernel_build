@@ -117,6 +117,7 @@ KernelPlatformToolchainInfo = provider(
         "ldflags": "flags for C linking",
         "ldexpr": "Extra shell expression appended to ldflags",
         "bin_path": "`PATH` relative to execroot.",
+        "bin_path_short": "`PATH` relative to execroot in runfiles",
         "runpaths": "RUNPATHs. Note this is already in ldexpr.",
         "sysroot": "sysroot",
         "libc": "The libc, one of musl or glibc.",
