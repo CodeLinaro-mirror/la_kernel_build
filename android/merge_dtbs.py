@@ -45,6 +45,9 @@ def split_array(array, cells):
 	"""
 	if array is None:
 		return None
+	if isinstance(array, int):
+		array = [array]
+	logging.debug(f"Type of array in split_array funciton is: {type(array)}")
 	assert (len(array) % cells) == 0
 	return frozenset(tuple(array[i*cells:(i*cells)+cells]) for i in range(len(array) // cells))
 
@@ -360,18 +363,28 @@ class InnerMergedDeviceTree(DeviceTreeInfo):
 		if self.plat_id:
 			plat_iter = self.plat_id if isinstance(self.plat_id, tuple) else chain.from_iterable(self.plat_id)
 			cmd = ['fdtput', '-t', 'i', out_file, '/', 'qcom,msm-id'] + list(map(str, plat_iter))
-			logging.debug('  {}'.format(' '.join(cmd)))
+			logging.debug('	 {}'.format(' '.join(cmd)))
 			subprocess.run(cmd, check=True)
 
 		if self.board_id:
 			board_iter = self.board_id if isinstance(self.board_id, tuple) else chain.from_iterable(self.board_id)
 			cmd = ['fdtput', '-t', 'i', out_file, '/', 'qcom,board-id'] + list(map(str, board_iter))
-			logging.debug('  {}'.format(' '.join(cmd)))
+			logging.debug('	 {}'.format(' '.join(cmd)))
 			subprocess.run(cmd, check=True)
 
 		if self.pmic_id:
 			pmic_iter = self.pmic_id if isinstance(self.pmic_id, tuple) else chain.from_iterable(self.pmic_id)
 			cmd = ['fdtput', '-t', 'i', out_file, '/', 'qcom,pmic-id'] + list(map(str, pmic_iter))
+			logging.debug('	 {}'.format(' '.join(cmd)))
+			subprocess.run(cmd, check=True)
+		if self.oem_id:
+			oem_iter = self.oem_id if isinstance(self.oem_id, tuple) else chain.from_iterable(self.oem_id)
+			cmd = ['fdtput', '-t', 'i', out_file, '/', 'qcom,oem-id'] + list(map(str, oem_iter))
+			subprocess.run(cmd, check=True)
+
+		if self.softsku_id:
+			softsku_iter = self.softsku_id if isinstance(self.softsku_id, tuple) else chain.from_iterable(self.softsku_id)
+			cmd = ['fdtput', '-t', 'i', out_file, '/', 'qcom,softsku-id'] + list(map(str, softsku_iter))
 			logging.debug('  {}'.format(' '.join(cmd)))
 			subprocess.run(cmd, check=True)
 
