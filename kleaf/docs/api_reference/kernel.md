@@ -1176,7 +1176,7 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_library")
 
 ddk_library(<a href="#ddk_library-name">name</a>, <a href="#ddk_library-kernel_build">kernel_build</a>, <a href="#ddk_library-srcs">srcs</a>, <a href="#ddk_library-deps">deps</a>, <a href="#ddk_library-hdrs">hdrs</a>, <a href="#ddk_library-includes">includes</a>, <a href="#ddk_library-linux_includes">linux_includes</a>, <a href="#ddk_library-local_defines">local_defines</a>, <a href="#ddk_library-copts">copts</a>,
             <a href="#ddk_library-removed_copts">removed_copts</a>, <a href="#ddk_library-asopts">asopts</a>, <a href="#ddk_library-config">config</a>, <a href="#ddk_library-kconfig">kconfig</a>, <a href="#ddk_library-defconfig">defconfig</a>, <a href="#ddk_library-autofdo_profile">autofdo_profile</a>,
-            <a href="#ddk_library-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_library-pkvm_el2">pkvm_el2</a>, <a href="#ddk_library-support_ftrace">support_ftrace</a>, <a href="#ddk_library-kwargs">**kwargs</a>)
+            <a href="#ddk_library-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_library-pkvm_el2">pkvm_el2</a>, <a href="#ddk_library-support_ftrace">support_ftrace</a>, <a href="#ddk_library-gcov">gcov</a>, <a href="#ddk_library-kwargs">**kwargs</a>)
 </pre>
 
 **EXPERIMENTAL**. A library that may be used by a DDK module.
@@ -1215,6 +1215,7 @@ Known issues:
 | <a id="ddk_library-debug_info_for_profiling"></a>debug_info_for_profiling |  see [`ddk_module.debug_info_for_profiling`](#ddk_module-debug_info_for_profiling)   |  `None` |
 | <a id="ddk_library-pkvm_el2"></a>pkvm_el2 |  **EXPERIMENTAL**. If True, builds EL2 hypervisor code.<br><br>If True: - The output list is the fixed `["kvm_nvhe.o"]`, plus relevant .o.cmd files - The generated Makefile is modified to build EL2 hypervisor code.<br><br>Note: This is only supported in selected branches.   |  `None` |
 | <a id="ddk_library-support_ftrace"></a>support_ftrace |  see [`ddk_module.support_ftrace`](#ddk_module-support_ftrace)   |  `None` |
+| <a id="ddk_library-gcov"></a>gcov |  see [`ddk_module.gcov`](#ddk_module-gcov)   |  `None` |
 | <a id="ddk_library-kwargs"></a>kwargs |  Additional attributes to the internal rule. See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 
@@ -1228,7 +1229,7 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_module")
 ddk_module(<a href="#ddk_module-name">name</a>, <a href="#ddk_module-kernel_build">kernel_build</a>, <a href="#ddk_module-srcs">srcs</a>, <a href="#ddk_module-deps">deps</a>, <a href="#ddk_module-hdrs">hdrs</a>, <a href="#ddk_module-textual_hdrs">textual_hdrs</a>, <a href="#ddk_module-includes">includes</a>, <a href="#ddk_module-conditional_srcs">conditional_srcs</a>,
            <a href="#ddk_module-crate_root">crate_root</a>, <a href="#ddk_module-linux_includes">linux_includes</a>, <a href="#ddk_module-out">out</a>, <a href="#ddk_module-local_defines">local_defines</a>, <a href="#ddk_module-copts">copts</a>, <a href="#ddk_module-removed_copts">removed_copts</a>, <a href="#ddk_module-asopts">asopts</a>, <a href="#ddk_module-linkopts">linkopts</a>,
            <a href="#ddk_module-config">config</a>, <a href="#ddk_module-kconfig">kconfig</a>, <a href="#ddk_module-defconfig">defconfig</a>, <a href="#ddk_module-generate_btf">generate_btf</a>, <a href="#ddk_module-autofdo_profile">autofdo_profile</a>, <a href="#ddk_module-debug_info_for_profiling">debug_info_for_profiling</a>,
-           <a href="#ddk_module-support_ftrace">support_ftrace</a>, <a href="#ddk_module-strip_modules">strip_modules</a>, <a href="#ddk_module-kwargs">**kwargs</a>)
+           <a href="#ddk_module-support_ftrace">support_ftrace</a>, <a href="#ddk_module-gcov">gcov</a>, <a href="#ddk_module-strip_modules">strip_modules</a>, <a href="#ddk_module-kwargs">**kwargs</a>)
 </pre>
 
 Defines a DDK (Driver Development Kit) module.
@@ -1531,6 +1532,7 @@ $(LINUXINCLUDE)
 | <a id="ddk_module-autofdo_profile"></a>autofdo_profile |  Label to an AutoFDO profile.   |  `None` |
 | <a id="ddk_module-debug_info_for_profiling"></a>debug_info_for_profiling |  If true, enables extra debug information to be emitted to make profile matching during AutoFDO more accurate.   |  `None` |
 | <a id="ddk_module-support_ftrace"></a>support_ftrace |  Default to `True`. If `False`, removes ftrace flags from the compile command.   |  `None` |
+| <a id="ddk_module-gcov"></a>gcov |  Default to `inherit`. Value must be one of `inherit`, `always` and `never`.<br><br>*   If `inherit`, inherit gcov configuration from parent configurations. This is equivalent     to setting nothing in the `Kbuild` file. If `CONFIG_GCOV_KERNEL=y` and     `CONFIG_GCOV_PROFILE_ALL=y`, gcov is enabled.<br><br>    *   In particular, if the `--gcov` flag is set, and you are building the kernel from source         (not using prebuilts), the kernel has `CONFIG_GCOV_KERNEL` and `CONFIG_GCOV_PROFILE_ALL`         set. In this case, `ddk_module(gcov="inherit")` inherits these two configs and enables         gcov in this module.<br><br>*   If `always`, enable gcov in this module if `CONFIG_GCOV_KERNEL=y`. This is equivalent     to setting `GCOV_PROFILE_<file> := y` for each file in `srcs`.<br><br>*   If `never`, never enable gcov for this module, regardless of the value of     `CONFIG_GCOV_KERNEL` and `CONFIG_GCOV_PROFILE_ALL`. This is equivalent to setting     `GCOV_PROFILE_<file> := n` for each file in `srcs`.   |  `None` |
 | <a id="ddk_module-strip_modules"></a>strip_modules |  See [kernel_build-strip_modules](#kernel_build-strip_modules). Controls whether debug information is stripped from the generated module, by default this is inherited from `kernel_build`, however it could be overriden with this attribute.   |  `None` |
 | <a id="ddk_module-kwargs"></a>kwargs |  Additional attributes to the internal rule. See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
@@ -1543,7 +1545,7 @@ $(LINUXINCLUDE)
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_submodule")
 
 ddk_submodule(<a href="#ddk_submodule-name">name</a>, <a href="#ddk_submodule-out">out</a>, <a href="#ddk_submodule-srcs">srcs</a>, <a href="#ddk_submodule-deps">deps</a>, <a href="#ddk_submodule-hdrs">hdrs</a>, <a href="#ddk_submodule-includes">includes</a>, <a href="#ddk_submodule-local_defines">local_defines</a>, <a href="#ddk_submodule-copts">copts</a>, <a href="#ddk_submodule-removed_copts">removed_copts</a>, <a href="#ddk_submodule-asopts">asopts</a>,
-              <a href="#ddk_submodule-linkopts">linkopts</a>, <a href="#ddk_submodule-conditional_srcs">conditional_srcs</a>, <a href="#ddk_submodule-crate_root">crate_root</a>, <a href="#ddk_submodule-autofdo_profile">autofdo_profile</a>, <a href="#ddk_submodule-debug_info_for_profiling">debug_info_for_profiling</a>,
+              <a href="#ddk_submodule-linkopts">linkopts</a>, <a href="#ddk_submodule-conditional_srcs">conditional_srcs</a>, <a href="#ddk_submodule-crate_root">crate_root</a>, <a href="#ddk_submodule-autofdo_profile">autofdo_profile</a>, <a href="#ddk_submodule-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_submodule-gcov">gcov</a>,
               <a href="#ddk_submodule-kwargs">**kwargs</a>)
 </pre>
 
@@ -1633,6 +1635,7 @@ dependencies are stable, it is recommended to:
 | <a id="ddk_submodule-crate_root"></a>crate_root |  See [`ddk_module.crate_root`](#ddk_module-crate_root).   |  `None` |
 | <a id="ddk_submodule-autofdo_profile"></a>autofdo_profile |  See [`ddk_module.autofdo_profile`](#ddk_module-autofdo_profile).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).   |  `None` |
 | <a id="ddk_submodule-debug_info_for_profiling"></a>debug_info_for_profiling |  See [`ddk_module.debug_info_for_profiling`](#ddk_module-debug_info_for_profiling).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).   |  `None` |
+| <a id="ddk_submodule-gcov"></a>gcov |  See [`ddk_module.gcov`](#ddk_module-gcov).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).   |  `None` |
 | <a id="ddk_submodule-kwargs"></a>kwargs |  Additional attributes to the internal rule, e.g. [`visibility`](https://docs.bazel.build/versions/main/visibility.html). See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 

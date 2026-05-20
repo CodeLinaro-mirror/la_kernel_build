@@ -128,3 +128,16 @@ and relative paths should be interpreted as relative to the repository on host. 
 This means:
 * Device `/sys/kernel/debug/absolute/from` maps to host `/absolute/to`
 * Device `/sys/kernel/debug/<repositry_root>/relative/from` maps to host `/<repository_root>/relative/to`.
+
+## ddk_module
+
+To control GCOV profiling for a specific `ddk_module`, set the `gcov` attribute. It supports the following values:
+
+*   `inherit` (default): Inherit GCOV configuration from parent configurations.
+    *   If the `--gcov` flag is set to `profile_all`, GCOV profiling is enabled for this module.
+    *   If the `--gcov` flag is set to `enabled` or `default`, GCOV profiling is NOT enabled for this module.
+*   `always`: Enable GCOV profiling for this module as long as GCOV is enabled globally (i.e., the `--gcov` flag is set to `enabled` or `profile_all`).
+*   `never`: Never enable GCOV profiling for this module, regardless of the `--gcov` flag.
+
+For details, see the `gcov` attribute documentation in [`ddk_module`](api_reference.md#ddk_module).
+
