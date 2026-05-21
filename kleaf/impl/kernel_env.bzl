@@ -351,8 +351,6 @@ def _kernel_env_impl(ctx):
           source {setup_env}
           {check_arch_cmd}
           {check_constants_cmd}
-        # Variables from resolved toolchain
-          {toolchains_setup_env_var_cmd}
           {set_clang_autofdo_profile_cmd}
         # TODO(b/236012223) Remove the warning after deprecation.
           {make_goals_deprecation_warning}
@@ -423,7 +421,6 @@ def _kernel_env_impl(ctx):
         setup_env = setup_env.path,
         check_arch_cmd = _get_check_arch_cmd(ctx),
         check_constants_cmd = check_constants_cmd,
-        toolchains_setup_env_var_cmd = toolchains.kernel_setup_env_var_cmd,
         set_clang_autofdo_profile_cmd = set_clang_autofdo_profile_cmd,
         make_goals_deprecation_warning = make_goals_deprecation_warning,
         kconfig_werror_setup = kconfig_werror_setup,
@@ -532,6 +529,7 @@ def get_env_info_setup_command(
 
 def _get_env_setup_cmds(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
+    toolchains = kernel_toolchains_utils.get(ctx)
 
     inputs = []
     pre_env = ""
@@ -605,6 +603,12 @@ def _get_env_setup_cmds(ctx):
     inputs += root_dir_realpath_ret.deps
 
     post_env += """
+          if [ -n "${{KLEAF_SET_UP_TOOLCHAIN_CMD}}" ]; then
+            eval "${{KLEAF_SET_UP_TOOLCHAIN_CMD}}"
+          else
+            # Default commands to set up variables from resolved toolchain
+            {toolchains_setup_env_var_cmd}
+          fi # KLEAF_SET_UP_TOOLCHAIN_CMD
         # Increase parallelism # TODO(b/192655643): do not use -j anymore
         export MAKEFLAGS="${{MAKEFLAGS}} -j$(
             make_jobs="$({get_make_jobs_cmd})"
@@ -690,6 +694,7 @@ def _get_env_setup_cmds(ctx):
             export TOOL_ARGS="${{TOOL_ARGS}} PAHOLE=${{ROOT_DIR}}/{pahole}"
         fi
     """.format(
+        toolchains_setup_env_var_cmd = toolchains.kernel_setup_env_var_cmd,
         get_make_jobs_cmd = status.get_volatile_status_cmd(ctx, "MAKE_JOBS"),
         get_make_keep_going_cmd = status.get_volatile_status_cmd(ctx, "MAKE_KEEP_GOING"),
         kernel_build_workspace_root = ctx.label.workspace_root,

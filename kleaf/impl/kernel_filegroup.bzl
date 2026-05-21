@@ -15,6 +15,7 @@
 """A target that mimics [`kernel_build`](#kernel_build) from a list of prebuilt files."""
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
+load("@bazel_skylib//lib:shell.bzl", "shell")
 load(
     ":common_providers.bzl",
     "DdkHeadersInfo",
@@ -127,21 +128,17 @@ def _get_config_env(ctx):
             KLEAF_HERMETIC_BASE={hermetic_base}
         fi
         KLEAF_FIX_KERNEL_DIR=1
+        KLEAF_SET_UP_TOOLCHAIN_CMD={quoted_toolchains_setup_env_var_cmd}
     """.format(
         kleaf_repo_workspace_root = Label(":kernel_filegroup.bzl").workspace_root,
         hermetic_base = hermetic_tools.internal_hermetic_base,
         run_hermetic_base = hermetic_tools.internal_run_hermetic_base,
+        quoted_toolchains_setup_env_var_cmd = shell.quote(toolchains.kernel_setup_env_var_cmd),
     )
     env_setup_command += get_env_info_setup_command(
         hermetic_tools_setup = hermetic_tools.setup,
         build_utils_sh = ctx.file._build_utils_sh,
         env_setup_script = ctx.file.env_setup_script,
-    )
-    env_setup_command += """
-        # Re-configure kernel toolchains because @kleaf may not be the root module any more.
-        {toolchains_setup_env_var_cmd}
-    """.format(
-        toolchains_setup_env_var_cmd = toolchains.kernel_setup_env_var_cmd,
     )
 
     config_env_setup_command = get_config_setup_command(
