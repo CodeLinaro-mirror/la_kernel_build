@@ -584,13 +584,22 @@ def ddk_module(
                 to setting nothing in the `Kbuild` file. If `CONFIG_GCOV_KERNEL=y` and
                 `CONFIG_GCOV_PROFILE_ALL=y`, gcov is enabled.
 
-                *   In particular, if the `--gcov` flag is set, and you are building the kernel from source
-                    (not using prebuilts), the kernel has `CONFIG_GCOV_KERNEL` and `CONFIG_GCOV_PROFILE_ALL`
-                    set. In this case, `ddk_module(gcov="inherit")` inherits these two configs and enables
-                    gcov in this module.
+                *   In particular, if `--gcov_mode=profile_all` is set (or the legacy `--gcov` flag is set to true),
+                    and you are building the kernel from source (not using prebuilts), the kernel has `CONFIG_GCOV_KERNEL` and
+                    `CONFIG_GCOV_PROFILE_ALL` set. In this case, `ddk_module(gcov="inherit")` inherits
+                    these two configs and enables gcov in this module.
+
+                *   If `--gcov_mode=enabled` is set, only
+                    `CONFIG_GCOV_KERNEL` is set, so `gcov="inherit"` will not enable gcov profiling for
+                    this module.
 
             *   If `always`, enable gcov in this module if `CONFIG_GCOV_KERNEL=y`. This is equivalent
                 to setting `GCOV_PROFILE_<file> := y` for each file in `srcs`.
+
+                *   In particular, if `--gcov_mode` is set to `enabled` or `profile_all` (or the legacy `--gcov` flag
+                    is set to true), and you are building the kernel from source (not using prebuilts),
+                    the kernel has `CONFIG_GCOV_KERNEL` set. In this case, `ddk_module(gcov="always")`
+                    enables gcov in this module.
 
             *   If `never`, never enable gcov for this module, regardless of the value of
                 `CONFIG_GCOV_KERNEL` and `CONFIG_GCOV_PROFILE_ALL`. This is equivalent to setting
