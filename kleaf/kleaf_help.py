@@ -26,7 +26,7 @@ _BAZEL_RC_DIR = "build/kernel/kleaf/bazelrc"
 FLAGS_BAZEL_RC = "build/kernel/kleaf/bazelrc/flags.bazelrc"
 
 _FLAG_PATTERN = re.compile(
-    r"build --flag_alias=(?P<short_name>[a-z_]+)=(?P<is_negated>no)?(?P<label>[a-zA-Z/:_-]+)$")
+    r"build --flag_alias=(?P<short_name>[a-z_]+)=(?P<is_negated>no)?(?P<label>[a-zA-Z/:_@-]+)$")
 
 _FLAG_COMMENT_PATTERN = re.compile(
     r'(?P<comment>((#\s*.*)\n)*)(?P<rule>[a-z_]+)\(\s*name\s*=\s*"(?P<name>[a-zA-Z-_]+)"',
@@ -161,7 +161,7 @@ class FlagAlias(object):
 
     def read_flag_comment(self, kleaf_repo_dir: pathlib.Path):
         # TODO(b/256052600): Use buildozer
-        build_file_rel = self.label.removeprefix('//')
+        build_file_rel = self.label.removeprefix("@kleaf//").removeprefix("//")
         build_file_rel = build_file_rel[:build_file_rel.index(":")]
         label_name = self.label[self.label.index(":") + 1:]
         build_file = kleaf_repo_dir / build_file_rel / "BUILD.bazel"
