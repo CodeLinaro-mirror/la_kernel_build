@@ -712,6 +712,15 @@ class KleafIntegrationTestShard2(KleafIntegrationTestBase):
         ]
         self._build(args)
 
+    def test_config_local_dist(self):
+        """Test --config=local works with dist target.
+
+        See b/515023391."""
+        self._build([
+            "--config=local",
+            f"//{self._common()}:kernel_aarch64_dist",
+        ])
+
 
 class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
     """Tests setting up a DDK workspace with @kleaf as dependency."""
