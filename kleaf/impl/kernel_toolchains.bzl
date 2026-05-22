@@ -133,6 +133,32 @@ def _kernel_toolchains_impl(ctx):
     #   below OUT_DIR,
     #   e.g. $OUT_DIR/scripts/sign-file, $OUT_DIR/tools/bpf/resolve_btfids/resolve_btfids
     # If this ever changes, edit kleaf_internal_eval_ldflags and add more levels.
+    #
+    # We use `realpath -s` (no-symlinks) to calculate relative paths.
+    #
+    # When building locally (with --config=local), OUT_DIR is overridden to a host cache directory:
+    #   OUT_DIR = /path/to/workspace/out/cache/HASH/common
+    # And ROOT_DIR (execroot) is:
+    #   ROOT_DIR = /path/to/workspace/out/bazel/output_user_root/HASH/execroot/_main
+    #
+    # We also want to calculate the rpath for the expected default OUT_DIR (for downstream sandboxed actions):
+    #   DEFAULT_OUT_DIR = ROOT_DIR/out/android-mainline/common
+    #
+    # In the local execution environment, ROOT_DIR contains a symlink `out` pointing to the host `out` directory:
+    #   ROOT_DIR/out -> /path/to/workspace/out
+    #
+    # If we use standard `realpath` (following symlinks):
+    #   realpath ROOT_DIR --relative-to DEFAULT_OUT_DIR
+    # Resolves DEFAULT_OUT_DIR to:
+    #   /path/to/workspace/out/android-mainline/common
+    # Resulting in a "dirty" host-escaping relative path:
+    #   ../../bazel/output_user_root/HASH/execroot/_main
+    #
+    # If we use `realpath -s` (ignoring symlinks):
+    #   realpath -s ROOT_DIR --relative-to DEFAULT_OUT_DIR
+    # Treats `out` as a regular directory, yielding a "clean" relative path:
+    #   ../../..
+    # This clean path is necessary for downstream actions running in a sandbox where `out` is a real directory.
     kernel_setup_env_var_cmd += """
         export HOSTCFLAGS={quoted_hostcflags}
         export USERCFLAGS={quoted_usercflags}
@@ -150,7 +176,7 @@ def _kernel_toolchains_impl(ctx):
         export -f kleaf_internal_append_one_ldflags
 
         function kleaf_internal_eval_ldflags() {{
-            local relative_to_output="$(realpath ${{ROOT_DIR}} --relative-to ${{OUT_DIR}})"
+            local relative_to_output="$(realpath -s ${{ROOT_DIR}} --relative-to ${{OUT_DIR}})"
             local relative_to_output_prefix="${{relative_to_output%%[!./]*}}"
             local relative_to_output_suffix="${{relative_to_output#${{relative_to_output_prefix}}}}"
             local relative_depth="${{relative_to_output_prefix//[^\\/]/}}"
@@ -235,8 +261,8 @@ def _get_rust_env_impl(_subrule_ctx, rust_tools, bindgen, host_libc, exec_glibc_
 
         function kleaf_internal_append_one_rust_flags() {{
             local backtrack_relative=$1
-            local RUNPATH_EXECROOT='$$$$\\{{ORIGIN\\}}/'"${{backtrack_relative}}$(realpath ${{ROOT_DIR}} --relative-to ${{OUT_DIR}})"
-            local RUNPATH_EXECROOT_LESSQUOTE='$$$$ORIGIN/'"${{backtrack_relative}}$(realpath ${{ROOT_DIR}} --relative-to ${{OUT_DIR}})"
+            local RUNPATH_EXECROOT='$$$$\\{{ORIGIN\\}}/'"${{backtrack_relative}}$(realpath -s ${{ROOT_DIR}} --relative-to ${{OUT_DIR}})"
+            local RUNPATH_EXECROOT_LESSQUOTE='$$$$ORIGIN/'"${{backtrack_relative}}$(realpath -s ${{ROOT_DIR}} --relative-to ${{OUT_DIR}})"
             export HOSTRUSTFLAGS="${{HOSTRUSTFLAGS}} "-Clink-args=-Wl,-rpath,${{RUNPATH_EXECROOT}}/{quoted_rust_bin}/../lib64
             export PROCMACROLDFLAGS="${{PROCMACROLDFLAGS}} "-Wl,-rpath,${{RUNPATH_EXECROOT_LESSQUOTE}}/{quoted_rust_bin}/../lib64
         }}
