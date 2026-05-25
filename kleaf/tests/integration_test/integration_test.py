@@ -1111,7 +1111,8 @@ class QuickIntegrationTest(KleafIntegrationTestBase):
 
     def test_help_kleaf(self):
         """Test that `bazel help kleaf` works."""
-        self._check_output("help", ["kleaf"])
+        out = self._check_output("help", ["kleaf"])
+        self.assertIn("--allow_ddk_unsafe_headers", out)
 
     def test_strip_execroot(self):
         """Test that --strip_execroot works."""
