@@ -18,7 +18,6 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load(":common_providers.bzl", "KernelBuildUnameInfo")
 load(":constants.bzl", "GKI_ARTIFACTS_AARCH64_OUTS")
-load(":gcov_utils.bzl", "gcov_attrs", "is_gcov_enabled")
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
 load(":utils.bzl", "utils")
 
@@ -81,14 +80,6 @@ def _gki_artifacts_impl(ctx):
                 export BUILD_GKI_BOOT_IMG{var_name}_SIZE={size}
             """.format(var_name = var_name, size = size)
 
-    # b/283225390: boot images with --gcov may overflow the boot image size
-    #   check when adding AVB hash footer.
-    skip_avb_cmd = ""
-    if is_gcov_enabled(ctx):
-        skip_avb_cmd = """
-            export BUILD_GKI_BOOT_SKIP_AVB=1
-        """
-
     inputs += images
 
     # All declare_file's above are "<name>/<filename>" without subdirectories,
@@ -108,7 +99,6 @@ def _gki_artifacts_impl(ctx):
         export MKBOOTIMG_PATH={mkbootimg}
         export KLEAF_INTERNAL_GKI_BOOT_IMG_CERTIFICATION_KEY={testkey}
         {size_cmd}
-        {skip_avb_cmd}
         build_gki_artifacts
     """.format(
         build_utils_sh = ctx.file._build_utils_sh.path,
@@ -121,7 +111,6 @@ def _gki_artifacts_impl(ctx):
         mkbootimg = ctx.executable.mkbootimg.path,
         testkey = ctx.file._testkey.path,
         size_cmd = size_cmd,
-        skip_avb_cmd = skip_avb_cmd,
     )
 
     if ctx.attr.arch == "arm64":
@@ -194,7 +183,7 @@ For example:
             cfg = "exec",
         ),
         "_testkey": attr.label(default = "@avb_test//:data/testkey_rsa4096.pem", allow_single_file = True),
-    } | gcov_attrs(),
+    },
     toolchains = [hermetic_toolchain.type],
 )
 
