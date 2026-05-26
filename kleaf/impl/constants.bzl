@@ -34,6 +34,12 @@ GKI_ARTIFACTS_AARCH64_OUTS = [
     for e in DEFAULT_IMAGES
 ]
 
+GKI_ARTIFACTS_X86_64_OUTS = [
+    "boot-img.tar.gz",
+    "gki-info.txt",
+    "boot.img",
+]
+
 SYSTEM_DLKM_COMMON_OUTS = [
     "system_dlkm_staging_archive.tar.gz",
     "system_dlkm.modules.load",

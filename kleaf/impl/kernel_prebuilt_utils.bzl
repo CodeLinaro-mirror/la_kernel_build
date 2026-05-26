@@ -17,11 +17,13 @@
 load(
     "//build/kernel/kleaf:constants.bzl",
     "DEFAULT_GKI_OUTS",
+    "X86_64_OUTS",
 )
 load(
     ":constants.bzl",
     "FILEGROUP_DEF_ARCHIVE_SUFFIX",
     "GKI_ARTIFACTS_AARCH64_OUTS",
+    "GKI_ARTIFACTS_X86_64_OUTS",
     "SIGNED_GKI_ARTIFACTS_ARCHIVE",
     "SYSTEM_DLKM_COMMON_OUTS",
     "UNSTRIPPED_MODULES_ARCHIVE",
@@ -31,7 +33,9 @@ visibility("//build/kernel/kleaf/...")
 
 def _common_ci_target_config(
         bazel_target_name,
-        ddk_headers_archive_name):
+        ddk_headers_archive_name,
+        default_outs,
+        gki_artifacts):
     return {
         "bazel_target_name": bazel_target_name,
         # Key: local file name.
@@ -98,7 +102,7 @@ def _common_ci_target_config(
                 "mandatory": True,
                 "remote_filename_fmt": item,
             }
-            for item in DEFAULT_GKI_OUTS
+            for item in default_outs
         } | {
             item: {
                 "target_suffix": "images",
@@ -112,7 +116,7 @@ def _common_ci_target_config(
                 "mandatory": True,
                 "remote_filename_fmt": item,
             }
-            for item in GKI_ARTIFACTS_AARCH64_OUTS
+            for item in gki_artifacts
         } | {
             # TODO(b/328770706): download_configs.json should be a proper rule to
             # get the name of the file from :kernel_aarch64_ddk_headers_archive
@@ -143,6 +147,8 @@ CI_TARGET_MAPPING = {
     "kernel_aarch64": _common_ci_target_config(
         bazel_target_name = "kernel_aarch64",
         ddk_headers_archive_name = "kernel_aarch64_ddk_headers_archive.tar.gz",
+        default_outs = DEFAULT_GKI_OUTS,
+        gki_artifacts = GKI_ARTIFACTS_AARCH64_OUTS,
     ) | {
         "repo_name": "gki_prebuilts",
         "arch": "arm64",
@@ -150,6 +156,8 @@ CI_TARGET_MAPPING = {
     "kernel_x86_64": _common_ci_target_config(
         bazel_target_name = "kernel_x86_64",
         ddk_headers_archive_name = "kernel_x86_64_ddk_headers_archive.tar.gz",
+        default_outs = X86_64_OUTS,
+        gki_artifacts = GKI_ARTIFACTS_X86_64_OUTS,
     ) | {
         "repo_name": "gki_prebuilts_x86_64",
         "arch": "x86_64",
@@ -158,6 +166,8 @@ CI_TARGET_MAPPING = {
         bazel_target_name = "kernel_aarch64_16k",
         # TODO: This should come from common/BUILD.bazel via common_kernel()
         ddk_headers_archive_name = "kernel_aarch64_ddk_headers_archive.tar.gz",
+        default_outs = DEFAULT_GKI_OUTS,
+        gki_artifacts = GKI_ARTIFACTS_AARCH64_OUTS,
     ) | {
         "repo_name": "gki_prebuilts_aarch64_16k",
         "arch": "arm64",
