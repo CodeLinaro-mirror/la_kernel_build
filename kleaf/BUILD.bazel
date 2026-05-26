@@ -207,6 +207,7 @@ bool_flag(
     name = "gcov",
     build_setting_default = False,
     visibility = ["//visibility:public"],
+    warn_message = "Use --gcov_mode=profile_all instead.",
 )
 
 # Flag to control gcov and whether *.gcno files are collected.
@@ -249,6 +250,7 @@ selects.config_setting_group(
 alias(
     name = "gcov_is_true",
     actual = ":gcov_mode_is_profile_all",
+    deprecation = "Use gcov_mode_is_profile_all instead.",
     visibility = ["//visibility:public"],
 )
 
