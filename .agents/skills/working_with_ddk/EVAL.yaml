@@ -1,0 +1,100 @@
+suite_name: working-with-ddk
+timeout_seconds: 300
+max_tool_calls: 50
+
+cases:
+  - name: ddk_single_source_migration
+    prompt: >
+      I want to convert my driver compiled with Kbuild containing:
+      obj-m += my_driver.o
+      where there is only a single my_driver.c file on the disk.
+      How do I define the BUILD.bazel file using ddk_module?
+    skills: [working-with-ddk]
+    rubric: |
+      The agent must:
+      - Suggest using the `ddk_module` rule.
+      - Map the name attribute to the driver target name.
+      - Map the `out` attribute to `"my_driver.ko"`.
+      - Explicitly list the single source file `"my_driver.c"` in the `srcs` attribute.
+    expect_keywords:
+      - "ddk_module"
+      - "out = \"my_driver.ko\""
+      - "srcs = [\"my_driver.c\"]"
+
+  - name: ddk_multiko_split_and_compatibility
+    prompt: >
+      I have a legacy kernel_module target named 'sensor_bundle' that outputs both 'accelerometer.ko' and 'gyroscope.ko'.
+      I want to migrate this setup to DDK module targets. Provide the BUILD.bazel configuration that ensures downstream
+      targets referencing 'sensor_bundle' do not break. Do not create any artifact files, output the code block directly in your response.
+    skills: [working-with-ddk]
+    rubric: |
+      The agent must:
+      - Recommend splitting the multi-ko target into separate `ddk_module` targets (one for each `.ko` file).
+      - Advise that `outs` (plural) is not supported in `ddk_module`, and `out` (singular) must be used.
+      - Recommend defining a `kernel_module_group` target named `sensor_bundle` containing both new module targets in `srcs`.
+    expect_keywords:
+      - "ddk_module"
+      - "kernel_module_group"
+      - "name = \"sensor_bundle\""
+
+  - name: ddk_implicit_header_inclusion
+    prompt: >
+      In my Kbuild configuration, I have ccflags-$(CONFIG_DEBUG_MODE) := -DDEBUG. I moved this conditional defines logic
+      into a local config header called 'driver_config.h'. How do I implicitly include this header in all compile commands
+      using ddk_module?
+    skills: [working-with-ddk]
+    rubric: |
+      The agent must:
+      - Suggest listing `driver_config.h` in the `srcs` list.
+      - Recommend using the `copts` attribute with `"-include", "$(location driver_config.h)"`.
+      - Explain that the `$(location)` macro is required to expand to the correct relative path in the sandboxed build directory.
+    expect_keywords:
+      - "copts"
+      - "-include"
+      - "$(location driver_config.h)"
+      - "srcs"
+
+  - name: ddk_pkvm_el2_library
+    prompt: >
+      I want to migrate my pKVM hypervisor EL2 library to Bazel. The original Kbuild file has `subdir-ccflags-y += -DMODULE`.
+      How do I compile this using DDK?
+    skills: [working-with-ddk]
+    rubric: |
+      The agent must:
+      - Suggest using the `ddk_library` rule.
+      - Recommend setting `pkvm_el2 = True` to build EL2 hypervisor code.
+      - Preserving the `-DMODULE` Kbuild flags by adding `"MODULE"` to the `local_defines` attribute.
+    expect_keywords:
+      - "ddk_library"
+      - "pkvm_el2 = True"
+      - "local_defines = [\"MODULE\"]"
+
+  - name: ddk_non_standard_ack_headers
+    prompt: >
+      My driver needs to include 'common/drivers/usb/core/usb.h' from the Android Common Kernel.
+      This header is not exported in the standard 'all_headers' target. How do I reference it in
+      my BUILD.bazel file using DDK?
+    skills: [working-with-ddk]
+    rubric: |
+      The agent must:
+      - Recommend adding the header to an SoC-specific unsafe list target in `common/BUILD.bazel` (e.g., `all_headers_unsafe_<soc_name>`), appending it to `all_headers_unsafe`, and using the `--allow_ddk_unsafe_headers` flag.
+      - Alternatively, suggest adding it to an SoC-specific allowlist target in `common/BUILD.bazel` (e.g., `all_headers_allowlist_<soc_name>`) and appending it to the main `all_headers_allowlist_aarch64` target.
+      - Warn that the allowlist option (Priority 2) requires GKI team review and approval due to potential pushback.
+    expect_keywords:
+      - "ddk_headers"
+      - "common/BUILD.bazel"
+      - "all_headers_"
+      - "GKI"
+
+  - name: ddk_allow_unsafe_headers_flag
+    prompt: >
+      I want to compile my DDK module which depends on some legacy/unsafe headers in the ACK (like under common/drivers/).
+      What flag do I need to pass to the Bazel build command to allow compiling with these unsafe headers?
+    skills: [working-with-ddk]
+    rubric: |
+      The agent must:
+      - Recommend passing the `--allow_ddk_unsafe_headers` flag.
+      - Show the bazel build command containing `--allow_ddk_unsafe_headers`.
+    expect_keywords:
+      - "--allow_ddk_unsafe_headers"
+      - "bazel"
