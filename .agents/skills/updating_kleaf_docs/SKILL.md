@@ -1,5 +1,5 @@
 ---
-name: docs-updater
+name: updating-kleaf-docs
 description: Updates Kleaf API documentation by reading instructions from BUILD.bazel and checks for git differences.
 ---
 # Instructions
