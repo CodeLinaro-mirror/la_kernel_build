@@ -11,6 +11,7 @@ build_test(
         "//build/kernel/kleaf/tests/ddk_examples/conditional_dependency/child",
         "//build/kernel/kleaf/tests/ddk_examples/ddk_config_deps/children",
         "//build/kernel/kleaf/tests/ddk_examples/ddk_library:mymod",
+        "//build/kernel/kleaf/tests/ddk_examples/ddk_library_all_srcs:mymod",
         "//build/kernel/kleaf/tests/ddk_examples/ddk_prebuilt_object:mymod",
         "//build/kernel/kleaf/tests/ddk_examples/exported_includes/child",
         "//build/kernel/kleaf/tests/ddk_examples/local_includes:foo",
