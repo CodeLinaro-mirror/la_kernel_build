@@ -915,6 +915,27 @@ def _makefiles_gcov_tests(name):
         tests = tests,
     )
 
+def _makefiles_library_tests(name):
+    """Tests for ddk_library Kbuild generation."""
+    tests = []
+
+    _create_makefiles_artifact_test(
+        name = name + "_library",
+        out = "fake.ko",
+        srcs = ["dep.c"],
+        target_type = "library",
+        expected_lines = [
+            "obj-m += fake.o",
+            "fake-y += dep.o",
+        ],
+    )
+    tests.append(name + "_library")
+
+    native.test_suite(
+        name = name,
+        tests = tests,
+    )
+
 def makefiles_test_suite(name):
     """Defines tests for `makefiles`.
 
@@ -1218,6 +1239,11 @@ def makefiles_test_suite(name):
         name = name + "_gcov",
     )
     tests.append(name + "_gcov")
+
+    _makefiles_library_tests(
+        name = name + "_library_tests",
+    )
+    tests.append(name + "_library_tests")
 
     native.test_suite(
         name = name,
