@@ -75,6 +75,10 @@ def kernel_build_strip_modules_test(name):
             name = name_prefix + "_build",
             outs = [],
             strip_modules = strip_modules,
+            make_goals = [
+                "Image",
+                "modules",
+            ],
             tags = ["manual"],
         )
         _strip_modules_test(

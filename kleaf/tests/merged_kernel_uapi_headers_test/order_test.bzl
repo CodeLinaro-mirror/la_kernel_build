@@ -103,6 +103,7 @@ def order_test(name):
     kernel_build(
         name = name + "_base",
         outs = [],
+        make_goals = [],
         tags = ["manual"],
     )
 
@@ -144,6 +145,7 @@ def order_test(name):
             name = base_kernel + "_device",
             base_kernel = base_kernel,
             outs = [],
+            make_goals = [],
             tags = ["manual"],
         )
 

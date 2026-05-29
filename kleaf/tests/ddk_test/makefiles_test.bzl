@@ -588,6 +588,7 @@ def _makefiles_include_ordering_artifacts_test(name):
     kernel_build(
         name = name + "_kernel_build",
         outs = [],
+        make_goals = [],
         ddk_module_headers = [name + "_kernel_build_ddk_headers"],
         tags = ["manual"],
     )
@@ -1172,6 +1173,7 @@ def makefiles_test_suite(name):
     kernel_build(
         name = name + "_kernel_build",
         outs = [],
+        make_goals = [],
         tags = ["manual"],
     )
     ddk_module(

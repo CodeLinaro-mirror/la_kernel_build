@@ -94,6 +94,7 @@ def kernel_toolchain_test(name):
         name = name + "_device_kernel",
         base_kernel = filegroup_name,
         outs = [],
+        make_goals = ["Image"],
         tags = ["manual"],
     )
 

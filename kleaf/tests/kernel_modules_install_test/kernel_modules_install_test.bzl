@@ -34,6 +34,7 @@ def kernel_modules_install_test(name):
         name = name + "_build",
         srcs = [],
         outs = [],
+        make_goals = [],
         tags = ["manual"],
     )
 
