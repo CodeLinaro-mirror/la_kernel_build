@@ -120,8 +120,17 @@ def _get_config_env(ctx):
     hermetic_tools = hermetic_toolchain.get(ctx)
     toolchains = kernel_toolchains_utils.get(ctx)
 
+    if not ctx.file._build_utils_sh.is_source:
+        fail("FATAL: _build_utils_sh must be a source file")
+    kleaf_repo_workspace_root = ctx.file._build_utils_sh.path.removesuffix("build/kernel/build_utils.sh").removesuffix("/")
+    kleaf_repo_workspace_root_short = ctx.file._build_utils_sh.short_path.removesuffix("build/kernel/build_utils.sh").removesuffix("/")
+
     env_setup_command = """
-        KLEAF_REPO_WORKSPACE_ROOT={kleaf_repo_workspace_root}
+        if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+            KLEAF_REPO_WORKSPACE_ROOT={kleaf_repo_workspace_root_short}
+        else
+            KLEAF_REPO_WORKSPACE_ROOT={kleaf_repo_workspace_root}
+        fi
         if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
             KLEAF_HERMETIC_BASE={run_hermetic_base}
         else
@@ -130,7 +139,8 @@ def _get_config_env(ctx):
         KLEAF_FIX_KERNEL_DIR=1
         KLEAF_SET_UP_TOOLCHAIN_CMD={quoted_toolchains_setup_env_var_cmd}
     """.format(
-        kleaf_repo_workspace_root = Label(":kernel_filegroup.bzl").workspace_root,
+        kleaf_repo_workspace_root = kleaf_repo_workspace_root,
+        kleaf_repo_workspace_root_short = kleaf_repo_workspace_root_short,
         hermetic_base = hermetic_tools.internal_hermetic_base,
         run_hermetic_base = hermetic_tools.internal_run_hermetic_base,
         quoted_toolchains_setup_env_var_cmd = shell.quote(toolchains.kernel_setup_env_var_cmd),
@@ -204,9 +214,15 @@ def _get_ddk_config_env(ctx, config_env):
     extra_restore_outputs_cmd = """
         # Restore module sources
         {check_sandbox_cmd}
-        tar xf {module_env_archive} -C ${{KLEAF_REPO_DIR}}
+        if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+            module_env_archive={module_env_archive_short}
+        else
+            module_env_archive={module_env_archive}
+        fi
+        tar xf ${{module_env_archive}} -C ${{KLEAF_REPO_DIR}}
     """.format(
         module_env_archive = ctx.file.module_env_archive.path,
+        module_env_archive_short = ctx.file.module_env_archive.short_path,
         check_sandbox_cmd = utils.get_check_sandbox_cmd(),
     )
 
@@ -277,8 +293,16 @@ def _get_mod_envs(ctx, modules_prepare_env, outs_mapping, internal_outs_mapping)
     module_env_extra_inputs_direct = []
     if ctx.file.generated_headers_for_module_archive:
         extract_module_generated_archive_cmd = """
-            tar xf {} -C ${{OUT_DIR}}
-        """.format(ctx.file.generated_headers_for_module_archive.path)
+            if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+                archive_path={archive_short}
+            else
+                archive_path={archive}
+            fi
+            tar xf ${{archive_path}} -C ${{OUT_DIR}}
+        """.format(
+            archive = ctx.file.generated_headers_for_module_archive.path,
+            archive_short = ctx.file.generated_headers_for_module_archive.short_path,
+        )
         module_env_extra_inputs_direct.append(ctx.file.generated_headers_for_module_archive)
 
     mod_min_env = create_serialized_env_info(

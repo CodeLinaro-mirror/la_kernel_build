@@ -2024,9 +2024,15 @@ def _get_serialized_env_info_setup_restore_outputs_command(outputs, fake_system_
     for dep, relpath in outputs.items():
         cmd += """
             mkdir -p $(dirname ${{OUT_DIR}}/{relpath})
-            rsync -aL {dep} ${{OUT_DIR}}/{relpath}
+            if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+                dep_path={dep_short}
+            else
+                dep_path={dep}
+            fi
+            rsync -aL ${{dep_path}} ${{OUT_DIR}}/{relpath}
         """.format(
             dep = dep.path,
+            dep_short = dep.short_path,
             relpath = relpath,
         )
 
@@ -2104,8 +2110,16 @@ def _create_infos(
     module_env_extra_inputs_direct = []
     if main_action_ret.generated_headers_for_module_archive:
         extract_module_generated_archive_cmd = """
-            tar xf {} -C ${{OUT_DIR}}
-        """.format(main_action_ret.generated_headers_for_module_archive.path)
+            if [ -n "${{BUILD_WORKSPACE_DIRECTORY}}" ] || [ "${{BAZEL_TEST}}" = "1" ]; then
+                archive_path={archive_short}
+            else
+                archive_path={archive}
+            fi
+            tar xf ${{archive_path}} -C ${{OUT_DIR}}
+        """.format(
+            archive = main_action_ret.generated_headers_for_module_archive.path,
+            archive_short = main_action_ret.generated_headers_for_module_archive.short_path,
+        )
         module_env_extra_inputs_direct.append(main_action_ret.generated_headers_for_module_archive)
 
     # For kernel_module()
