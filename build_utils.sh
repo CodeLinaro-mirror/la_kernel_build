@@ -1004,30 +1004,29 @@ function build_gki_boot_images() {
     GKI_MKBOOTIMG_ARGS+=("--output" "${boot_image_path}")
     "${MKBOOTIMG_PATH}" "${GKI_MKBOOTIMG_ARGS[@]}"
 
-    if [[ -z "${BUILD_GKI_BOOT_SKIP_AVB}" ]]; then
-      # Pick a SPL date far enough in the future so that you can flash
-      # development GKI kernels on an unlocked device without wiping the
-      # userdata. This is for development purposes only and should be
-      # overwritten by the Android platform build to include an accurate SPL.
-      # Note, the certified GKI release builds will not include the SPL
-      # property.
-      local spl_month=$((($(date +'%-m') + 3) % 12))
-      local spl_year="$(date +'%Y')"
-      if [ $((${spl_month} % 3)) -gt 0 ]; then
-        # Round up to the next quarterly platform release (QPR) month
-        spl_month=$((${spl_month} + 3 - (${spl_month} % 3)))
-      fi
-      if [ "${spl_month}" -lt "$(date +'%-m')" ]; then
-        # rollover to the next year
-        spl_year="$((${spl_year} + 1))"
-      fi
-      local spl_date=$(printf "%d-%02d-05\n" ${spl_year} ${spl_month})
-
-      gki_add_avb_footer "${boot_image_path}" \
-        "$(gki_get_boot_img_size_flag "${compression}")" "${spl_date}"
-      gki_dry_run_certify_bootimg "${boot_image_path}" \
-        "${GKI_ARTIFACTS_INFO_FILE}" "${spl_date}"
+    # Pick a SPL date far enough in the future so that you can flash
+    # development GKI kernels on an unlocked device without wiping the
+    # userdata. This is for development purposes only and should be
+    # overwritten by the Android platform build to include an accurate SPL.
+    # Note, the certified GKI release builds will not include the SPL
+    # property.
+    local spl_month=$((($(date +'%-m') + 3) % 12))
+    local spl_year="$(date +'%Y')"
+    if [ $((${spl_month} % 3)) -gt 0 ]; then
+      # Round up to the next quarterly platform release (QPR) month
+      spl_month=$((${spl_month} + 3 - (${spl_month} % 3)))
     fi
+    if [ "${spl_month}" -lt "$(date +'%-m')" ]; then
+      # rollover to the next year
+      spl_year="$((${spl_year} + 1))"
+    fi
+    local spl_date=$(printf "%d-%02d-05\n" ${spl_year} ${spl_month})
+
+    gki_add_avb_footer "${boot_image_path}" \
+      "$(gki_get_boot_img_size_flag "${compression}")" "${spl_date}"
+    gki_dry_run_certify_bootimg "${boot_image_path}" \
+      "${GKI_ARTIFACTS_INFO_FILE}" "${spl_date}"
+
     images_to_pack+=("${boot_image}")
   done
 
