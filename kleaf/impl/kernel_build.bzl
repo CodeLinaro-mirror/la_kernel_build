@@ -282,8 +282,7 @@ def kernel_build(
               srcs = DEFAULT_GKI_OUTS,
             )
             ```
-        make_goals: A list of strings defining targets for the kernel build.
-          This overrides `MAKE_GOALS` from build config if provided.
+        make_goals: A list of strings defining the make goals / targets for the kernel build.
         generate_vmlinux_btf: If `True`, generates `vmlinux.btf` that is stripped of any debug
           symbols, but contains type and symbol information within a .BTF section.
           This is suitable for ABI analysis through BTF.

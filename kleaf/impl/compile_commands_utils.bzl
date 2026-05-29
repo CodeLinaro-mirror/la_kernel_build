@@ -100,7 +100,7 @@ def _get_step(ctx, compile_commands_parent):
     )
 
 def _additional_make_goals(ctx):
-    """Returns a list of additional `MAKE_GOALS`.
+    """Returns a list of additional make_goals.
 
     Args:
         ctx: ctx

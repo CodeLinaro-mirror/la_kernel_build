@@ -213,7 +213,7 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
-# Forcefully add vmlinux to outs (implicitly) and to MAKE_GOALS.
+# Forcefully add vmlinux to outs (implicitly) and to make_goals.
 bool_setting(
     name = "force_add_vmlinux",
     build_setting_default = False,
