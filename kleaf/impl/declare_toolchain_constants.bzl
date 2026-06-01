@@ -23,7 +23,6 @@ visibility("public")
 # - It is a sensible default
 # - It may be overridden by calling declare_toolchain_constants at the root module
 _DEFAULT_TOOLCHAIN_CONSTANTS = "//common:bazel/constants.scl"
-_DEFAULT_FALLBACK_TOOLCHAIN_CONSTANTS = "//common:build.config.constants"
 
 def _declare_repos(module_ctx, tag_name):
     root_toolchain_constants = []
@@ -36,7 +35,6 @@ def _declare_repos(module_ctx, tag_name):
             kleaf_toolchain_constants += installed_constants
 
     toolchain_constants = None
-    fallback_toolchain_constants = None
     if root_toolchain_constants:
         if len(root_toolchain_constants) > 1:
             fail("kernel_toolchain_ext is installed {} times at root module, expected once".format(len(toolchain_constants)))
@@ -48,12 +46,10 @@ def _declare_repos(module_ctx, tag_name):
 
     if not toolchain_constants:
         toolchain_constants = _DEFAULT_TOOLCHAIN_CONSTANTS
-        fallback_toolchain_constants = _DEFAULT_FALLBACK_TOOLCHAIN_CONSTANTS
 
     key_value_repo(
         name = "kernel_toolchain_info",
         srcs = [toolchain_constants],
-        internal_fallback_src = fallback_toolchain_constants,
     )
     clang_toolchain_repository(
         name = "kleaf_clang_toolchain",
