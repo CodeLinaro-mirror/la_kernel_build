@@ -1,0 +1,25 @@
+load(
+    "@kleaf//build/kernel/kleaf:kernel.bzl",
+    "ddk_library",
+    "ddk_module",
+)
+
+ddk_library(
+    name = "libfoo",
+    srcs = [
+        "mod.c",
+    ],
+    kernel_build = "@kleaf//common:kernel_aarch64",
+    visibility = ["//visibility:private"],
+)
+
+ddk_module(
+    name = "mymod",
+    srcs = [],
+    out = "mymod.ko",
+    kernel_build = "@kleaf//common:kernel_aarch64",
+    visibility = ["//build/kernel/kleaf/tests/ddk_examples:__subpackages__"],
+    deps = [
+        ":libfoo",
+    ],
+)

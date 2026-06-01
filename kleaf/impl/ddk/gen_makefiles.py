@@ -391,12 +391,15 @@ def _generate_kbuild_and_extra(
          open(out_ldflags_path, "a") as out_ldflags:
         out_file.write(_get_license_str())
 
-        if not is_library:
-            out_file.write(textwrap.dedent(f"""\
-                # Build {package / kernel_module_out}
-                obj-m += {kernel_module_out.with_suffix('.o').name}
-                """))
-            out_file.write("\n")
+        if is_library:
+            comment = "# b/493749432: Define obj-m to ensure -DMODULE is defined for library objects"
+        else:
+            comment = f"# Build {package / kernel_module_out}"
+        out_file.write(textwrap.dedent(f"""\
+            {comment}
+            obj-m += {kernel_module_out.with_suffix('.o').name}
+            """))
+        out_file.write("\n")
 
         for src_item in rel_srcs:
             config = src_item.get("config")
