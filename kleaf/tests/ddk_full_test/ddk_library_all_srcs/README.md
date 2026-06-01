@@ -20,7 +20,7 @@ Run the following to build it:
 
 ```shell
 tools/bazel build \
-    //build/kernel/kleaf/tests/ddk_examples/ddk_library_all_srcs:mymod
+    //build/kernel/kleaf/tests/ddk_full_test/ddk_library_all_srcs:mymod
 ```
 
 ## Full sources

@@ -580,7 +580,7 @@ def _define_common_kernels_additional_tests(
     # is only included when we are building //common:kernel_aarch64.
     if native.package_relative_label(kernel_build_name) == native.package_relative_label("//common:kernel_aarch64"):
         extra_tests += [
-            Label("//build/kernel/kleaf/tests/built_with_ddk_test"),
+            Label("//build/kernel/kleaf/tests/ddk_full_test"),
             Label("//build/kernel/kleaf/tests/ddk_examples"),
             Label("//build/kernel/kleaf/tests/ddk_test:ddk_images_test_suite"),
             Label("//build/kernel/kleaf/tests/merge_module_symvers_test"),

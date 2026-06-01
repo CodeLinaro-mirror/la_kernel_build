@@ -1,3 +1,4 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load(
     "@kleaf//build/kernel/kleaf:kernel.bzl",
     "ddk_library",
@@ -18,8 +19,16 @@ ddk_module(
     srcs = [],
     out = "mymod.ko",
     kernel_build = "@kleaf//common:kernel_aarch64",
-    visibility = ["//build/kernel/kleaf/tests/ddk_examples:__subpackages__"],
+    visibility = ["//visibility:private"],
     deps = [
         ":libfoo",
     ],
+)
+
+build_test(
+    name = "ddk_library_all_srcs",
+    targets = [
+        ":mymod",
+    ],
+    visibility = ["//build/kernel/kleaf:__subpackages__"],
 )
