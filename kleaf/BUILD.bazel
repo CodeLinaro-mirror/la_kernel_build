@@ -684,12 +684,12 @@ bool_flag(
 string_flag(
     name = "autoload_build_config_constants",
     build_setting_default = "always",
+    error_message = "if_unset will not be supported. Constants will always be auto-loaded.",
     values = [
         "always",
         "if_unset",
     ],
     visibility = ["//visibility:public"],
-    warn_message = "if_unset will not be supported. Constants will always be auto-loaded.",
 )
 
 bool_flag(
