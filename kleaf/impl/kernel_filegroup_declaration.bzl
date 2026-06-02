@@ -21,6 +21,7 @@ load(
     "FILEGROUP_DEF_ARCHIVE_SUFFIX",
     "FILEGROUP_DEF_BUILD_FRAGMENT_NAME",
     "GKI_ARTIFACTS_AARCH64_OUTS",
+    "GKI_ARTIFACTS_X86_64_OUTS",
     "SIGNED_GKI_ARTIFACTS_ARCHIVE",
 )
 load(":hermetic_toolchain.bzl", "hermetic_toolchain")
@@ -291,7 +292,7 @@ def _write_filegroup_decl_file(
     sub.add("{signed_gki_artifacts_src_repr}", repr("//{}".format(SIGNED_GKI_ARTIFACTS_ARCHIVE)))
     sub.add_joined(
         "{all_gki_artifacts_repr}",
-        depset(GKI_ARTIFACTS_AARCH64_OUTS),
+        depset(GKI_ARTIFACTS_AARCH64_OUTS if info.arch == "arm64" else GKI_ARTIFACTS_X86_64_OUTS),
         map_each = repr,
         **join
     )
