@@ -1654,6 +1654,7 @@ def _get_modinst_step(ctx, modules_staging_dir):
                     echo "ERROR: KMI or sublevel mismatch before running make modules_install:" >&2
                     echo "  {label}: ${{my_kmi}} (from ${{my_release}})" >&2
                     echo "  {base_kernel_label}: ${{base_kmi}} (from ${{base_release}})" >&2
+                    exit 1
                 fi
             )
 
