@@ -137,6 +137,11 @@ internal_deps = use_extension("@rules_rust//rust/private:internal_extensions.bzl
 override_repo(internal_deps, "rules_rust_tinyjson")
 # END GBL deps.
 
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+
+# Inhibits rules_rust from registering default toolchains to ensure hermetic builds (no internet downloads).
+rust.toolchain(versions = [])
+
 kernel_toolchain_ext = use_extension("//build/kernel/kleaf:kernel_toolchain_ext.bzl", "kernel_toolchain_ext")
 use_repo(kernel_toolchain_ext, "kernel_toolchain_info")
 use_repo(kernel_toolchain_ext, "kleaf_clang_toolchain")
@@ -196,6 +201,10 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_rust",
+    version = "0.60.0",
+)
+bazel_dep(
+    name = "rules_rust_bindgen",
     version = "0.60.0",
 )
 bazel_dep(
@@ -269,6 +278,11 @@ local_path_override(
 local_path_override(
     module_name = "rules_rust",
     path = "external/bazelbuild-rules_rust",
+)
+
+local_path_override(
+    module_name = "rules_rust_bindgen",
+    path = "external/bazelbuild-rules_rust/extensions/bindgen",
 )
 
 local_path_override(
