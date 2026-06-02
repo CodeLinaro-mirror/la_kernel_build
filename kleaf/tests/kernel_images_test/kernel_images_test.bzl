@@ -110,6 +110,7 @@ def initramfs_test(name):
             # This is a requirement (for more, see initramfs.bzl).
             "System.map",
         ],
+        make_goals = ["all"],
         tags = ["manual"],
     )
     kernel_modules_install(

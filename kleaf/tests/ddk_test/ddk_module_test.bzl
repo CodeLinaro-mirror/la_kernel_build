@@ -172,6 +172,7 @@ def ddk_module_test_suite(name):
         name = name + "_kernel_build",
         outs = ["vmlinux"],
         tags = ["manual"],
+        make_goals = [],
     )
 
     kernel_module(

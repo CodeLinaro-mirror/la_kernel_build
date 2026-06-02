@@ -24,12 +24,14 @@ load(":optimize_ddk_config_actions_analysis_test.bzl", "optimize_ddk_config_acti
 kernel_build(
     name = "test_kernel_build_1",
     outs = [],
+    make_goals = [],
     tags = ["manual"],
 )
 
 kernel_build(
     name = "test_kernel_build_2",
     outs = [],
+    make_goals = [],
     tags = ["manual"],
 )
 

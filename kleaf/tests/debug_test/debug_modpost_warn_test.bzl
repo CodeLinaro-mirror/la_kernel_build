@@ -67,6 +67,7 @@ def debug_modpost_warn_test(name):
     kernel_build(
         name = name + "_kernel",
         outs = [],
+        make_goals = [],
         tags = ["manual"],
     )
 

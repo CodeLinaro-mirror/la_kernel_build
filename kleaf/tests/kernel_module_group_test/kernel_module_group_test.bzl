@@ -134,12 +134,14 @@ def kernel_module_group_test(name):
     kernel_build(
         name = name + "_build_a",
         outs = [],
+        make_goals = [],
         tags = ["manual"],
     )
 
     kernel_build(
         name = name + "_build_b",
         outs = [],
+        make_goals = [],
         tags = ["manual"],
     )
 

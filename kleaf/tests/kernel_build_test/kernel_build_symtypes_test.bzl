@@ -87,6 +87,7 @@ def kernel_build_symtypes_test(name):
             makefile = Label("//common:Makefile"),
             outs = [],
             kbuild_symtypes = kbuild_symtypes,
+            make_goals = ["Image"],
         )
 
         kbuild_symtypes_flag_true_test(

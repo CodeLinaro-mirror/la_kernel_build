@@ -91,6 +91,7 @@ def notrim_transition_test(name):
             outs = [],
             trim_nonlisted_kmi = base_trim,
             kmi_symbol_list = "symbol_list_base",
+            make_goals = [],
             tags = ["manual"],
         )
 
@@ -112,6 +113,7 @@ def notrim_transition_test(name):
                 name = name + "_{}_{}_device_build".format(base_trim_str, device_trim_str),
                 base_kernel = name + "_{}_base_build".format(base_trim_str),
                 outs = [],
+                make_goals = [],
                 trim_nonlisted_kmi = device_trim,
                 kmi_symbol_list = "symbol_list_device",
                 tags = ["manual"],

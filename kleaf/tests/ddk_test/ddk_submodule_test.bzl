@@ -49,6 +49,7 @@ def ddk_submodule_test(name):
     kernel_build(
         name = name + "_kernel_build",
         outs = [],
+        make_goals = [],
         tags = ["manual"],
     )
 

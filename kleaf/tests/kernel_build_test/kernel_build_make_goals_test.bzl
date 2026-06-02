@@ -81,13 +81,6 @@ def kernel_build_make_goals_test(name):
     """
     tests = []
 
-    # Test the fallback (MAKE_GOALS) from config file.
-    kernel_build(
-        name = name + "_build_from_config",
-        outs = [],
-        tags = ["manual"],
-    )
-
     # Test by setting the goals from kernel build rule.
     kernel_build(
         name = name + "_build_from_rule",
@@ -104,12 +97,6 @@ def kernel_build_make_goals_test(name):
         ("with_vmlinux", with_vmlinux_make_goals_test),
         ("kgdb_enable_with_vmlinux", kgdb_with_vmlinux_make_goals_test),
     ]:
-        test(
-            name = name + "_goals_from_config_" + suffix,
-            target_under_test = name + "_build_from_config",
-            must_have_make_goals = ["${MAKE_GOALS}"],
-            must_not_have_make_goals = [],
-        )
         tests.append(name + "_goals_from_config_" + suffix)
 
         test(
