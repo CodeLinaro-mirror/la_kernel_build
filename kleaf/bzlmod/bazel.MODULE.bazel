@@ -147,9 +147,11 @@ use_repo(kernel_toolchain_ext, "kernel_toolchain_info")
 use_repo(kernel_toolchain_ext, "kleaf_clang_toolchain")
 use_repo(kernel_toolchain_ext, "kleaf_python_toolchain")
 use_repo(kernel_toolchain_ext, "kleaf_host_tools")
+use_repo(kernel_toolchain_ext, "kleaf_rust_toolchain")
 
 register_toolchains(
     "@kleaf_clang_toolchain//:all",
+    "@kleaf_rust_toolchain//:all",
     "//build/kernel:devicetree_toolchain",
     "//build/kernel:hermetic_tools_toolchain",
     "//prebuilts/build-tools:py_exec_tools_toolchain",

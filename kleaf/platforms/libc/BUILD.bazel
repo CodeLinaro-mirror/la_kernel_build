@@ -30,6 +30,7 @@ constraint_value(
         "//prebuilts/build-tools:__subpackages__",
         "//prebuilts/kernel-build-tools:__subpackages__",
         "@kleaf_clang_toolchain//:__subpackages__",
+        "@kleaf_rust_toolchain//:__subpackages__",
         "@kmod//:__subpackages__",
     ],
 )
@@ -42,6 +43,7 @@ constraint_value(
         "//prebuilts/build-tools:__subpackages__",
         "//prebuilts/kernel-build-tools:__subpackages__",
         "@kleaf_clang_toolchain//:__subpackages__",
+        "@kleaf_rust_toolchain//:__subpackages__",
         "@kmod//:__subpackages__",
     ],
 )
