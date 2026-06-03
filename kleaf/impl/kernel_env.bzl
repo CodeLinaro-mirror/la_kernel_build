@@ -83,8 +83,7 @@ def _get_check_arch_cmd(ctx):
     )
 
 def _get_make_goals(ctx):
-    # Fallback to goals from build.config
-    make_goals = ["${MAKE_GOALS}"]
+    make_goals = []
     if ctx.attr.make_goals:
         # This is a basic sanitization of the input.
         for goal in ctx.attr.make_goals:
@@ -95,30 +94,6 @@ def _get_make_goals(ctx):
     make_goals += kgdb.additional_make_goals(ctx)
     make_goals += compile_commands_utils.additional_make_goals(ctx)
     return make_goals
-
-def _get_make_goals_deprecation_warning(ctx):
-    # Omit the warning if the goals have been set
-    if ctx.attr.make_goals:
-        return ""
-
-    msg = """
-          # Warning about MAKE_GOALS deprecation.
-          if [[ -n ${{MAKE_GOALS}} ]] ; then
-            KLEAF_MAKE_TARGETS=$(echo "${{MAKE_GOALS% }}" | sed '/^$/d' | sed 's/\\S*/  "&",/g')
-            #  Omit when empty.
-            if [[ -z ${{KLEAF_MAKE_TARGETS}} ]]; then
-              echo "WARNING: Empty MAKE_GOALS detected. Ensure all targets are listed explicitly."
-            else
-              echo "WARNING: MAKE_GOALS from build.config is being deprecated, use make_goals in kernel_build;" >&2
-              echo "Consider adding:\n\nmake_goals = [\n${{KLEAF_MAKE_TARGETS}}" >&2
-              echo "],\n\nto {build_target} kernel." >&2
-            fi
-            unset KLEAF_MAKE_TARGETS
-          fi
-    """.format(
-        build_target = str(ctx.label).removesuffix("_env"),
-    )
-    return msg
 
 def _get_kconfig_werror_setup(ctx):
     if not ctx.attr._kconfig_werror[BuildSettingInfo].value:
@@ -262,7 +237,6 @@ def _kernel_env_impl(ctx):
     inputs += set_source_date_epoch_ret.deps
 
     make_goals = _get_make_goals(ctx)
-    make_goals_deprecation_warning = _get_make_goals_deprecation_warning(ctx)
 
     kconfig_werror_setup = _get_kconfig_werror_setup(ctx)
 
@@ -352,8 +326,11 @@ def _kernel_env_impl(ctx):
           {check_arch_cmd}
           {check_constants_cmd}
           {set_clang_autofdo_profile_cmd}
-        # TODO(b/236012223) Remove the warning after deprecation.
-          {make_goals_deprecation_warning}
+        # Error out if MAKE_GOALS is still set.
+          if [[ -n ${{MAKE_GOALS}} ]] ; then
+            echo "ERROR: MAKE_GOALS is deprecated; use kernel_build(make_goals=) instead." >&2
+            exit 1
+          fi
         # Enforce check configs.
           {kconfig_werror_setup}
         # Identify the build user as 'kleaf' to recognize a kleaf-built kernel
@@ -422,7 +399,6 @@ def _kernel_env_impl(ctx):
         check_arch_cmd = _get_check_arch_cmd(ctx),
         check_constants_cmd = check_constants_cmd,
         set_clang_autofdo_profile_cmd = set_clang_autofdo_profile_cmd,
-        make_goals_deprecation_warning = make_goals_deprecation_warning,
         kconfig_werror_setup = kconfig_werror_setup,
         out = out_file.path,
         config_tags_comment_file = config_tags_out.env.path,
@@ -802,7 +778,10 @@ kernel_env = rule(
             default = "auto",
             values = ["true", "false", "auto"],
         ),
-        "make_goals": attr.string_list(doc = "`MAKE_GOALS`"),
+        "make_goals": attr.string_list(
+            doc = "Make goals / targets.",
+            mandatory = True,
+        ),
         "kcflags": attr.string_list(),
         "pahole": attr.label(
             executable = True,

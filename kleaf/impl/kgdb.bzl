@@ -61,7 +61,7 @@ def _get_grab_gdb_scripts_step(ctx):
     )
 
 def _additional_make_goals(ctx):
-    """Returns a list of additional `MAKE_GOALS`.
+    """Returns a list of additional make_goals.
 
     Args:
         ctx: ctx
