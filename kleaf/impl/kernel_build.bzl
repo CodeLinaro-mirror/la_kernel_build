@@ -1327,6 +1327,14 @@ def _get_check_remaining_modules_step(
             outputs = [],
         )
 
+    if not "modules" in ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals:
+        return struct(
+            cmd = "",
+            inputs = [],
+            tools = [],
+            outputs = [],
+        )
+
     message_type = "ERROR"
     epilog = "exit 1"
     if ctx.attr._allow_undeclared_modules[BuildSettingInfo].value:
@@ -1671,19 +1679,23 @@ def _get_modinst_step(ctx, modules_staging_dir):
     cmd += """
          # Set variables and create dirs for modules
            mkdir -p {modules_staging_dir}
+    """.format(modules_staging_dir = modules_staging_dir)
+    if "modules" in ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals:
+        cmd += """
          # Install modules
-           if grep -q "\\bmodules\\b" <<< "{make_goals}" ; then
-               make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} DEPMOD=true O=${{OUT_DIR}} {module_strip_flag} INSTALL_MOD_PATH=$(realpath {modules_staging_dir}) modules_install
-           else
-               # Workaround as this file is required, hence just produce a placeholder.
-               touch {internal_outs_under_out_dir}
-           fi
-    """.format(
-        modules_staging_dir = modules_staging_dir,
-        internal_outs_under_out_dir = " ".join(["${{OUT_DIR}}/{}".format(item) for item in _kernel_build_internal_outs]),
-        module_strip_flag = module_strip_flag,
-        make_goals = " ".join(ctx.attr.config[KernelEnvMakeGoalsInfo].make_goals),
-    )
+         make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} DEPMOD=true O=${{OUT_DIR}} {module_strip_flag} INSTALL_MOD_PATH=$(realpath {modules_staging_dir}) modules_install
+        """.format(
+            modules_staging_dir = modules_staging_dir,
+            internal_outs_under_out_dir = " ".join(["${{OUT_DIR}}/{}".format(item) for item in _kernel_build_internal_outs]),
+            module_strip_flag = module_strip_flag,
+        )
+    else:
+        cmd += """
+            # Workaround as this file is required, hence just produce a placeholder.
+            touch {internal_outs_under_out_dir}
+        """.format(
+            internal_outs_under_out_dir = " ".join(["${{OUT_DIR}}/{}".format(item) for item in _kernel_build_internal_outs]),
+        )
 
     if base_kernel:
         cmd += """
@@ -1848,10 +1860,8 @@ def _build_main_action(
            {grab_unstripped_intree_modules_cmd}
          # Make a copy of Module.symvers
            {copy_module_symvers_cmd}
-           if grep -q "\\bmodules\\b" <<< "{make_goals}"; then
-             # Check if there are remaining *.ko files
-               {check_remaining_modules_cmd}
-           fi
+         # Check if there are remaining *.ko files
+           {check_remaining_modules_cmd}
          # Clean up staging directories
            rm -rf {modules_staging_dir}
          # Create last_build symlink in cache_dir
