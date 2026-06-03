@@ -105,6 +105,7 @@ _MODULES_PREPARE_ARCHIVE = "modules_prepare_outdir.tar.gz"
 def kernel_build(
         name,
         outs,
+        make_goals,
         build_config = None,
         makefile = None,
         keep_module_symvers = None,
@@ -118,7 +119,6 @@ def kernel_build(
         arch = None,
         srcarch = None,
         base_kernel = None,
-        make_goals = None,
         kconfig_ext = None,
         dtstree = None,
         kmi_symbol_list = None,
