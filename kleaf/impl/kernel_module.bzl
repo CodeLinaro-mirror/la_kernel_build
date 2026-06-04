@@ -628,7 +628,6 @@ def _kernel_module_impl(ctx):
                """.format(
             label = ctx.label,
             ext_mod = ext_mod,
-            generate_btf = int(ctx.attr.generate_btf),
             module_symvers = module_symvers.path,
             modules_staging_dir = modules_staging_dws.directory.path,
             outdir = outdir,
