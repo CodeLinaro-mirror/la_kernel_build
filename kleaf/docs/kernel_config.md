@@ -434,3 +434,11 @@ CONFIG_MODULE_2=m
 CONFIG_DEBUG_1=y
 # CONFIG_DEBUG_2 is not set
 ```
+
+## Troubleshooting
+
+### Kconfig mismatches
+
+If a check fails with an error like
+`CONFIG_FOO: actual '', expected 'CONFIG_FOO=m'`, refer to the
+[Kconfig Mismatch Troubleshooting Guide](errors.md#kconfig-mismatch).
