@@ -338,6 +338,8 @@ for EXT_MOD in ${EXT_MODULES}; do
      btgt="canoe"
   elif [ "$TARGET_BOARD_PLATFORM" = "hamoa_la" ]; then
      btgt="hamoa_la"
+  elif [ "$TARGET_BOARD_PLATFORM" = "mahua" ]; then
+     btgt="glymur"
   else
      btgt="$TARGET_BOARD_PLATFORM"
   fi
