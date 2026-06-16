@@ -187,6 +187,12 @@ alias(
     visibility = ["//visibility:private"],
 )
 
+alias(
+    name = "bindgen",
+    actual = "//prebuilts/clang-tools:bindgen",
+    visibility = ["//visibility:public"],
+)
+
 # List of prebuilt tools where label names are used as the tool names
 _PREBUILT_TOOLS = [
     # keep sorted
