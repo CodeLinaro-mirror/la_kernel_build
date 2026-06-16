@@ -14,6 +14,7 @@
 
 """Runs `make modules_prepare` to prepare `$OUT_DIR` for modules."""
 
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(":cache_dir.bzl", "cache_dir")
 load(
     ":common_providers.bzl",
@@ -37,7 +38,9 @@ def _modules_prepare_subrule_impl(
         execution_requirements,
         setup_script_name,
         cache_dir_step,
-        progress_message_note):
+        progress_message_note,
+        _modules_prepare_exclude_unnecessary_files,
+        _rust):
     """Common implementation to prepare for module build.
 
     Args:
@@ -52,6 +55,9 @@ def _modules_prepare_subrule_impl(
         setup_script_name: Name of setup script to declare.
         cache_dir_step: See cache_dir.get_step, or a stub step if caching is not needed.
         progress_message_note: suffix to be added to progress_message.
+        _modules_prepare_exclude_unnecessary_files: If True, excludes *.o, *.d, *.cmd, .tmp_* files when
+            packaging $OUT_DIR after modules_prepare.
+        _rust: If True, includes the /rust directory in the packaged $OUT_DIR.
 
     Returns:
         dict of infos. Keys are info type names, values are infos.
@@ -85,6 +91,17 @@ def _modules_prepare_subrule_impl(
            ${OUT_DIR}/scripts/selinux/genheaders/genheaders ${OUT_DIR}/security/selinux/flask.h ${OUT_DIR}/security/selinux/av_permissions.h
         """
 
+    if _modules_prepare_exclude_unnecessary_files[BuildSettingInfo].value:
+        exclude_opts = "--exclude='*.o' --exclude='*.d' --exclude='*.cmd' --exclude='.tmp_*'"
+        if not _rust[BuildSettingInfo].value:
+            exclude_opts += " --exclude='./rust'"
+        package_cmd = "tar cf - {exclude_options} -C ${{OUT_DIR}} . | gzip > {output_path}".format(
+            exclude_options = exclude_opts,
+            output_path = outdir_tar_gz.path,
+        )
+    else:
+        package_cmd = "tar czf " + outdir_tar_gz.path + " -C ${OUT_DIR} ."
+
     command += """
          # Prepare for the module build
            make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} KERNEL_SRC=${{ROOT_DIR}}/${{KERNEL_DIR}} modules_prepare
@@ -94,11 +111,11 @@ def _modules_prepare_subrule_impl(
          # of the directory, making tar unhappy.
            rm -f ${{OUT_DIR}}/source
          # Package files
-           tar czf {outdir_tar_gz} -C ${{OUT_DIR}} .
+           {package_cmd}
            {cache_dir_post_cmd}
     """.format(
         force_gen_headers_cmd = force_gen_headers_cmd,
-        outdir_tar_gz = outdir_tar_gz.path,
+        package_cmd = package_cmd,
         cache_dir_post_cmd = cache_dir_step.post_cmd,
     )
 
@@ -144,6 +161,17 @@ def _modules_prepare_subrule_impl(
 modules_prepare_subrule = subrule(
     implementation = _modules_prepare_subrule_impl,
     subrules = [debug.print_scripts_subrule],
+    attrs = {
+        "_modules_prepare_exclude_unnecessary_files": attr.label(
+            default = "//build/kernel/kleaf:modules_prepare_exclude_unnecessary_files",
+            doc = "If True, excludes *.o, *.d, *.cmd, .tmp_* files when packaging $OUT_DIR",
+        ),
+        "_rust": attr.label(
+            default = "//build/kernel/kleaf:rust",
+            doc = """If True, Rust support is enabled; rust/ directory is kept in the archive.
+                 This only has an effect if _modules_prepare_exclude_unnecessary_files is also True.""",
+        ),
+    },
 )
 
 def _modules_prepare_impl(ctx):
