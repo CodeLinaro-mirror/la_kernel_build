@@ -14,7 +14,6 @@
 
 """Tests kernel_build.toolchain_version."""
 
-load("@bazel_skylib//lib:unittest.bzl", "analysistest")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("@kernel_toolchain_info//:dict.bzl", "CLANG_VERSION")
 load(
@@ -24,15 +23,7 @@ load(
 )
 load("//build/kernel/kleaf/impl:kernel_build.bzl", "kernel_build")
 load("//build/kernel/kleaf/impl:kernel_filegroup.bzl", "kernel_filegroup")
-
-def _pass_analysis_test_impl(ctx):
-    env = analysistest.begin(ctx)
-    return analysistest.end(env)
-
-_pass_analysis_test = analysistest.make(
-    impl = _pass_analysis_test_impl,
-    doc = "Test that `target_under_test` passes analysis phase.",
-)
+load("//build/kernel/kleaf/tests/utils:pass_analysis_test.bzl", "pass_analysis_test")
 
 def kernel_toolchain_test(name):
     """Tests that building against kernel_filegroup does not fail toolchain version checks.
@@ -98,7 +89,7 @@ def kernel_toolchain_test(name):
         tags = ["manual"],
     )
 
-    _pass_analysis_test(
+    pass_analysis_test(
         name = name,
         target_under_test = name + "_device_kernel",
     )
