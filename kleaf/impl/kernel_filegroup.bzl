@@ -23,6 +23,7 @@ load(
     "DefconfigInfo",
     "GcovInfo",
     "KernelBuildAbiInfo",
+    "KernelBuildConfigDirectoryInfo",
     "KernelBuildExtModuleInfo",
     "KernelBuildGeneratedHeadersForModuleInfo",
     "KernelBuildInTreeModulesInfo",
@@ -487,6 +488,7 @@ def _kernel_filegroup_impl(ctx):
         _get_toolchain_version_info(ctx),
         DefconfigInfo(file = ctx.file.defconfig, make_target = None),
         defconfig_fragments_info,
+        KernelBuildConfigDirectoryInfo(config_out_dir = ctx.file.config_out_dir),
     ]
     if serialized_env:
         infos.append(serialized_env)

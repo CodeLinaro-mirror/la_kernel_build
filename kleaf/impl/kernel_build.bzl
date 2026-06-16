@@ -39,6 +39,7 @@ load(
     "DefconfigInfo",
     "GcovInfo",
     "KernelBuildAbiInfo",
+    "KernelBuildConfigDirectoryInfo",
     "KernelBuildExtModuleInfo",
     "KernelBuildFilegroupDeclInfo",
     "KernelBuildGeneratedHeadersForModuleInfo",
@@ -2376,6 +2377,7 @@ def _create_infos(
         output_group_info,
         default_info,
         module_symvers_file_info,
+        KernelBuildConfigDirectoryInfo(config_out_dir = ctx.file.config),
     ]
 
 def _kernel_build_impl(ctx):
@@ -2455,6 +2457,7 @@ _kernel_build = rule(
                 KernelEnvAttrInfo,
                 KernelEnvMakeGoalsInfo,
                 KernelToolchainInfo,
+                KernelConfigInfo,
             ],
             doc = "the kernel_config target",
             allow_single_file = True,
