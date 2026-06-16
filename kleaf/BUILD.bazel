@@ -259,6 +259,14 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
+# If true, excludes *.o, *.d, *.cmd, .tmp_* files when packaging $OUT_DIR after modules_prepare
+# Also, if the rust is false, /rust directory is excluded.
+bool_flag(
+    name = "modules_prepare_exclude_unnecessary_files",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
 config_setting(
     name = "kcov_is_true",
     flag_values = {":kcov": "1"},

@@ -90,6 +90,7 @@ build --flag_alias=kbuild_symtypes=@kleaf//build/kernel/kleaf:kbuild_symtypes
 build --flag_alias=kgdb=@kleaf//build/kernel/kleaf:kgdb
 build --flag_alias=gdb=@kleaf//build/kernel/kleaf:gdb
 build --flag_alias=preserve_kbuild_output=@kleaf//build/kernel/kleaf:preserve_kbuild_output
+build --flag_alias=modules_prepare_exclude_unnecessary_files=@kleaf//build/kernel/kleaf:modules_prepare_exclude_unnecessary_files
 
 # flags alias to allow passing --debug_* flags
 build --flag_alias=debug_annotate_scripts=@kleaf//build/kernel/kleaf:debug_annotate_scripts
