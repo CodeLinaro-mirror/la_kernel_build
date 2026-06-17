@@ -104,6 +104,7 @@ bzl_library(
         "kernel_build_output.bzl",
         "kernel_compile_commands.bzl",
         "kernel_config.bzl",
+        "kernel_config_devicetree_library.bzl",
         "kernel_config_settings.bzl",
         "kernel_dtstree.bzl",
         "kernel_env.bzl",
@@ -155,6 +156,7 @@ bzl_library(
         "@bazel_skylib//lib:sets",
         "@bazel_skylib//lib:shell",
         "@bazel_skylib//rules:common_settings",
+        "@rules_devicetree//devicetree:devicetree_library",
     ],
 )
 

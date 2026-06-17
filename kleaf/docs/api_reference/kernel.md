@@ -2324,3 +2324,44 @@ In the above example, if `:my_config_setting` does not apply, the
 | <a id="kernel_build_output-visibility"></a>visibility |  The visibility to be passed to this macro's exported targets. It always implicitly includes the location where this macro is instantiated, so this attribute only needs to be explicitly set if you want the macro's targets to be additionally visible somewhere else.   | <a href="https://bazel.build/concepts/labels">List of labels</a>; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  |
 
 
+<a id="kernel_config_devicetree_library"></a>
+
+## kernel_config_devicetree_library
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_config_devicetree_library")
+
+kernel_config_devicetree_library(*, <a href="#kernel_config_devicetree_library-name">name</a>, <a href="#kernel_config_devicetree_library-compatible_with">compatible_with</a>, <a href="#kernel_config_devicetree_library-deprecation">deprecation</a>, <a href="#kernel_config_devicetree_library-exec_compatible_with">exec_compatible_with</a>,
+                                 <a href="#kernel_config_devicetree_library-exec_properties">exec_properties</a>, <a href="#kernel_config_devicetree_library-features">features</a>, <a href="#kernel_config_devicetree_library-kernel_build">kernel_build</a>, <a href="#kernel_config_devicetree_library-package_metadata">package_metadata</a>,
+                                 <a href="#kernel_config_devicetree_library-restricted_to">restricted_to</a>, <a href="#kernel_config_devicetree_library-tags">tags</a>, <a href="#kernel_config_devicetree_library-target_compatible_with">target_compatible_with</a>, <a href="#kernel_config_devicetree_library-testonly">testonly</a>, <a href="#kernel_config_devicetree_library-toolchains">toolchains</a>,
+                                 <a href="#kernel_config_devicetree_library-visibility">visibility</a>)
+</pre>
+
+Creates a
+[`devicetree_library`](https://github.com/bazel-contrib/rules_devicetree/blob/main/docs/api/devicetree_library.md)
+target that exposes kernel config includes.
+
+This is useful for devicetree builds that need to access kernel configuration
+headers (e.g. `linux/kconfig.h` for `IS_ENABLED` macro).
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="kernel_config_devicetree_library-name"></a>name |  A unique name for this macro instance. Normally, this is also the name for the macro's main or only target. The names of any other targets that this macro might create will be this name with a string suffix.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="kernel_config_devicetree_library-compatible_with"></a>compatible_with |  <a href="https://bazel.build/reference/be/common-definitions#common.compatible_with">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a>; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
+| <a id="kernel_config_devicetree_library-deprecation"></a>deprecation |  <a href="https://bazel.build/reference/be/common-definitions#common.deprecation">Inherited rule attribute</a>   | String; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
+| <a id="kernel_config_devicetree_library-exec_compatible_with"></a>exec_compatible_with |  <a href="https://bazel.build/reference/be/common-definitions#common.exec_compatible_with">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a>; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
+| <a id="kernel_config_devicetree_library-exec_properties"></a>exec_properties |  <a href="https://bazel.build/reference/be/common-definitions#common.exec_properties">Inherited rule attribute</a>   | <a href="https://bazel.build/rules/lib/core/dict">Dictionary: String -> String</a> | optional |  `None`  |
+| <a id="kernel_config_devicetree_library-features"></a>features |  <a href="https://bazel.build/reference/be/common-definitions#common.features">Inherited rule attribute</a>   | List of strings | optional |  `None`  |
+| <a id="kernel_config_devicetree_library-kernel_build"></a>kernel_build |  The [`kernel_build`](#kernel_build) or [`kernel_filegroup`](#kernel_filegroup) target to extract config from   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="kernel_config_devicetree_library-package_metadata"></a>package_metadata |  <a href="https://bazel.build/reference/be/common-definitions#common.package_metadata">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a>; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
+| <a id="kernel_config_devicetree_library-restricted_to"></a>restricted_to |  <a href="https://bazel.build/reference/be/common-definitions#common.restricted_to">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a>; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
+| <a id="kernel_config_devicetree_library-tags"></a>tags |  <a href="https://bazel.build/reference/be/common-definitions#common.tags">Inherited rule attribute</a>   | List of strings; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
+| <a id="kernel_config_devicetree_library-target_compatible_with"></a>target_compatible_with |  <a href="https://bazel.build/reference/be/common-definitions#common.target_compatible_with">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `None`  |
+| <a id="kernel_config_devicetree_library-testonly"></a>testonly |  <a href="https://bazel.build/reference/be/common-definitions#common.testonly">Inherited rule attribute</a>   | Boolean; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
+| <a id="kernel_config_devicetree_library-toolchains"></a>toolchains |  <a href="https://bazel.build/reference/be/common-definitions#common.toolchains">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `None`  |
+| <a id="kernel_config_devicetree_library-visibility"></a>visibility |  The visibility to be passed to this macro's exported targets. It always implicitly includes the location where this macro is instantiated, so this attribute only needs to be explicitly set if you want the macro's targets to be additionally visible somewhere else.   | <a href="https://bazel.build/concepts/labels">List of labels</a>; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  |
+
+
