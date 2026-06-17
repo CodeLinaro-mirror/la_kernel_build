@@ -30,6 +30,7 @@ test_suite(
         "//build/kernel/kleaf/tests/hermetic_test",
         "//build/kernel/kleaf/tests/kernel_build_config_test",
         "//build/kernel/kleaf/tests/kernel_build_test",
+        "//build/kernel/kleaf/tests/kernel_config_devicetree_library_test",
         "//build/kernel/kleaf/tests/kernel_config_test",
         "//build/kernel/kleaf/tests/kernel_images_test",
         "//build/kernel/kleaf/tests/kernel_module_group_test",
