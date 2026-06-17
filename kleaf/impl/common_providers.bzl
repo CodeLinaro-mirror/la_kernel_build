@@ -631,3 +631,15 @@ DtstreeInfo = provider(
         "makefile": "DTS tree makefile",
     },
 )
+
+KernelBuildConfigDirectoryInfo = provider(
+    doc = """Provides the config directory of a kernel_build or kernel_filegroup.
+
+This is used to share the config directory with other rules, such as
+devicetree building rules, without depending on implementation details
+of the kernel build/filegroup rules.
+""",
+    fields = {
+        "config_out_dir": "The output directory of kernel config, or None if not available.",
+    },
+)
