@@ -61,6 +61,7 @@ filegroup(
     name = "build_test_targets",
     srcs = [
         "//out_of_tree:device_images",
+        "//out_of_tree:test_dtb",
     ] + select({
         ":kernel_flag_is_source": [
             # Test that the device modules and images can be built.

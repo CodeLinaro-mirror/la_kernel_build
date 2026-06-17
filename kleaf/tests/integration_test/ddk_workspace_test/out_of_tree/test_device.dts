@@ -1,0 +1,12 @@
+/dts-v1/;
+
+#include <generated/autoconf.h>
+
+// Force a compilation error if the expected config items are not defined.
+// This ensures that we are actually reading the real kernel config.
+#ifndef CONFIG_MODULES
+#error CONFIG_MODULES is not defined! Kernel config extraction might have failed.
+#endif
+
+/ {
+};
