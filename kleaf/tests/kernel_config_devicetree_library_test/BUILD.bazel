@@ -1,0 +1,113 @@
+# Copyright (C) 2026 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("@bazel_skylib//rules:write_file.bzl", "write_file")
+load("@kernel_toolchain_info//:dict.bzl", "CLANG_VERSION")
+load("//build/kernel/kleaf:kernel.bzl", "kernel_config_devicetree_library")
+load("//build/kernel/kleaf/impl:constants.bzl", "MODULES_STAGING_ARCHIVE", "UNSTRIPPED_MODULES_ARCHIVE")
+load("//build/kernel/kleaf/impl:kernel_build.bzl", "kernel_build")
+load("//build/kernel/kleaf/impl:kernel_filegroup.bzl", "kernel_filegroup")
+load("//build/kernel/kleaf/tests/utils:pass_analysis_test.bzl", "pass_analysis_test")
+
+# Common dummy files for kernel_filegroup
+write_file(
+    name = "kernel_config_devicetree_library_test_staging_archive",
+    out = "kernel_config_devicetree_library_test_staging_archive/" + MODULES_STAGING_ARCHIVE,
+)
+
+write_file(
+    name = "kernel_config_devicetree_library_test_unstripped_modules",
+    out = "kernel_config_devicetree_library_test_unstripped_modules/" + UNSTRIPPED_MODULES_ARCHIVE,
+)
+
+write_file(
+    name = "kernel_config_devicetree_library_test_gki_info",
+    out = "kernel_config_devicetree_library_test_gki_info/gki-info.txt",
+    content = [
+        "KERNEL_RELEASE=99.98.97",
+        "",
+    ],
+)
+
+write_file(
+    name = "kernel_config_devicetree_library_test_dummy_config",
+    out = "kernel_config_devicetree_library_test_dummy_config/config",
+)
+
+# Platforms for kernel_filegroup
+platform(
+    name = "kernel_config_devicetree_library_test_target_platform",
+    constraint_values = [
+        "@platforms//os:android",
+        "@platforms//cpu:arm64",
+    ],
+)
+
+platform(
+    name = "kernel_config_devicetree_library_test_exec_platform",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# 1. Test with kernel_build
+kernel_build(
+    name = "kernel_config_devicetree_library_test_kernel_build",
+    outs = [],
+    make_goals = ["Image"],
+    tags = ["manual"],
+)
+
+kernel_config_devicetree_library(
+    name = "kernel_config_devicetree_library_test_dt_lib_with_build",
+    kernel_build = ":kernel_config_devicetree_library_test_kernel_build",
+    tags = ["manual"],
+)
+
+pass_analysis_test(
+    name = "kernel_config_devicetree_library_test_with_build_test",
+    target_under_test = ":kernel_config_devicetree_library_test_dt_lib_with_build",
+)
+
+# 2. Test with kernel_filegroup (with config_out_dir)
+kernel_filegroup(
+    name = "kernel_config_devicetree_library_test_kernel_filegroup",
+    config_out_dir = ":kernel_config_devicetree_library_test_dummy_config",
+    exec_platform = ":kernel_config_devicetree_library_test_exec_platform",
+    expected_toolchain_version = CLANG_VERSION,
+    gki_artifacts = ":kernel_config_devicetree_library_test_gki_info",
+    tags = ["manual"],
+    target_platform = ":kernel_config_devicetree_library_test_target_platform",
+    deps = [
+        ":kernel_config_devicetree_library_test_staging_archive",
+        ":kernel_config_devicetree_library_test_unstripped_modules",
+    ],
+)
+
+kernel_config_devicetree_library(
+    name = "kernel_config_devicetree_library_test_dt_lib_with_filegroup",
+    kernel_build = ":kernel_config_devicetree_library_test_kernel_filegroup",
+    tags = ["manual"],
+)
+
+pass_analysis_test(
+    name = "kernel_config_devicetree_library_test_with_filegroup_test",
+    target_under_test = ":kernel_config_devicetree_library_test_dt_lib_with_filegroup",
+)
+
+test_suite(
+    name = "kernel_config_devicetree_library_test",
+    tests = None,  # all tests in the package
+)
