@@ -1,10 +1,12 @@
 load(
     "@kleaf//build/kernel/kleaf:kernel.bzl",
     "ddk_module",
+    "kernel_config_devicetree_library",
     "kernel_modules_install",
     "system_dlkm_image",
     "vendor_dlkm_image",
 )
+load("@rules_devicetree//devicetree:dtb.bzl", "dtb")
 
 # Test building no-op DDK module against kernel from sources
 ddk_module(
@@ -39,4 +41,16 @@ filegroup(
         ":device_vendor_dlkm_image",
     ],
     visibility = ["//tests:__pkg__"],
+)
+
+kernel_config_devicetree_library(
+    name = "kernel_config_dt_lib",
+    kernel_build = "//tests:kernel",
+)
+
+dtb(
+    name = "test_dtb",
+    srcs = ["test_device.dts"],
+    visibility = ["//tests:__pkg__"],
+    deps = [":kernel_config_dt_lib"],
 )
