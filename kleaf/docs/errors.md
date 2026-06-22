@@ -407,3 +407,88 @@ This is a harmless warning message.
 This is a harmless warning message.
 
 [comment]: <> (Bug 194427140)
+
+## CONFIG\_FOO: actual '', expected 'CONFIG\_FOO=m' {#kconfig-mismatch}
+
+This error occurs when a configuration fragment (or defconfig) requests a
+symbol (e.g., `CONFIG_FOO=m`), but Kconfig omits or disables it during the
+final `.config` generation.
+
+Kconfig drops symbols silently if their definitions are missing, their Kconfig
+files are not loaded, or their dependencies are unmet.
+
+To resolve this, check the following:
+
+*   **Is the symbol defined in Kconfig?**
+    Verify that the symbol actually exists in the source tree. Note that when
+    searching Kconfig files, you must omit the `CONFIG_` prefix.
+
+    ```shell
+    git grep "config FOO"
+    ```
+
+    *If there are no matches, the symbol does not exist (check for typos or
+    missing driver patches).*
+
+*   **Is the Kconfig file actually loaded?**
+    If `config FOO` is defined in a custom file like `drivers/custom/Kconfig`,
+    ensure that Kconfig actually parses this file.
+
+    Trace the `source` statements starting from `arch/$(ARCH)/Kconfig` or
+    `drivers/Kconfig`. You should verify that a parent `Kconfig` file includes
+    your custom file:
+
+    ```kconfig
+    source "drivers/custom/Kconfig"
+    ```
+
+*   **Are there multiple definitions?**
+    Sometimes a symbol is defined multiple times under different architecture
+    guards or choice blocks. Run `git grep "config FOO"` across the entire tree
+    to ensure you are looking at the active definition for your target
+    architecture.
+
+*   **Are all dependencies met? (Most Common)**
+    If a symbol's `depends on` condition is not met, Kconfig will silently
+    disable it.
+
+    You can verify exactly which dependency is missing using **interactive
+    menuconfig search**:
+
+    1.  Run `menuconfig` on your kernel build target:
+        ```shell
+        tools/bazel run //path/to:my_kernel_build_config -- menuconfig
+        ```
+    2.  Press `/` to open the search prompt.
+    3.  Type `FOO` and press **Enter**.
+    4.  Examine the **`Depends on:`** field in the search output.
+        *   It will show the required dependencies and their **current
+            evaluation** (e.g., `BAR [=n]`).
+    5.  Exit `menuconfig` and add the missing dependency (`CONFIG_BAR=y`) to
+        your configuration fragment.
+
+*   **Does the discrepancy come from a downstream fragment?**
+    When building a downstream target (such as
+    `//common-modules/virtual-device`) that inherits from a `base_kernel`, a
+    requested option in your local fragment may be dropped because:
+    *   A required core dependency is disabled in the base kernel.
+    *   Another conflicting setting within the device build fragment (or other
+        applied fragments) unintentionally overrides or drops it.
+
+    To resolve this:
+
+    1.  Run `menuconfig` directly on your downstream target (e.g.,
+        `tools/bazel run //common-modules/virtual-device:virtual_device_x86_64_config -- menuconfig`).
+    2.  Search for your symbol (press `/`) to inspect its dependencies and final
+        evaluation.
+    3.  Add missing dependencies or remove conflicting overrides directly in
+        your local `defconfig_fragment` (e.g., `virtual_device.fragment`).
+
+### Handling Dependency Loops
+
+If Kconfig fails with `error: recursive dependency detected`:
+
+*   This typically happens when mixing `select` and `depends on` circularly
+    across multiple symbols.
+*   **Rule of Thumb**: Prefer `depends on` over `select`. Use `select` only for
+    non-visible symbols with no dependencies of their own.
