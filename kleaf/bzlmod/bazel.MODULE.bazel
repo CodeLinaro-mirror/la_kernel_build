@@ -145,6 +145,7 @@ rust.toolchain(versions = [])
 kernel_toolchain_ext = use_extension("//build/kernel/kleaf:kernel_toolchain_ext.bzl", "kernel_toolchain_ext")
 use_repo(kernel_toolchain_ext, "kernel_toolchain_info")
 use_repo(kernel_toolchain_ext, "kleaf_clang_toolchain")
+use_repo(kernel_toolchain_ext, "kleaf_python_toolchain")
 use_repo(kernel_toolchain_ext, "kleaf_host_tools")
 
 register_toolchains(
