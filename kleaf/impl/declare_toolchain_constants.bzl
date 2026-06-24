@@ -16,6 +16,7 @@
 
 load("//build/kernel/kleaf:key_value_repo.bzl", "key_value_repo")
 load("//prebuilts/clang/host/linux-x86/kleaf:clang_toolchain_repository.bzl", "clang_toolchain_repository")
+load("//prebuilts/clang/host/linux-x86/kleaf:python_toolchain_repository.bzl", "python_toolchain_repository")
 
 visibility("public")
 
@@ -53,6 +54,9 @@ def _declare_repos(module_ctx, tag_name):
     )
     clang_toolchain_repository(
         name = "kleaf_clang_toolchain",
+    )
+    python_toolchain_repository(
+        name = "kleaf_python_toolchain",
     )
 
 _tag_class = tag_class(
