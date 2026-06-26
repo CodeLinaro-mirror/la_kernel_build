@@ -143,6 +143,10 @@ case "${KERNEL_TARGET}" in
   chora)
     KERNEL_TARGET="canoe"
     ;;
+  mahua)
+    KERNEL_TARGET="glymur"
+    ;;
+
 esac
 
 export KERNEL_TARGET
@@ -706,7 +710,7 @@ fi
 if [ "${DESKTOPOS_PREBUILT}" == "1" ]; then
     _MKDTBO="${ANDROID_BUILD_TOP}/system/libufdt/utils/src/mkdtboimg.py"
     _DTBS="${ANDROID_KERNEL_OUT}/dtbs"
-    _CFG="${ROOT_DIR}/qcom/opensource/devicetree/qcom/hamoa_dtbo.config"
+    _CFG="${ROOT_DIR}/qcom/opensource/devicetree/qcom/${TARGET_BOARD_PLATFORM}_dtbo.config"
     _LZ4="${ROOT_DIR}/prebuilts/kernel-build-tools/linux-x86/bin/lz4"
     echo "  [Desktop OS] Creating dtbo.img via cfg_create from ${_CFG}"
     "${_MKDTBO}" cfg_create \
