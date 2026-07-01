@@ -782,6 +782,42 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
             prebuilt_base_kernel =
                 "@gki_prebuilts_aarch64_16k//kernel_aarch64_16k")
 
+    def test_compile_commands_reachable(self):
+        """Tests that compile_commands.json contains reachable paths to ddk_modinfo.c"""
+        kleaf_repo = self.ddk_workspace / "external/kleaf"
+        if not arguments.mount_spec:
+            mount_spec = {
+                self.real_kleaf_repo: kleaf_repo
+            }
+            self._unshare_mount_run(mount_spec=mount_spec, link_spec=LinkSpec())
+            return
+
+        self._run_ddk_workspace_setup_test(
+            kleaf_repo,
+            ddk_workspace=self.ddk_workspace,
+            build_targets=[]
+        )
+
+        out_dir = self.ddk_workspace / "compdb_out"
+        json_file = self.ddk_workspace / "compile_commands.json"
+
+        self._check_call(
+            "run",
+            [
+                "//out_of_tree:out_of_tree_compile_commands",
+                "--",
+                "--out_directory",
+                str(out_dir),
+                str(json_file),
+            ],
+            cwd=self.ddk_workspace,
+        )
+
+        self.assertTrue(json_file.exists(), f"{json_file} was not generated")
+        staged_modinfo = out_dir / "out_of_tree/ddk_modinfo.c"
+        self.assertTrue(staged_modinfo.exists(), f"Staged ddk_modinfo.c not found at {staged_modinfo}")
+
+
 
     def _run_test_setup_with_local_prebuilts(
             self, source_base_kernel, prebuilt_base_kernel):

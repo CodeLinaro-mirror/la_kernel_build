@@ -1,6 +1,7 @@
 load(
     "@kleaf//build/kernel/kleaf:kernel.bzl",
     "ddk_module",
+    "kernel_compile_commands",
     "kernel_config_devicetree_library",
     "kernel_modules_install",
     "system_dlkm_image",
@@ -53,4 +54,9 @@ dtb(
     srcs = ["test_device.dts"],
     visibility = ["//tests:__pkg__"],
     deps = [":kernel_config_dt_lib"],
+)
+
+kernel_compile_commands(
+    name = "out_of_tree_compile_commands",
+    deps = [":out_of_tree"],
 )
