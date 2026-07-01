@@ -572,7 +572,7 @@ def _handle_ddk_modinfo(
         with open(out_cflags_path, "w") as out_cflags:
             out_cflags.write("\n")
             out_cflags.write(textwrap.dedent(f"""\
-                    -include $(ROOT_DIR)/{str(package / ddk_modinfo.name)}
+                    -include $(COMMON_OUT_DIR)/{str(package / ddk_modinfo.name)}
                 """))
             out_cflags.write("\n")
 
