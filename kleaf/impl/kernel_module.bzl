@@ -473,15 +473,26 @@ def _kernel_module_impl(ctx):
         command += """
              # Restore Makefile and Kbuild
                cp -r {ddk_makefiles}/* {ext_mod}/
-
+             # Copy all ddk_modinfo.c files from ddk_makefiles to the output directory
+             # preserving the subdirectory structure.
+             (
+                cd {ddk_makefiles}
+                for file in $(find . -name ddk_modinfo.c); do
+                    mkdir -p "${{COMMON_OUT_DIR}}/{ext_mod}/$(dirname "$file")"
+                    cp "$file" "${{COMMON_OUT_DIR}}/{ext_mod}/$file"
+                done
+             )
              # Replace env var in cflags/asflags/.cmd files
              # find -exec sed is error-prone due to readdir() issues, so save it to a
              # variable first.
              # No need to parse .ldflags because we don't write $(ROOT_DIR) to .ldflags;
              # see gen_makefiles.py
-            (
+             (
                 files=$(find {ext_mod} -name '*.cflags_shipped' -o -name '*.asflags_shipped')
-                sed -i'' -e 's:$(ROOT_DIR):'"${{ROOT_DIR}}"':g' ${{files}}
+                sed -i'' \
+                    -e 's:$(ROOT_DIR):'"${{ROOT_DIR}}"':g' \
+                    -e 's:$(COMMON_OUT_DIR):'"${{COMMON_OUT_DIR}}"':g' \
+                    ${{files}}
 
                 files=$(find {ext_mod} -name '*.cmd_shipped')
                 if [ -n "${{files}}" ]; then
