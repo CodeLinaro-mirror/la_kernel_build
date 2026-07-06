@@ -1,6 +1,5 @@
 build:gbl --@rules_rust//rust/settings:toolchain_generated_sysroot=false
 common:gbl --extra_toolchains=@gbl//toolchain:all
-test:gbl  --test_output=errors
 
 common:gbl --incompatible_autoload_externally=-@rules_python,-@rules_shell,-@rules_android,-@rules_java,-@protobuf,-@com_google_protobuf
 common:gbl -c opt
