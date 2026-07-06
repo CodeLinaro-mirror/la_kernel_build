@@ -1,0 +1,101 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+load("@rules_rust_bindgen//:defs.bzl", "rust_bindgen")
+load("//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_genrule")
+load("//build/kernel/kleaf:kernel.bzl", "android_filegroup")
+
+# Bindgen Tests
+
+cc_library(
+    name = "point_c",
+    srcs = ["empty.c"],
+    hdrs = ["header.h"],
+)
+
+rust_bindgen(
+    name = "point_bindgen_src",
+    cc_lib = ":point_c",
+    header = "header.h",
+)
+
+rust_library(
+    name = "point_bindgen",
+    srcs = [":point_bindgen_src"],
+    crate_name = "point_bindgen",
+    edition = "2021",
+)
+
+rust_test(
+    name = "rust_test_unit",
+    srcs = ["test.rs"],
+    edition = "2021",
+    deps = [
+        ":point_bindgen",
+    ],
+)
+
+# Host Execution Tests
+
+rust_binary(
+    name = "hello_rust",
+    srcs = ["main.rs"],
+    edition = "2021",
+)
+
+hermetic_genrule(
+    name = "hello_rust_host_run",
+    outs = ["hello_rust_host_run.txt"],
+    cmd = "$(location :hello_rust) > $@",
+    tools = [":hello_rust"],
+)
+
+build_test(
+    name = "rust_host_test",
+    targets = [
+        ":hello_rust_host_run",
+    ],
+)
+
+# Android Target Build Tests
+
+rust_binary(
+    name = "hello_rust_android",
+    srcs = ["main.rs"],
+    edition = "2021",
+    rustc_flags = [
+        "-C",
+        "panic=abort",
+    ],
+    target_compatible_with = ["@platforms//os:android"],
+)
+
+android_filegroup(
+    name = "hello_rust_android_arm64_group",
+    srcs = [":hello_rust_android"],
+    cpu = "arm64",
+)
+
+android_filegroup(
+    name = "hello_rust_android_x86_64_group",
+    srcs = [":hello_rust_android"],
+    cpu = "x86_64",
+)
+
+build_test(
+    name = "rust_android_test",
+    targets = [
+        ":hello_rust_android_arm64_group",
+        ":hello_rust_android_x86_64_group",
+    ],
+)
+
+# Main Package Test Suite
+
+test_suite(
+    name = "rust_test",
+    tests = None,  # All tests in this package
+    visibility = ["//build/kernel/kleaf/tests:__pkg__"],
+)

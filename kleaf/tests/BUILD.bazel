@@ -37,6 +37,7 @@ test_suite(
         "//build/kernel/kleaf/tests/kernel_modules_install_test",
         "//build/kernel/kleaf/tests/libcap_test",
         "//build/kernel/kleaf/tests/merged_kernel_uapi_headers_test",
+        "//build/kernel/kleaf/tests/rust_test",
         "//build/kernel/kleaf/tests/trim_test",
         "//build/kernel/kleaf/tests/utils_test",
         "//build/kernel/kleaf/tests/zip_test",

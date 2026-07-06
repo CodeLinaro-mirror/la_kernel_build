@@ -15,6 +15,7 @@
 """Module extension that instantiates key_value_repo."""
 
 load("//build/kernel/kleaf:key_value_repo.bzl", "key_value_repo")
+load("//build/kernel/kleaf/impl:rust_toolchain_repository.bzl", "rust_toolchain_repository")
 load("//prebuilts/clang/host/linux-x86/kleaf:clang_toolchain_repository.bzl", "clang_toolchain_repository")
 load("//prebuilts/clang/host/linux-x86/kleaf:python_toolchain_repository.bzl", "python_toolchain_repository")
 
@@ -57,6 +58,9 @@ def _declare_repos(module_ctx, tag_name):
     )
     python_toolchain_repository(
         name = "kleaf_python_toolchain",
+    )
+    rust_toolchain_repository(
+        name = "kleaf_rust_toolchain",
     )
 
 _tag_class = tag_class(
