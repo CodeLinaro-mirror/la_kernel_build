@@ -405,6 +405,13 @@ if [ "${COPY_NEEDED}" == "1" ]; then
       cp ${ANDROID_KP_OUT_DIR}/dist/modules.load ${ANDROID_KERNEL_OUT}/modules.load
     fi
 
+    # Ensure that vendor_dlkm.modules.blocklist for LA Prime is empty.
+    # Through this blocklist, autogvm blocks modules exclusive to LA Prime
+    # for all other lunch targets that use autogvm.
+    if [ "${ENABLE_VENDOR_CUTTLEFISH}" == "true" ]; then
+      echo > "${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist"
+    fi
+
     if [ -f "${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist" ]; then
       VENDOR_RAMDISK_MODULES_DIR="${ANDROID_PRODUCT_OUT}/vendor_ramdisk/lib/modules"
       mkdir -p "${VENDOR_RAMDISK_MODULES_DIR}"
