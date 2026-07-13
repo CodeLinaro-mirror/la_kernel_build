@@ -187,6 +187,10 @@ bazel_dep(
     version = "1.0.0",
 )
 bazel_dep(
+    name = "protobuf",
+    version = "29.0",
+)
+bazel_dep(
     name = "rules_cc",
     version = "0.2.11",
 )
@@ -255,6 +259,11 @@ local_path_override(
 local_path_override(
     module_name = "platforms",
     path = "external/bazelbuild-platforms",
+)
+
+local_path_override(
+    module_name = "protobuf",
+    path = "external/protobuf",
 )
 
 local_path_override(
