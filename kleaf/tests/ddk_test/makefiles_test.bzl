@@ -937,6 +937,27 @@ def _makefiles_library_tests(name):
         tests = tests,
     )
 
+def _makefiles_ddk_modinfo_test(name):
+    """Tests that a single-source DDK module has ddk_modinfo.c included in cflags."""
+    tests = []
+
+    _create_makefiles_artifact_test(
+        name = name + "_test_mod",
+        srcs = ["base.c"],
+        out = name + "_base.ko",
+        expected_cflags_lines = [
+            "-include $(COMMON_OUT_DIR)/{}/ddk_modinfo.c".format(
+                native.package_name(),
+            ),
+        ],
+    )
+    tests.append(name + "_test_mod")
+
+    native.test_suite(
+        name = name,
+        tests = tests,
+    )
+
 def makefiles_test_suite(name):
     """Defines tests for `makefiles`.
 
@@ -951,6 +972,11 @@ def makefiles_test_suite(name):
         module_out = "dep.ko",
     )
     tests.append(name + "_simple")
+
+    _makefiles_ddk_modinfo_test(
+        name = name + "_ddk_modinfo",
+    )
+    tests.append(name + "_ddk_modinfo")
 
     _makefiles_test_make(
         name = name + "_multiple_sources",
