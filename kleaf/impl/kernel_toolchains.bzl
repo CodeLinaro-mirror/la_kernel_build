@@ -17,13 +17,11 @@
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:shell.bzl", "shell")
-load("@kernel_toolchain_info//:dict.bzl", "VARS")
 load(
     ":common_providers.bzl",
     "KernelEnvToolchainsInfo",
     "KernelPlatformToolchainInfo",
 )
-load(":utils.bzl", "utils")
 
 visibility("//build/kernel/kleaf/...")
 
@@ -202,8 +200,8 @@ def _kernel_toolchains_impl(ctx):
         userldexpr = target.ldexpr,
     )
     rust_env = _get_rust_env(
-        rust_tools = ctx.attr._rust_tools,
-        bindgen = ctx.attr._bindgen,
+        rust_toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"],
+        bindgen_toolchain = ctx.toolchains["@rules_rust_bindgen//:toolchain_type"],
         host_libc = exec.libc,
         exec_glibc_info = ctx.attr.exec_glibc_toolchain[KernelPlatformToolchainInfo],
     )
@@ -223,8 +221,8 @@ def _kernel_toolchains_impl(ctx):
         host_sysroot = exec.sysroot,
     )
 
-def _get_rust_env_impl(_subrule_ctx, rust_tools, bindgen, host_libc, exec_glibc_info):
-    if not rust_tools:
+def _get_rust_env_impl(_subrule_ctx, rust_toolchain, bindgen_toolchain, host_libc, exec_glibc_info):
+    if not rust_toolchain or not bindgen_toolchain:
         return _RustEnvInfo(
             inputs = depset(),
             # Always declare this function so we can use it unconditionally when handling --cache_dir
@@ -234,13 +232,24 @@ def _get_rust_env_impl(_subrule_ctx, rust_tools, bindgen, host_libc, exec_glibc_
             """,
         )
 
-    rust_files_depset = depset(transitive = [target.files for target in rust_tools])
+    rustc = rust_toolchain.rustc
+    bindgen_file = bindgen_toolchain.bindgen
 
-    # Note: There are only 2 files in this depset, so using to_list() is okay
-    rust_files_list = rust_files_depset.to_list()
+    bindgen_transitive = []
+    bindgen_direct = []
+    if bindgen_file:
+        bindgen_direct.append(bindgen_file)
+    if bindgen_toolchain.libclang:
+        bindgen_transitive.append(bindgen_toolchain.libclang[DefaultInfo].files)
+    if bindgen_toolchain.libstdcxx:
+        bindgen_transitive.append(bindgen_toolchain.libstdcxx[DefaultInfo].files)
 
-    rustc = utils.find_file("rustc", rust_files_list, "rust tools", required = True)
-    bindgen_file = bindgen[DefaultInfo].files_to_run.executable
+    # Skip the clang executable.
+    # Our Rust toolchains does not specify the clang executable. Plus, just the executable
+    # alone wouldn't be sufficient -- we would need its runfiles. Since cc_toolchain.all_files are
+    # added anyways, we just do an assertion here.
+
+    bindgen_files = depset(direct = bindgen_direct, transitive = bindgen_transitive)
 
     if host_libc == "musl":
         target = "x86_64-unknown-linux-musl"
@@ -283,20 +292,13 @@ def _get_rust_env_impl(_subrule_ctx, rust_tools, bindgen, host_libc, exec_glibc_
     )
 
     return _RustEnvInfo(
-        inputs = depset(transitive = [rust_files_depset, exec_glibc_info.all_files, bindgen[DefaultInfo].default_runfiles.files]),
+        inputs = depset(transitive = [rust_toolchain.all_files, exec_glibc_info.all_files, bindgen_files]),
         cmd = cmd,
     )
 
 _get_rust_env = subrule(
     implementation = _get_rust_env_impl,
 )
-
-def _get_rust_tools(rust_toolchain_version):
-    if not rust_toolchain_version:
-        return []
-    rust_binaries = "@prebuilt_rust//%s:binaries" % rust_toolchain_version
-
-    return [Label(rust_binaries)]
 
 kernel_toolchains = rule(
     doc = """Helper for `kernel_env` to get toolchains for different platforms.""",
@@ -313,17 +315,6 @@ kernel_toolchains = rule(
         "target_toolchain": attr.label(
             providers = [KernelPlatformToolchainInfo],
         ),
-        # TODO(b/284390729): Use toolchain resolution
-        "rust_toolchain_version": attr.string(
-            doc = "the version of the rust toolchain to use for this environment",
-            default = VARS.get("RUSTC_VERSION", ""),
-        ),
-        "_rust_tools": attr.label_list(default = _get_rust_tools, allow_files = True),
-        "_bindgen": attr.label(
-            default = "//build/kernel:bindgen",
-            cfg = "exec",
-            allow_files = True,
-        ),
         # This is not used, but the dependency ensures that if
         # --noincompatible_kernel_use_resolved_toolchains is specified, an error message is printed.
         "_kernel_use_resolved_toolchains": attr.label(
@@ -335,5 +326,9 @@ kernel_toolchains = rule(
         "_platform_cpu_riscv64": attr.label(default = "@platforms//cpu:riscv64"),
         "_platform_cpu_x86_64": attr.label(default = "@platforms//cpu:x86_64"),
     },
+    toolchains = [
+        config_common.toolchain_type("@rules_rust//rust:toolchain_type", mandatory = False),
+        config_common.toolchain_type("@rules_rust_bindgen//:toolchain_type", mandatory = False),
+    ],
     subrules = [_get_rust_env],
 )
