@@ -44,6 +44,7 @@ kernel_build(
         "olddefconfig",
     ],
     makefile = "//common:Makefile",
+    pahole = "//common:pahole",
     tags = ["manual"],
 )
 

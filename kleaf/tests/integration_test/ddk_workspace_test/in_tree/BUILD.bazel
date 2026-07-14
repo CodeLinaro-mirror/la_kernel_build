@@ -23,6 +23,7 @@ kernel_build(
     module_outs = [
         "psmouse.ko",
     ],
+    pahole = "@kleaf//common:pahole",
 )
 
 # Test building out-of-tree module against kernel with in-tree modules
