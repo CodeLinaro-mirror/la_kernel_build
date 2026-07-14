@@ -545,16 +545,34 @@ python_runtime_files(
     visibility = ["//build/kernel:__pkg__"],
 )
 
+alias(
+    name = "stg_src",
+    actual = select({
+        "//build/kernel/kleaf:stg_from_sources_is_true": "@stg//:stg",
+        "//conditions:default": "//prebuilts/kernel-build-tools:stg",
+    }),
+    visibility = ["//visibility:private"],
+)
+
 executable_dispatcher(
     name = "stg",
-    src = "//prebuilts/kernel-build-tools:stg",
+    src = ":stg_src",
     # All kernel_abi() can see this
     visibility = ["//visibility:public"],
 )
 
+alias(
+    name = "stgdiff_src",
+    actual = select({
+        "//build/kernel/kleaf:stg_from_sources_is_true": "@stg//:stgdiff",
+        "//conditions:default": "//prebuilts/kernel-build-tools:stgdiff",
+    }),
+    visibility = ["//visibility:private"],
+)
+
 executable_dispatcher(
     name = "stgdiff",
-    src = "//prebuilts/kernel-build-tools:stgdiff",
+    src = ":stgdiff_src",
     # All kernel_abi() can see this
     visibility = ["//visibility:public"],
 )

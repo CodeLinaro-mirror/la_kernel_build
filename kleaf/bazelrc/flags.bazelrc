@@ -36,6 +36,8 @@ build --flag_alias=dtc_from_sources=@kleaf//build/kernel/kleaf:dtc_from_sources
 build --flag_alias=nodtc_from_sources=no@kleaf//build/kernel/kleaf:dtc_from_sources
 build --flag_alias=pahole_from_sources=@kleaf//build/kernel/kleaf:pahole_from_sources
 build --flag_alias=nopahole_from_sources=no@kleaf//build/kernel/kleaf:pahole_from_sources
+build --flag_alias=stg_from_sources=@kleaf//build/kernel/kleaf:stg_from_sources
+build --flag_alias=nostg_from_sources=no@kleaf//build/kernel/kleaf:stg_from_sources
 
 # flags that control kleaf integrity checking
 build --flag_alias=allow_ddk_unsafe_headers=@kleaf//build/kernel/kleaf:allow_ddk_unsafe_headers
