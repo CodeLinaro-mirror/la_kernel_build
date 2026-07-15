@@ -466,6 +466,19 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
+# If true, build stg from sources
+bool_flag(
+    name = "stg_from_sources",
+    build_setting_default = False,
+    visibility = ["//visibility:private"],
+)
+
+config_setting(
+    name = "stg_from_sources_is_true",
+    flag_values = {":stg_from_sources": "1"},
+    visibility = ["//build/kernel/kleaf/impl:__pkg__"],
+)
+
 # No-op. Do not set it explicitly.
 bool_flag(
     name = "gzip_is_pigz",
