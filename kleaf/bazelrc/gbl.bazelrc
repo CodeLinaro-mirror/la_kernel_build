@@ -1,4 +1,3 @@
-build:gbl --@rules_rust//rust/settings:toolchain_generated_sysroot=false
 common:gbl --extra_toolchains=@gbl//toolchain:all
 
 common:gbl --incompatible_autoload_externally=-@rules_python,-@rules_shell,-@rules_android,-@rules_java,-@protobuf,-@com_google_protobuf
