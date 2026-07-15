@@ -72,6 +72,13 @@ new_kleaf_local_repository(
 )
 
 new_kleaf_local_repository(
+    name = "stg",
+    build_file = "build/kernel/kleaf/stg.BUILD",
+    mandatory = False,
+    path = "external/stg",
+)
+
+new_kleaf_local_repository(
     name = "toybox",
     build_file = "build/kernel/kleaf/toybox.BUILD",
     path = "external/toybox",
