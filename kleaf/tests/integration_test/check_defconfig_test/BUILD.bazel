@@ -40,6 +40,7 @@ kernel_build(
     check_defconfig = "match",
     make_goals = ["fake"],
     makefile = "//common:Makefile",
+    pahole = "//common:pahole",
     # Setting 64K page size implicitly changes VA_BITS to 42, which triggers the build error.
     pre_defconfig_fragments = ["64k_config"],
     tags = ["manual"],
