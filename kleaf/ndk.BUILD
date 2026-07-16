@@ -41,6 +41,7 @@ _SYSROOT_TRIPLE_LEVEL_FILES = [
     "libc.so",
     "libdl.so",
     "libm.so",
+    "liblog.so",
     "crtbegin_dynamic.o",
     "crtbegin_static.o",
     "crtend_android.o",
