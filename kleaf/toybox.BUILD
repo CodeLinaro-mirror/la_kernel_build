@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
 cc_binary(
     name = "toybox",
     srcs = glob(
@@ -104,6 +106,7 @@ cc_binary(
     visibility = ["//visibility:public"],
     deps = [
         "@kleaf//prebuilts/kernel-build-tools:libcrypto",
+        "@kleaf//prebuilts/kernel-build-tools:libjemalloc",
         "@zlib",
     ],
 )
