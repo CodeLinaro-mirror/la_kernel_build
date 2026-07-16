@@ -247,7 +247,7 @@ def _get_rust_env_impl(_subrule_ctx, rust_tools, bindgen, host_libc, exec_glibc_
     elif host_libc == "glibc":
         target = "x86_64-unknown-linux-gnu"
     else:
-        fail("Unknown libc {}".format(target))
+        fail("Unknown libc {}".format(host_libc))
 
     # RUNPATH_EXECROOT: A heuristic path to execroot expressed relative to $ORIGIN.
     # RUNPATH_EXECROOT assumes that all binaries built by Kbuild are several levels
