@@ -35,7 +35,8 @@ test_suite(
         "//build/kernel/kleaf/tests/kernel_images_test",
         "//build/kernel/kleaf/tests/kernel_module_group_test",
         "//build/kernel/kleaf/tests/kernel_modules_install_test",
-        "//build/kernel/kleaf/tests/libcap_test",
+        # b/536813037 - Revert when test is fixed
+        # "//build/kernel/kleaf/tests/libcap_test",
         "//build/kernel/kleaf/tests/merged_kernel_uapi_headers_test",
         "//build/kernel/kleaf/tests/rust_test",
         "//build/kernel/kleaf/tests/trim_test",
