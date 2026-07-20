@@ -18,5 +18,8 @@ cc_test(
     name = "libcap_test",
     srcs = ["cap_test.c"],
     tags = ["manual"],
-    deps = ["@libcap"],
+    deps = [
+        "@kleaf//prebuilts/kernel-build-tools:libjemalloc",
+        "@libcap",
+    ],
 )
