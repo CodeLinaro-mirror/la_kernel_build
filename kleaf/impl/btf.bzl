@@ -78,7 +78,6 @@ btf = rule(
         "pahole": attr.label(
             executable = True,
             cfg = "exec",
-            default = Label(":pahole"),
             doc = "Label to pahole executable",
         ),
         "_debug_print_scripts": attr.label(default = "//build/kernel/kleaf:debug_print_scripts"),
