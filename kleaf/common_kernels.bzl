@@ -536,6 +536,7 @@ def _define_common_kernels_additional_tests(
         base_kernel_module = min(modules) if modules else None,
         arch = arch,
         page_size = page_size,
+        pahole = ":pahole",
     )
 
     kernel_build(
@@ -549,6 +550,7 @@ def _define_common_kernels_additional_tests(
         make_goals = ["modules"],
         # We don't actually build the kernel_build target, so we don't care about outputs
         outs = [],
+        pahole = ":pahole",
         testonly = True,
         tags = ["manual"],
         visibility = ["//visibility:private"],
