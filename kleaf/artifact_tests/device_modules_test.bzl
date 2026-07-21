@@ -93,6 +93,7 @@ def _create_one_device_modules_test(
         base_kernel_label,
         base_kernel_module,
         expect_signature,
+        pahole,
         module_outs = None):
     srcarch = kernel_utils.get_src_arch(arch)
 
@@ -108,6 +109,7 @@ def _create_one_device_modules_test(
             Label("//build/kernel/kleaf/impl/defconfig:signing_modules_disabled"),
         ],
         outs = [],
+        pahole = pahole,
         base_kernel = base_kernel_label,
         module_outs = module_outs,
         make_goals = ["modules"],
@@ -139,7 +141,8 @@ def device_modules_test(
         base_kernel_label,
         base_kernel_module,
         arch,
-        page_size):
+        page_size,
+        pahole):
     """Tests for device's modules.
 
     This test checks that device targets contains proper modules.
@@ -153,6 +156,7 @@ def device_modules_test(
           no tests will be defined.
         arch: architecture of `base_kernel`. This is either `"arm64"` or `"x86_64"`.
         page_size: page size of `base_kernel`.
+        pahole: pahole tool to use for generating BTF.
     """
 
     if not base_kernel_module:
@@ -168,6 +172,7 @@ def device_modules_test(
         base_kernel_module = base_kernel_module,
         base_kernel_label = base_kernel_label,
         expect_signature = True,
+        pahole = pahole,
     )
     tests.append(name + "_use_gki_module")
 
@@ -179,6 +184,7 @@ def device_modules_test(
         base_kernel_module = base_kernel_module,
         base_kernel_label = base_kernel_label,
         expect_signature = False,
+        pahole = pahole,
         module_outs = [base_kernel_module],
     )
     tests.append(name + "_use_device_module")
