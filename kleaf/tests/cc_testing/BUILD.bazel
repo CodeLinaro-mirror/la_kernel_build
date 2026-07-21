@@ -69,7 +69,10 @@ cc_binary(
     ],
     linkstatic = False,
     target_compatible_with = _LINUX_X86_64,
-    deps = [":mylib_linux_x86_64"],
+    deps = [
+        ":mylib_linux_x86_64",
+        "@kleaf//prebuilts/kernel-build-tools:libjemalloc",
+    ],
 )
 
 cc_binary(
