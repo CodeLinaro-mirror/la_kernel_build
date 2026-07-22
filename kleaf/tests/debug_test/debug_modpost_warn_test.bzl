@@ -69,6 +69,7 @@ def debug_modpost_warn_test(name):
         outs = [],
         make_goals = [],
         tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
     )
 
     kernel_module(

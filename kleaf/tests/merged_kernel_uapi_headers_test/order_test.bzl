@@ -105,6 +105,7 @@ def order_test(name):
         outs = [],
         make_goals = [],
         tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
     )
 
     native.filegroup(
@@ -147,6 +148,7 @@ def order_test(name):
             outs = [],
             make_goals = [],
             tags = ["manual"],
+            pahole = "//build/kernel/kleaf/tests:fake_pahole",
         )
 
         kernel_module(

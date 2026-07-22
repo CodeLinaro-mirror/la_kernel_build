@@ -67,6 +67,7 @@ kernel_build(
     name = "kernel_config_devicetree_library_test_kernel_build",
     outs = [],
     make_goals = ["Image"],
+    pahole = "//build/kernel/kleaf/tests:fake_pahole",
     tags = ["manual"],
 )
 

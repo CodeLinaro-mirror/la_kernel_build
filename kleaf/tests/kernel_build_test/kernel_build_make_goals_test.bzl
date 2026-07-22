@@ -89,6 +89,7 @@ def kernel_build_make_goals_test(name):
             "GOAL_FROM_RULE_2",
         ],
         outs = [],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
         tags = ["manual"],
     )
     for suffix, test in [

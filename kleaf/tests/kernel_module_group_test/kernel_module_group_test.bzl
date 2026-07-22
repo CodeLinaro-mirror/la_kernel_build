@@ -136,6 +136,7 @@ def kernel_module_group_test(name):
         outs = [],
         make_goals = [],
         tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
     )
 
     kernel_build(
@@ -143,6 +144,7 @@ def kernel_module_group_test(name):
         outs = [],
         make_goals = [],
         tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
     )
 
     ddk_module(

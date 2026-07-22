@@ -72,6 +72,7 @@ def trim_attr_test(name):
         kernel_build(
             name = name + "_{}_base_build".format(base_trim_str),
             outs = [],
+            pahole = "//build/kernel/kleaf/tests:fake_pahole",
             make_goals = [],
             trim_nonlisted_kmi = base_trim,
             kmi_symbol_list = "symbol_list_base",
@@ -98,6 +99,7 @@ def trim_attr_test(name):
                 trim_nonlisted_kmi = device_trim,
                 kmi_symbol_list = "symbol_list_device",
                 tags = ["manual"],
+                pahole = "//build/kernel/kleaf/tests:fake_pahole",
             )
 
             _trim_analysis_test(

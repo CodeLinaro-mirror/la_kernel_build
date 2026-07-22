@@ -36,6 +36,7 @@ def kernel_modules_install_test(name):
         outs = [],
         make_goals = [],
         tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
     )
 
     # Module B

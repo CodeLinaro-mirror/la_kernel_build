@@ -591,6 +591,7 @@ def _makefiles_include_ordering_artifacts_test(name):
         make_goals = [],
         ddk_module_headers = [name + "_kernel_build_ddk_headers"],
         tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
     )
 
     ddk_module(
@@ -1201,6 +1202,7 @@ def makefiles_test_suite(name):
         outs = [],
         make_goals = [],
         tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
     )
     ddk_module(
         name = name + "_parent_include_hdrs_before_deps",
