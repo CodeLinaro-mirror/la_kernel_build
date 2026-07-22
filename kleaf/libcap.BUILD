@@ -11,7 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 load("@kleaf//build/kernel/kleaf:hermetic_tools.bzl", "hermetic_genrule")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 
 cc_library(
     name = "libcap",
@@ -21,6 +23,7 @@ cc_library(
         "libcap/cap_file.c",
         "libcap/cap_flag.c",
         "libcap/cap_proc.c",
+        "libcap/cap_syscalls.c",
         "libcap/cap_text.c",
     ] + glob(["**/*.h"]),
     copts = [
