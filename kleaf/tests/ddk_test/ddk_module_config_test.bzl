@@ -48,6 +48,7 @@ def ddk_module_config_test_suite(name):
             "fake_defconfig_fragment",
         ],
         tags = ["manual"],
+        pahole = "//common:pahole",
     )
 
     ddk_module(
