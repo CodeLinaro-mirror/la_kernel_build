@@ -461,6 +461,7 @@ def kernel_config_option_test_suite(name):
             make_goals = ["FAKE_MAKE_GOALS"],
             outs = [],
             tags = ["manual"],
+            pahole = "//common:pahole",
         )
 
         kernel_build(
@@ -474,6 +475,7 @@ def kernel_config_option_test_suite(name):
             make_goals = ["FAKE_MAKE_GOALS"],
             outs = [],
             tags = ["manual"],
+            pahole = "//common:pahole",
         )
 
         kernel_build(
@@ -487,6 +489,7 @@ def kernel_config_option_test_suite(name):
             make_goals = ["FAKE_MAKE_GOALS"],
             outs = [],
             tags = ["manual"],
+            pahole = "//common:pahole",
         )
 
     trim_kernels = {}

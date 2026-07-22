@@ -225,6 +225,7 @@ def kernel_defconfig_fragments_test(name):
             outs = [],
             make_goals = ["Image"],
             tags = ["manual"],
+            pahole = "//common:pahole",
         )
 
         _transition_test(
@@ -416,6 +417,7 @@ def _nocheck_test(name):
         outs = [],
         make_goals = ["Image"],
         tags = ["manual"],
+        pahole = "//common:pahole",
     )
 
     _get_config(
