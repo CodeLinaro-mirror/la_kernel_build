@@ -84,6 +84,7 @@ def _write_source_file_impl(ctx):
                 ctx.label.workspace_root,
                 ctx.label.package,
             ),
+            "{forward_argv0}": "true" if ctx.attr.forward_argv0 else "false",
         },
     )
     return DefaultInfo(files = depset([out]))
@@ -104,6 +105,7 @@ _write_source_file = rule(
             aspects = [native_binary_aspect],
         ),
         "out": attr.string(),
+        "forward_argv0": attr.bool(mandatory = True),
         "_use_symlinks": attr.label(
             default = "//build/kernel/kleaf:hermetic_tools_use_symlinks",
         ),
@@ -160,6 +162,7 @@ def _executable_dispatcher_internal_impl(
         data,
         append_args,
         reversed_env,
+        forward_argv0,
         **kwargs):
     _write_source_file(
         name = name + "_source.cpp",
@@ -168,6 +171,7 @@ def _executable_dispatcher_internal_impl(
         out = name,
         append_args = append_args,
         reversed_env = reversed_env,
+        forward_argv0 = forward_argv0,
         visibility = ["//visibility:private"],
         **kwargs
     )
@@ -235,6 +239,7 @@ executable_dispatcher_internal = macro(
             """,
             allow_files = True,
         ),
+        "forward_argv0": attr.bool(default = True),
     },
 )
 
@@ -245,6 +250,7 @@ def executable_dispatcher(
         append_args = None,
         reversed_env = None,
         python_hack = None,
+        forward_argv0 = None,
         **kwargs):
     """RBE-friendly native_binary() that supports embedding args and env.
 
@@ -265,6 +271,9 @@ def executable_dispatcher(
 
             `python_runtime_files` can't be used in `native_binary`. This is a hack to avoid
             falling to that case.
+        forward_argv0: Whether to forward `argv[0]` to the underlying binary. Defaults to `True`. Set to `False`
+            for binaries like `python` that require `argv[0]` to match
+            their actual path for relative standard library resolution.
         **kwargs: Additional attributes to the internal rule, e.g.
           [`visibility`](https://docs.bazel.build/versions/main/visibility.html).
           See complete list
@@ -305,6 +314,7 @@ def executable_dispatcher(
         data = data,
         append_args = append_args,
         reversed_env = reversed_env,
+        forward_argv0 = forward_argv0,
         **private_kwargs
     )
 
