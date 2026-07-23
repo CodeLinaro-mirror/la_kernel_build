@@ -61,6 +61,7 @@ def _ddk_uapi_headers_good_headers_test(
         outs = ["vmlinux"],
         make_goals = ["vmlinux"],
         tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
     )
 
     ddk_uapi_headers(
@@ -81,6 +82,7 @@ def _ddk_uapi_headers_bad_headers_test(name, srcs):
         outs = ["vmlinux"],
         make_goals = ["vmlinux"],
         tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
     )
 
     ddk_uapi_headers(

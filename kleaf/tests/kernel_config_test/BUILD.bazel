@@ -30,6 +30,7 @@ kernel_build(
     base_kernel = "//common:kernel_aarch64",
     check_defconfig = "minimized",
     make_goals = ["fake"],
+    pahole = "//build/kernel/kleaf/tests:fake_pahole",
     tags = ["manual"],
 )
 

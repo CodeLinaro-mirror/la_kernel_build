@@ -173,6 +173,7 @@ def ddk_module_test_suite(name):
         outs = ["vmlinux"],
         tags = ["manual"],
         make_goals = [],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
     )
 
     kernel_module(

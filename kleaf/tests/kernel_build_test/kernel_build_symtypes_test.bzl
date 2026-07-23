@@ -86,6 +86,7 @@ def kernel_build_symtypes_test(name):
             tags = ["manual"],
             makefile = Label("//common:Makefile"),
             outs = [],
+            pahole = "//build/kernel/kleaf/tests:fake_pahole",
             kbuild_symtypes = kbuild_symtypes,
             make_goals = ["Image"],
         )

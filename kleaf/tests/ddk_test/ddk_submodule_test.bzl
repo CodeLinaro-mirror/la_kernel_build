@@ -51,6 +51,7 @@ def ddk_submodule_test(name):
         outs = [],
         make_goals = [],
         tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
     )
 
     ddk_headers(

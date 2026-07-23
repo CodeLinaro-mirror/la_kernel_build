@@ -25,6 +25,7 @@ kernel_build(
     name = "test_kernel_build_1",
     outs = [],
     make_goals = [],
+    pahole = "//build/kernel/kleaf/tests:fake_pahole",
     tags = ["manual"],
 )
 
@@ -32,6 +33,7 @@ kernel_build(
     name = "test_kernel_build_2",
     outs = [],
     make_goals = [],
+    pahole = "//build/kernel/kleaf/tests:fake_pahole",
     tags = ["manual"],
 )
 

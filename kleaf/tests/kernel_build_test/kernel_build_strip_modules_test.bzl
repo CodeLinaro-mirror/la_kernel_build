@@ -74,6 +74,7 @@ def kernel_build_strip_modules_test(name):
         kernel_build(
             name = name_prefix + "_build",
             outs = [],
+            pahole = "//build/kernel/kleaf/tests:fake_pahole",
             strip_modules = strip_modules,
             make_goals = [
                 "Image",

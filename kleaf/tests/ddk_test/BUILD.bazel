@@ -41,6 +41,7 @@ kernel_build(
     name = "ddk_test_submodule_cross_package_test_kernel_build",
     outs = [],
     make_goals = [],
+    pahole = "//build/kernel/kleaf/tests:fake_pahole",
     tags = ["manual"],
 )
 

@@ -112,6 +112,7 @@ def initramfs_test(name):
         ],
         make_goals = ["all"],
         tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
     )
     kernel_modules_install(
         name = name + "modules_install",
