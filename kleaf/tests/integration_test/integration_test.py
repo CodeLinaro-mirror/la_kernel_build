@@ -760,6 +760,13 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
             shutil.copy(
                 "build/kernel/kleaf/tests/integration_test/ddk_workspace_test/fake_common.BUILD",
                 common_build)
+
+            fake_pahole = pathlib.Path(self._common()) / "fake_pahole.c"
+            self.addCleanup(lambda: fake_pahole.unlink(missing_ok=True))
+            shutil.copy(
+                "build/kernel/kleaf/tests/integration_test/ddk_workspace_test/fake_pahole.c",
+                fake_pahole)
+
             mount_spec = {
                 self.real_kleaf_repo: kleaf_repo,
                 self.real_kleaf_repo / self._common(): self.ddk_workspace / "forked_common",

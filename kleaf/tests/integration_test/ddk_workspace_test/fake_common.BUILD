@@ -3,6 +3,12 @@ load(
     "kernel_build",
 )
 
+# buildifier: disable=native-cc-binary
+cc_binary(
+    name = "fake_pahole",
+    srcs = ["fake_pahole.c"],
+)
+
 filegroup(
     name = "common_kernel_sources",
     srcs = glob(
@@ -25,4 +31,5 @@ kernel_build(
     defconfig = ":arch/arm64/configs/gki_defconfig",
     make_goals = ["olddefconfig"],
     makefile = ":Makefile",
+    pahole = ":fake_pahole",
 )
