@@ -829,6 +829,14 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
             f"found {staged_modinfos}",
         )
 
+        with open(json_file) as f:
+            commands = json.load(f)
+        files = [entry["file"] for entry in commands]
+        self.assertTrue(any(f.endswith("out_of_tree/mydriver.c") for f in files),
+                        f"mydriver.c not found in {json_file}")
+        self.assertTrue(any(f.endswith("out_of_tree/mylib.c") for f in files),
+                        f"mylib.c not found in {json_file}")
+
 
 
     def _run_test_setup_with_local_prebuilts(

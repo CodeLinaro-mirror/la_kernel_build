@@ -24,4 +24,16 @@
 MODULE_DESCRIPTION("A test module for DDK testing purposes");
 MODULE_AUTHOR("Yifan Hong <elsk@google.com>");
 MODULE_LICENSE("GPL v2");
+#include "mylib.h"
+#include <linux/init.h>
 
+static int __init mydriver_init(void) {
+    mylib_function();
+    return 0;
+}
+
+static void __exit mydriver_exit(void) {
+}
+
+module_init(mydriver_init);
+module_exit(mydriver_exit);

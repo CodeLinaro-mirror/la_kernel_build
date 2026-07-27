@@ -22,6 +22,7 @@ load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     ":common_providers.bzl",
+    "CompileCommandsInfo",
     "DdkConfigInfo",
     "DdkHeadersInfo",
     "DdkLibraryInfo",
@@ -567,6 +568,7 @@ def _create_kernel_module_dep_info(kernel_module):
         kernel_module_setup_info = kernel_module[KernelModuleSetupInfo],
         kernel_module_info = kernel_module[KernelModuleInfo],
         module_symvers_info = kernel_module[ModuleSymversInfo],
+        compile_commands_info = kernel_module[CompileCommandsInfo],
     )
 
 # Cross compiler name is not always the same as the linux arch
