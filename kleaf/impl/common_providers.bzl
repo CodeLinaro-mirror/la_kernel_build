@@ -253,6 +253,7 @@ KernelBuildExtModuleInfo = provider(
         "modinst_env": "`KernelSerializedEnvInfo` for running `modules_install`.",
         "collect_unstripped_modules": "Whether an external [`kernel_module`](kernel.md#kernel_module) building against this [`kernel_build`](kernel.md#kernel_build) should provide unstripped ones for debugging.",
         "strip_modules": "Whether debug information for distributed modules is stripped",
+        "base_kernel_label": "Label of the base_kernel of this kernel_build, if any",
     },
 )
 

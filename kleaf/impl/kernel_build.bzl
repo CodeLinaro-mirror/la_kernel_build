@@ -2206,6 +2206,7 @@ def _create_infos(
         collect_unstripped_modules = ctx.attr.collect_unstripped_modules,
         strip_modules = ctx.attr.strip_modules,
         ddk_module_defconfig_fragments = ddk_module_defconfig_fragments,
+        base_kernel_label = base_kernel.label if base_kernel else None,
     )
 
     base_kernel_for_ddk_headers = base_kernel_utils.get_base_kernel_for_ddk_headers(ctx)
