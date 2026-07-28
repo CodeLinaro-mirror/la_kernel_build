@@ -147,6 +147,15 @@ def kernel_module_group_test(name):
         pahole = "//build/kernel/kleaf/tests:fake_pahole",
     )
 
+    kernel_build(
+        name = name + "_build_c",
+        base_kernel = name + "_build_a",
+        outs = [],
+        make_goals = [],
+        tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
+    )
+
     ddk_module(
         name = name + "_ddk_a1",
         out = name + "_ddk_a1.ko",
@@ -167,6 +176,14 @@ def kernel_module_group_test(name):
         name = name + "_ddk_b",
         out = name + "_ddk_b.ko",
         kernel_build = name + "_build_b",
+        srcs = [],
+        tags = ["manual"],
+    )
+
+    ddk_module(
+        name = name + "_ddk_c",
+        out = name + "_ddk_c.ko",
+        kernel_build = name + "_build_c",
         srcs = [],
         tags = ["manual"],
     )
@@ -193,6 +210,15 @@ def kernel_module_group_test(name):
         srcs = [],
     )
     tests.append(name + "_no_srcs")
+
+    _good_test(
+        name = name + "_mixed_base",
+        srcs = [
+            name + "_ddk_a1",
+            name + "_ddk_c",
+        ],
+    )
+    tests.append(name + "_mixed_base")
 
     _bad_test(
         name = name + "_bad",

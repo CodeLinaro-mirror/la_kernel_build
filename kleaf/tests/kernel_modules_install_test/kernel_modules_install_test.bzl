@@ -86,6 +86,42 @@ def kernel_modules_install_test(name):
         tags = ["manual"],
     )
 
+    # Compat test setup
+    kernel_build(
+        name = name + "_build_compat_a",
+        srcs = [],
+        outs = [],
+        make_goals = [],
+        tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
+    )
+
+    kernel_build(
+        name = name + "_build_compat_b",
+        base_kernel = name + "_build_compat_a",
+        srcs = [],
+        outs = [],
+        make_goals = [],
+        tags = ["manual"],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
+    )
+
+    ddk_module(
+        name = name + "_module_compat_a",
+        out = name + "_module_compat_a.ko",
+        kernel_build = name + "_build_compat_a",
+        srcs = [],
+        tags = ["manual"],
+    )
+
+    ddk_module(
+        name = name + "_module_compat_b",
+        out = name + "_module_compat_b.ko",
+        kernel_build = name + "_build_compat_b",
+        srcs = [],
+        tags = ["manual"],
+    )
+
     tests = []
 
     # Test 1: check_dependencies = False (default). Should pass even if B is missing.
@@ -132,6 +168,54 @@ def kernel_modules_install_test(name):
         ],
     )
     tests.append(name + "_test_missing_dep")
+
+    # Test 4: Explicitly use derived kernel. Should pass.
+    kernel_modules_install(
+        name = name + "_install_compat_derived",
+        kernel_build = name + "_build_compat_b",
+        kernel_modules = [
+            name + "_module_compat_a",
+            name + "_module_compat_b",
+        ],
+        tags = ["manual"],
+    )
+    success_test(
+        name = name + "_test_compat_derived",
+        target_under_test = name + "_install_compat_derived",
+    )
+    tests.append(name + "_test_compat_derived")
+
+    # Test 5: Explicitly use base kernel. Should fail.
+    kernel_modules_install(
+        name = name + "_install_compat_base",
+        kernel_build = name + "_build_compat_a",
+        kernel_modules = [
+            name + "_module_compat_a",
+            name + "_module_compat_b",
+        ],
+        tags = ["manual"],
+    )
+    failure_test(
+        name = name + "_test_compat_base",
+        target_under_test = name + "_install_compat_base",
+        error_message_substrs = ["They must refer to the same kernel_build."],
+    )
+    tests.append(name + "_test_compat_base")
+
+    # Test 6: Inferred kernel. Should pass.
+    kernel_modules_install(
+        name = name + "_install_compat_inferred",
+        kernel_modules = [
+            name + "_module_compat_a",
+            name + "_module_compat_b",
+        ],
+        tags = ["manual"],
+    )
+    success_test(
+        name = name + "_test_compat_inferred",
+        target_under_test = name + "_install_compat_inferred",
+    )
+    tests.append(name + "_test_compat_inferred")
 
     native.test_suite(
         name = name,

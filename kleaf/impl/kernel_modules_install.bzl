@@ -47,20 +47,18 @@ _OUT_ALLOWLIST = [
 ]
 
 def _kernel_modules_install_impl(ctx):
-    kernel_build_infos = None
+    initial_kernel_build_infos = None
     if ctx.attr.kernel_build:
-        kernel_build_infos = kernel_utils.create_kernel_module_kernel_build_info(ctx.attr.kernel_build)
-    else:
-        kernel_build_infos = kernel_utils.get_kernel_build_infos(ctx.attr.kernel_modules)
+        initial_kernel_build_infos = kernel_utils.create_kernel_module_kernel_build_info(ctx.attr.kernel_build)
+
+    kernel_build_infos = kernel_utils.check_kernel_build(
+        [target[KernelModuleInfo] for target in ctx.attr.kernel_modules],
+        initial_kernel_build_infos,
+        ctx.label,
+    )
 
     if not kernel_build_infos:
         fail("No `kernel_build` or `kernel_modules` provided.")
-
-    kernel_utils.check_kernel_build(
-        [target[KernelModuleInfo] for target in ctx.attr.kernel_modules],
-        kernel_build_infos.label,
-        ctx.label,
-    )
 
     # A list of declared files for outputs of kernel_module rules
     external_modules = []

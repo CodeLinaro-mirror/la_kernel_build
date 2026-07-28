@@ -421,35 +421,58 @@ def _get_kernel_build_infos(kernel_modules):
             return kernel_module[KernelModuleInfo].kernel_build_infos
     return None
 
-def _check_kernel_build(kernel_module_infos, kernel_build_label, this_label):
-    """Check that kernel_modules have the same kernel_build as the given one.
+def _check_kernel_build(kernel_module_infos, kernel_build_infos, this_label):
+    """Check that kernel_modules have the same kernel_build (or compatible) as the given one.
 
     Args:
         kernel_module_infos: list of KernelModuleInfo of kernel module dependencies.
-        kernel_build_label: the label of kernel_build.
+        kernel_build_infos: KernelModuleKernelBuildInfo of the target, or None if inferred.
         this_label: label of the module being checked.
+
+    Returns:
+        The resolved KernelModuleKernelBuildInfo.
     """
 
+    inferred = (kernel_build_infos == None)
+    ref_infos = kernel_build_infos
+
     for kernel_module_info in kernel_module_infos:
-        if kernel_module_info.kernel_build_infos == None:
+        dep_infos = kernel_module_info.kernel_build_infos
+        if dep_infos == None:
             continue
 
-        if kernel_build_label == None:
-            kernel_build_label = kernel_module_info.kernel_build_infos.label
+        if ref_infos == None:
+            ref_infos = dep_infos
             continue
 
-        if kernel_module_info.kernel_build_infos.label != \
-           kernel_build_label:
-            fail((
-                "{this_label} refers to kernel_build {kernel_build}, but " +
-                "depended kernel_module {dep} refers to kernel_build " +
-                "{dep_kernel_build}. They must refer to the same kernel_build."
-            ).format(
-                this_label = this_label,
-                kernel_build = kernel_build_label,
-                dep = kernel_module_info.label,
-                dep_kernel_build = kernel_module_info.kernel_build_infos.label,
-            ))
+        if dep_infos.label == ref_infos.label:
+            continue
+
+        ref_base = getattr(ref_infos.ext_module_info, "base_kernel_label", None)
+        dep_base = getattr(dep_infos.ext_module_info, "base_kernel_label", None)
+
+        if dep_infos.label == ref_base:
+            # dep is base of ref. Allowed.
+            continue
+
+        if inferred and (ref_infos.label == dep_base):
+            # ref is base of dep, and we are inferring.
+            # Allowed, and we update ref to the more specific one.
+            ref_infos = dep_infos
+            continue
+
+        fail((
+            "{this_label} refers to kernel_build {kernel_build}, but " +
+            "depended kernel_module {dep} refers to kernel_build " +
+            "{dep_kernel_build}. They must refer to the same kernel_build."
+        ).format(
+            this_label = this_label,
+            kernel_build = ref_infos.label,
+            dep = kernel_module_info.label,
+            dep_kernel_build = dep_infos.label,
+        ))
+
+    return ref_infos
 
 def _create_kernel_module_kernel_build_info(kernel_build):
     """Creates KernelModuleKernelBuildInfo.

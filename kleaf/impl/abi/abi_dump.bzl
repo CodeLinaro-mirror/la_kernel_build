@@ -30,7 +30,7 @@ visibility("//build/kernel/kleaf/...")
 def _abi_dump_impl(ctx):
     kernel_utils.check_kernel_build(
         [target[KernelModuleInfo] for target in ctx.attr.kernel_modules],
-        ctx.attr.kernel_build.label,
+        kernel_utils.create_kernel_module_kernel_build_info(ctx.attr.kernel_build),
         ctx.label,
     )
 
