@@ -272,7 +272,7 @@ def _kernel_module_impl(ctx):
 
     kernel_utils.check_kernel_build(
         [target.kernel_module_info for target in kernel_module_deps],
-        ctx.attr.kernel_build.label,
+        kernel_utils.create_kernel_module_kernel_build_info(ctx.attr.kernel_build),
         ctx.label,
     )
     _check_module_symvers_restore_path(kernel_module_deps, ctx.label)
