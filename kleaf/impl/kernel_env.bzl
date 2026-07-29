@@ -786,7 +786,6 @@ kernel_env = rule(
         "pahole": attr.label(
             executable = True,
             cfg = "exec",
-            default = Label(":pahole"),
             doc = "Label to pahole executable",
         ),
         "clang_autofdo_profile": attr.label(allow_single_file = True),

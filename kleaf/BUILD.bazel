@@ -453,17 +453,12 @@ bool_flag(
     visibility = ["//build/kernel:__pkg__"],
 )
 
-# If true, build pahole from sources
+# No-op. Do not set it explicitly.
 bool_flag(
     name = "pahole_from_sources",
     build_setting_default = True,
-    visibility = ["//visibility:private"],
-)
-
-config_setting(
-    name = "pahole_from_sources_is_true",
-    flag_values = {":pahole_from_sources": "1"},
-    visibility = ["//visibility:public"],
+    error_message = "--nopahole_from_sources is no longer supported.",
+    visibility = ["//build/kernel:__pkg__"],
 )
 
 # If true, build stg from sources

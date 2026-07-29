@@ -236,10 +236,7 @@ def common_kernel(
         clang_autofdo_profile = clang_autofdo_profile,
         generated_headers_for_module = generated_headers_for_module,
         generate_out_targets = not modules_superset,
-        pahole = select({
-            Label("//build/kernel/kleaf:pahole_from_sources_is_true"): ":pahole",
-            "//conditions:default": None,
-        }),
+        pahole = ":pahole",
     )
 
     if not modules_superset:

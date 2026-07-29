@@ -577,13 +577,6 @@ executable_dispatcher(
     visibility = ["//visibility:public"],
 )
 
-alias(
-    name = "pahole",
-    actual = "//build/kernel:pahole",
-    # All kernel_env() can see this
-    visibility = ["//visibility:public"],
-)
-
 exports_files(
     [
         "executable_dispatcher.template.cpp",
