@@ -74,7 +74,6 @@ new_kleaf_local_repository(
 new_kleaf_local_repository(
     name = "stg",
     build_file = "build/kernel/kleaf/stg.BUILD",
-    mandatory = False,
     path = "external/stg",
 )
 
