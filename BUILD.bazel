@@ -190,6 +190,7 @@ executable_dispatcher(
 executable_dispatcher(
     name = "python3",
     src = "//build/kernel/kleaf/impl:python_runtime_files",
+    forward_argv0 = False,
     python_hack = True,
     visibility = ["//visibility:private"],
 )
@@ -197,6 +198,7 @@ executable_dispatcher(
 executable_dispatcher(
     name = "python",
     src = ":python3",
+    forward_argv0 = False,
     python_hack = True,
     visibility = ["//visibility:private"],
 )

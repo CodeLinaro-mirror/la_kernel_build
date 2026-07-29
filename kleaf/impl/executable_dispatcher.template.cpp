@@ -38,6 +38,8 @@ constexpr std::string_view kActualExeShortPath =
 constexpr std::string_view kOut = "{out}";
 constexpr std::string_view kPkgBinDir = "{pkg_bin_dir}";
 constexpr std::string_view kPkgShort = "{pkg_short}";
+constexpr bool kForwardArgv0 = {forward_argv0};
+
 
 // Args appended to the args from command line.
 std::vector<std::string> get_append_args() { return {{append_args}}; }
@@ -94,8 +96,19 @@ void do_exec(const std::filesystem::path &executable, int argc, char *argv[],
 
   // calculate args
   std::vector<char *> new_argv;
-  for (int i = 0; i < argc; i++) {
-    new_argv.push_back(argv[i]);
+  std::string exec_str;
+  if constexpr (kForwardArgv0) {
+    for (int i = 0; i < argc; i++) {
+      new_argv.push_back(argv[i]);
+    }
+  } else {
+    exec_str = executable.string();
+    if (argc > 0) {
+      new_argv.push_back(exec_str.data());
+    }
+    for (int i = 1; i < argc; i++) {
+      new_argv.push_back(argv[i]);
+    }
   }
   auto append_args = get_append_args();
   for (auto &append_arg : append_args) {
