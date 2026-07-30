@@ -21,3 +21,6 @@
 build:canary --kconfig_werror
 
 common:canary --pahole_from_sources
+
+# b/526725799: Enable the new python toolchain
+common:canary --extra_toolchains=@kleaf_python_toolchain//:py_toolchain
