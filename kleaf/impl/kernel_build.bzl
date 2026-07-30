@@ -107,6 +107,7 @@ def kernel_build(
         name,
         outs,
         make_goals,
+        pahole,
         build_config = None,
         makefile = None,
         keep_module_symvers = None,
@@ -147,7 +148,6 @@ def kernel_build(
         kcflags = None,
         clang_autofdo_profile = None,
         generate_out_targets = None,
-        pahole = None,
         **kwargs):
     """Defines a kernel build target with all dependent targets.
 
