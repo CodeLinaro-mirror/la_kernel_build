@@ -784,6 +784,7 @@ kernel_env = rule(
         ),
         "kcflags": attr.string_list(),
         "pahole": attr.label(
+            mandatory = True,
             executable = True,
             cfg = "exec",
             doc = "Label to pahole executable",
