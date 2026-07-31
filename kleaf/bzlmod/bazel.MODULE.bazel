@@ -154,8 +154,7 @@ register_toolchains(
     "@kleaf_rust_toolchain//:all",
     "//build/kernel:devicetree_toolchain",
     "//build/kernel:hermetic_tools_toolchain",
-    "//prebuilts/build-tools:py_exec_tools_toolchain",
-    "//prebuilts/build-tools:py_toolchain_musl",
+    "@kleaf_python_toolchain//:all",
 )
 
 # TODO(b/276493276): Resolve the issue of these versions getting outdated.
