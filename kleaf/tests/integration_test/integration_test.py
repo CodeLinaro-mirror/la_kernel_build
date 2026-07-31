@@ -821,8 +821,13 @@ class DdkWorkspaceSetupTest(KleafIntegrationTestBase):
         )
 
         self.assertTrue(json_file.exists(), f"{json_file} was not generated")
-        staged_modinfo = out_dir / "out_of_tree/ddk_modinfo.c"
-        self.assertTrue(staged_modinfo.exists(), f"Staged ddk_modinfo.c not found at {staged_modinfo}")
+        staged_modinfos = list(out_dir.glob("**/out_of_tree/ddk_modinfo.c"))
+        self.assertEqual(
+            len(staged_modinfos),
+            1,
+            f"Expected exactly 1 staged ddk_modinfo.c under {out_dir}, "
+            f"found {staged_modinfos}",
+        )
 
 
 
