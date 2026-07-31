@@ -109,6 +109,7 @@ def _kernel_compile_commands_impl(ctx):
             # But this is good enough for now, and more efficient because you
             # don't need to load the whole JSON list to memory.
             script_content += """
+                mkdir -p ${{out_directory}}/{compile_commands_common_out_dir}
                 rsync -a --prune-empty-dirs \\
                     --include '*/' \\
                     --include '*.c' \\
@@ -117,12 +118,23 @@ def _kernel_compile_commands_impl(ctx):
                     --include '*.cflags' \\
                     --include '*.asflags' \\
                     --include '*.ldflags' \\
-                    --exclude '*' ${{BUILD_WORKSPACE_DIRECTORY}}/{compile_commands_common_out_dir}/ ${{out_directory}}/
+                    --exclude '*' ${{BUILD_WORKSPACE_DIRECTORY}}/{compile_commands_common_out_dir}/ ${{out_directory}}/{compile_commands_common_out_dir}/
+
+                # Replace in extra files for this target
+                extra_files=$(find ${{out_directory}}/{compile_commands_common_out_dir} -name '*.cflags' -o -name '*.asflags')
+                for extra_file in ${{extra_files}}
+                do
+                    sed -i'' \\
+                        -e "s:\\${{COMMON_OUT_DIR}}:${{out_directory}}/{compile_commands_common_out_dir}:g" \\
+                        -e "s:\\${{ROOT_DIR}}:${{BUILD_WORKSPACE_DIRECTORY}}:g" \\
+                        ${{extra_file}}
+                done
+
                 if [[ -s ${{OUTPUT}}.tmp ]]; then
                     echo ',' >> ${{OUTPUT}}.tmp
                 fi
                 sed -e '1d;$d' \\
-                    -e "s:\\${{COMMON_OUT_DIR}}:${{out_directory}}:g" \\
+                    -e "s:\\${{COMMON_OUT_DIR}}:${{out_directory}}/{compile_commands_common_out_dir}:g" \\
                     -e "s:\\${{ROOT_DIR}}:${{BUILD_WORKSPACE_DIRECTORY}}:g" \\
                     {compile_commands_with_vars} >> ${{OUTPUT}}.tmp
             """.format(
@@ -137,18 +149,6 @@ def _kernel_compile_commands_impl(ctx):
             real_clang_path=$(realpath $(which clang))
             sed -i "s:\\"command\\"\\: \\"clang:\\"command\\"\\: \\"${real_clang_path}:g" ${OUTPUT}.tmp
         fi
-    """
-
-    # Replace env variables in .*flags with absolute paths.
-    script_content += """
-        extra_files=$(find ${out_directory} -name '*.cflags' -o -name '*.asflags')
-        for extra_file in ${extra_files}
-        do
-            sed -i'' \\
-                -e "s:\\${COMMON_OUT_DIR}:${out_directory}:g" \\
-                -e "s:\\${ROOT_DIR}:${BUILD_WORKSPACE_DIRECTORY}:g" \\
-                ${extra_file}
-        done
     """
 
     script_content += """
