@@ -77,6 +77,7 @@ btf = rule(
         "_cc_toolchain": attr.label(default = "//build/kernel/kleaf/impl:kernel_toolchains"),
         "pahole": attr.label(
             executable = True,
+            mandatory = True,
             cfg = "exec",
             doc = "Label to pahole executable",
         ),
