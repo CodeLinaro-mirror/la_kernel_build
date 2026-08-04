@@ -265,8 +265,7 @@ def _kernel_module_impl(ctx):
         print("\nWARNING: {}".format(message))
 
     split_deps = kernel_utils.split_kernel_module_deps(ctx.attr.deps, ctx.label)
-    kernel_module_deps = split_deps.kernel_modules
-    kernel_module_deps = [kernel_utils.create_kernel_module_dep_info(target) for target in kernel_module_deps]
+    kernel_module_deps = list(split_deps.kernel_modules)
     if ctx.attr.internal_ddk_makefiles_dir:
         kernel_module_deps += ctx.attr.internal_ddk_makefiles_dir[DdkSubmoduleInfo].kernel_module_deps.to_list()
 

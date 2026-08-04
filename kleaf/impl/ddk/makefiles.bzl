@@ -626,7 +626,7 @@ def _makefiles_impl(ctx):
             out = None if ctx.attr.target_type == "library" else ctx.attr.module_out,
             srcs = depset(transitive = srcs_depset_transitive),
             kernel_module_deps = depset(
-                [kernel_utils.create_kernel_module_dep_info(target) for target in kernel_module_deps],
+                kernel_module_deps,
                 transitive = [dep[DdkSubmoduleInfo].kernel_module_deps for dep in submodule_deps],
             ),
             linux_includes_include_infos = include_infos,

@@ -507,6 +507,15 @@ def _split_kernel_module_deps(deps, this_label):
     Args:
         deps: The list of deps
         this_label: label of the module being checked.
+
+    Returns:
+        A struct with these fields:
+        * kernel_modules: A list of `KernelModuleDepInfo` provider instances.
+        * hdrs: A list of `Target`s with `DdkHeadersInfo`.
+        * submodules: A list of `Target`s with `DdkSubmoduleInfo`.
+        * module_symvers: A list of `Target`s with `ModuleSymversInfo`.
+        * ddk_configs: A list of `Target`s with `DdkConfigInfo`.
+        * ddk_libraries: A list of `Target`s with `DdkLibraryInfo`.
     """
 
     kernel_module_deps = []
@@ -521,7 +530,7 @@ def _split_kernel_module_deps(deps, this_label):
             hdr_deps.append(dep)
             is_valid_dep = True
         if all([info in dep for info in [KernelModuleSetupInfo, KernelModuleInfo, ModuleSymversInfo]]):
-            kernel_module_deps.append(dep)
+            kernel_module_deps.append(_create_kernel_module_dep_info(dep))
             is_valid_dep = True
         if all([info in dep for info in [DdkHeadersInfo, DdkSubmoduleInfo]]):
             submodule_deps.append(dep)
