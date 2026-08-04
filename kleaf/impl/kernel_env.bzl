@@ -162,6 +162,8 @@ def _get_root_dir_realpath(ctx):
 
 def _kernel_env_impl(ctx):
     kconfig_ext = ctx.file.kconfig_ext
+    if kconfig_ext and kconfig_ext.basename != "Kconfig.ext":
+        fail("{}: kconfig_ext must be named 'Kconfig.ext', but got '{}'".format(ctx.label, kconfig_ext.basename))
     dtstree_makefile = None
     dtstree_srcs = depset()
     if ctx.attr.dtstree != None:
