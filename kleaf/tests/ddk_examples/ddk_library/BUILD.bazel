@@ -1,6 +1,7 @@
 load(
     "@kleaf//build/kernel/kleaf:kernel.bzl",
     "ddk_module",
+    "kernel_compile_commands",
 )
 
 ddk_module(
@@ -21,4 +22,9 @@ ddk_module(
     deps = [
         "//build/kernel/kleaf/tests/ddk_examples/ddk_library/libfoo",
     ],
+)
+
+kernel_compile_commands(
+    name = "mymod_compile_commands",
+    deps = [":mymod"],
 )

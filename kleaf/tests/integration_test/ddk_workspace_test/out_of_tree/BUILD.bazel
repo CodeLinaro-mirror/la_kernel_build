@@ -1,5 +1,6 @@
 load(
     "@kleaf//build/kernel/kleaf:kernel.bzl",
+    "ddk_library",
     "ddk_module",
     "kernel_compile_commands",
     "kernel_config_devicetree_library",
@@ -10,11 +11,19 @@ load(
 load("@rules_devicetree//devicetree:dtb.bzl", "dtb")
 
 # Test building no-op DDK module against kernel from sources
+ddk_library(
+    name = "mylib",
+    srcs = ["mylib.c"],
+    hdrs = ["mylib.h"],
+    kernel_build = "//tests:kernel",
+)
+
 ddk_module(
     name = "out_of_tree",
     srcs = ["mydriver.c"],
     out = "out_of_tree.ko",
     kernel_build = "//tests:kernel",
+    deps = [":mylib"],
 )
 
 kernel_modules_install(

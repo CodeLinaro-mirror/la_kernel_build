@@ -137,7 +137,6 @@ def ddk_library(
         internal_ddk_config = name + "_config",
         internal_is_ddk_library = True,
         internal_extra_make_goals = ["kleaf-objects"],
-        internal_compdb = "skip",
         internal_modules_install = False,
         internal_mnemonic = "DDK library",
         # Don't ask Kbuild to stamp it

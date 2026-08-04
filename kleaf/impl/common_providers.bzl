@@ -451,6 +451,7 @@ KernelModuleDepInfo = provider(
         "kernel_module_setup_info": "`KernelModuleSetupInfo`",
         "module_symvers_info": "`ModuleSymversInfo`",
         "kernel_module_info": "`KernelModuleInfo`",
+        "compile_commands_info": "`CompileCommandsInfo`",
     },
 )
 

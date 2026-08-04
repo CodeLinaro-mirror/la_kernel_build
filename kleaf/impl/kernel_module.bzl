@@ -797,6 +797,8 @@ def _kernel_module_impl(ctx):
         transitive = [dep.kernel_module_info.transitive_files for dep in kernel_module_deps],
     )
 
+    transitive_compile_commands = [dep.compile_commands_info.infos for dep in kernel_module_deps]
+
     return [
         # Sync list of infos with kernel_module_group.
         DefaultInfo(
@@ -840,10 +842,13 @@ def _kernel_module_impl(ctx):
             directories = depset([grab_cmd_step.cmd_dir]),
         ),
         CompileCommandsInfo(
-            infos = depset([CompileCommandsSingleInfo(
-                compile_commands_with_vars = compile_commands_step.compile_commands_with_vars,
-                compile_commands_common_out_dir = compile_commands_step.compile_commands_common_out_dir,
-            )]),
+            infos = depset(
+                [CompileCommandsSingleInfo(
+                    compile_commands_with_vars = compile_commands_step.compile_commands_with_vars,
+                    compile_commands_common_out_dir = compile_commands_step.compile_commands_common_out_dir,
+                )] if compile_commands_step.compile_commands_with_vars else [],
+                transitive = transitive_compile_commands,
+            ),
         ),
         ModuleSymversFileInfo(
             module_symvers = depset([module_symvers]) if module_symvers else depset(),

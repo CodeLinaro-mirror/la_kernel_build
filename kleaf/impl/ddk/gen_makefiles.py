@@ -142,6 +142,11 @@ def _gen_makefile(
             \t$(MAKE) -C $(KERNEL_SRC) M=$(M) $(KBUILD_OPTIONS) \\
             \t    KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)"       \\
             \t    {objects}
+
+            compile_commands.json:
+            \t$(MAKE) -C $(KERNEL_SRC) M=$(M) $(KBUILD_OPTIONS) \\
+            \t    KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)"       \\
+            \t    $(@)
             """)
     else:
         content += textwrap.dedent("""\
