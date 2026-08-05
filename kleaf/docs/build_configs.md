@@ -43,7 +43,7 @@ _"Not supported"_ is displayed. Contact [owners](../OWNERS) if you need support.
   - [KMI\_SYMBOL\_LIST](#kmi_symbol_list)
   - [ADDITIONAL\_KMI\_SYMBOL\_LISTS](#additional_kmi_symbol_lists)
   - [KMI\_ENFORCED](#kmi_enforced)
-  - [GENERATE\_VMLINUX\_BTF](#generate_vmlinux_btf)
+  - [GENERATE\_VMLINUX\_BTF (deprecated)](#generate_vmlinux_btf)
   - [SKIP\_MRPROPER](#skip_mrproper)
   - [SKIP\_DEFCONFIG](#skip_defconfig)
   - [SKIP\_IF\_VERSION\_MATCHES](#skip_if_version_matches)
@@ -305,11 +305,7 @@ See [documentation for ABI monitoring].
 
 ## GENERATE\_VMLINUX\_BTF
 
-```python
-kernel_build(generate_vmlinux_btf=...)
-```
-
-See [documentation for all rules].
+Deprecated.
 
 ## SKIP\_MRPROPER
 
