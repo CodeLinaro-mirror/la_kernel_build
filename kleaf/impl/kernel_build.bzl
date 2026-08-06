@@ -19,7 +19,6 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
-load("@bazel_skylib//rules:select_file.bzl", "select_file")
 load(
     "//build/kernel/kleaf/artifact_tests:kernel_test.bzl",
     "kernel_build_test",
@@ -28,7 +27,6 @@ load(
 load(":abi/base_kernel_utils.bzl", "base_kernel_utils")
 load(":abi/force_add_vmlinux_utils.bzl", "force_add_vmlinux_utils")
 load(":abi/trim_nonlisted_kmi_utils.bzl", "trim_nonlisted_kmi_utils")
-load(":btf.bzl", "btf")
 load(":cache_dir.bzl", "cache_dir")
 load(
     ":common_providers.bzl",
@@ -679,6 +677,12 @@ def kernel_build(
     if sanitizers and len(sanitizers) > 1:
         fail("only one sanitizer may be passed to kernel_build.sanitizers")
 
+    if generate_vmlinux_btf:
+        # buildifier: disable=print
+        print("WARNING: {}: generate_vmlinux_btf is deprecated and has no effect. Please remove it.".format(
+            native.package_relative_label(name),
+        ))
+
     if srcs == None:
         srcs = native.glob(
             ["**"],
@@ -926,20 +930,6 @@ WARNING: {}: defconfig_fragments is deprecated; use post_defconfig_fragments ins
         srcs = srcs,
         **kwargs
     )
-
-    if generate_vmlinux_btf:
-        btf_name = name + "_btf"
-        select_file(
-            name = name + "_vmlinux_output",
-            srcs = name,
-            subpath = "vmlinux",
-        )
-        btf(
-            name = btf_name,
-            vmlinux = name + "_vmlinux_output",
-            pahole = pahole,
-            **kwargs
-        )
 
     kernel_build_test(
         name = name + "_test",
