@@ -16,6 +16,8 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:sets.bzl", "sets")
+load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
+load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load(
     ":common_providers.bzl",
     "DdkHeadersInfo",
@@ -130,6 +132,36 @@ def ddk_headers_common_impl(label, hdrs, includes, linux_includes):
         ),
     )
 
+def ddk_headers_cc_info_transitively(label, hdrs, includes, linux_includes):
+    """Constructs CcInfo transitively from dependencies.
+
+    Args:
+        label: Label of this target.
+        hdrs: List of header dependencies (targets).
+        includes: List of include directories relative to the current package.
+        linux_includes: Like `includes` but for `LINUXINCLUDE`.
+    Returns:
+        CcInfo provider.
+    """
+    our_prefix = paths.join(label.workspace_root, label.package)
+    our_includes = [paths.join(our_prefix, inc) for inc in includes + linux_includes]
+
+    transitive_includes = []
+    transitive_headers = []
+
+    for dep in hdrs:
+        if CcInfo in dep:
+            transitive_includes.append(dep[CcInfo].compilation_context.includes)
+            transitive_headers.append(dep[CcInfo].compilation_context.headers)
+        else:
+            transitive_headers.append(dep.files)
+
+    compilation_context = cc_common.create_compilation_context(
+        headers = depset(transitive = transitive_headers),
+        includes = depset(our_includes, transitive = transitive_includes),
+    )
+    return CcInfo(compilation_context = compilation_context)
+
 def _ddk_headers_impl(ctx):
     if get_headers_depset(ctx.attr.textual_hdrs):
         # buildifier: disable=print
@@ -149,10 +181,18 @@ def _ddk_headers_impl(ctx):
         kernel_build_ddk_config_env = None,
     )
 
+    cc_info = ddk_headers_cc_info_transitively(
+        ctx.label,
+        ctx.attr.hdrs + ctx.attr.textual_hdrs,
+        ctx.attr.includes,
+        ctx.attr.linux_includes,
+    )
+
     return [
         DefaultInfo(files = ddk_headers_info.files),
         ddk_headers_info,
         ddk_config_info,
+        cc_info,
     ]
 
 ddk_headers = rule(
