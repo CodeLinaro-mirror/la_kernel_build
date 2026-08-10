@@ -225,6 +225,13 @@ KernelBuildInfo = provider(
     },
 )
 
+KernelBuildGenHeadersInfo = provider(
+    doc = """A provider providing information of a `kernel_build` to generate and consume kernel headers.""",
+    fields = {
+        "arch": "Target CPU architecture (e.g. arm64, x86_64)",
+    },
+)
+
 CompileCommandsSingleInfo = provider(
     doc = """Provides info necessary to build compile_commands.json for a single target.""",
     fields = {
