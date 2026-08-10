@@ -42,6 +42,7 @@ load(
     "KernelBuildConfigDirectoryInfo",
     "KernelBuildExtModuleInfo",
     "KernelBuildFilegroupDeclInfo",
+    "KernelBuildGenHeadersInfo",
     "KernelBuildGeneratedHeadersForModuleInfo",
     "KernelBuildInTreeModulesInfo",
     "KernelBuildInfo",
@@ -2103,6 +2104,10 @@ def _create_infos(
         base_kernel_files = kbuild_mixed_tree_ret.base_kernel_files,
     )
 
+    kernel_build_gen_headers_info = KernelBuildGenHeadersInfo(
+        arch = ctx.attr.arch,
+    )
+
     kernel_build_uname_info = KernelBuildUnameInfo(
         kernel_release = all_output_files["internal_outs"]["include/config/kernel.release"],
     )
@@ -2350,6 +2355,7 @@ def _create_infos(
         kbuild_mixed_tree_info,
         generated_headers_for_module_info,
         kernel_build_info,
+        kernel_build_gen_headers_info,
         kernel_build_module_info,
         kernel_build_uapi_info,
         kernel_build_uname_info,
