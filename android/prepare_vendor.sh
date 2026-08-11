@@ -143,9 +143,17 @@ case "${KERNEL_TARGET}" in
   chora)
     KERNEL_TARGET="canoe"
     ;;
+  mahua)
+    KERNEL_TARGET="glymur"
+    ;;
+
 esac
 
 export KERNEL_TARGET
+
+# Determine if the lunch target is LA Prime (Cuttlefish-based) to be able to
+# alter specific build steps.
+ENABLE_VENDOR_CUTTLEFISH="$(get_build_var ENABLE_VENDOR_CUTTLEFISH)"
 
 ################################################################################
 # Configure LTO
@@ -397,6 +405,13 @@ if [ "${COPY_NEEDED}" == "1" ]; then
       cp ${ANDROID_KP_OUT_DIR}/dist/modules.load ${ANDROID_KERNEL_OUT}/modules.load
     fi
 
+    # Ensure that vendor_dlkm.modules.blocklist for LA Prime is empty.
+    # Through this blocklist, autogvm blocks modules exclusive to LA Prime
+    # for all other lunch targets that use autogvm.
+    if [ "${ENABLE_VENDOR_CUTTLEFISH}" == "true" ]; then
+      echo > "${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist"
+    fi
+
     if [ -f "${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist" ]; then
       VENDOR_RAMDISK_MODULES_DIR="${ANDROID_PRODUCT_OUT}/vendor_ramdisk/lib/modules"
       mkdir -p "${VENDOR_RAMDISK_MODULES_DIR}"
@@ -496,9 +511,18 @@ if [ "${COPY_NEEDED}" == "1" ]; then
 
   cp "${files[@]/#/${ANDROID_KP_OUT_DIR}/dist/}" ${ANDROID_KERNEL_OUT}/
 
-  rm -rf ${ANDROID_KERNEL_OUT}/kp-dtbs
-  mkdir ${ANDROID_KERNEL_OUT}/kp-dtbs
-  cp ${ANDROID_KP_OUT_DIR}/dist/*.dtb* ${ANDROID_KERNEL_OUT}/kp-dtbs/
+  # LA Prime has its own set of dtb files, prefixed with "prime".
+  # However, board-id, msm-id and vmid in these dtbs would collide with the ones
+  # already built for autogvm. For this reason, LA Prime copies only its dtbs,
+  # and all other lunch targets copy everything except LA Prime dtbs.
+  rm -rf "${ANDROID_KERNEL_OUT}"/kp-dtbs
+  mkdir "${ANDROID_KERNEL_OUT}"/kp-dtbs
+  if [ "${ENABLE_VENDOR_CUTTLEFISH}" == "true" ] ; then
+    cp "${ANDROID_KP_OUT_DIR}"/dist/prime-*.dtb* "${ANDROID_KERNEL_OUT}"/kp-dtbs/
+  else
+    cp "${ANDROID_KP_OUT_DIR}"/dist/*.dtb* "${ANDROID_KERNEL_OUT}"/kp-dtbs/
+    rm -f "${ANDROID_KERNEL_OUT}"/kp-dtbs/prime-*.dtb*
+  fi
 
   rm -rf ${ANDROID_KERNEL_OUT}/host
   cp -r ${ANDROID_KP_OUT_DIR}/host ${ANDROID_KERNEL_OUT}/
@@ -688,3 +712,32 @@ fi
 
 # remove bazel dir to avoid build issues
 rm -rf ${ANDROID_BUILD_TOP}/kernel_platform/out/bazel
+
+# Remove bazel-cache for incremental builds for Desktop OS
+if [ "${RECOMPILE_MODULE}" == "1" ] && [ "${DESKTOPOS_PREBUILT}" == "1" ]; then
+    KP_OUT_DIR="${ANDROID_BUILD_TOP}/bazel-cache/"
+
+    if [ -d "${KP_OUT_DIR}" ]; then
+        echo "Cleaning Bazel Cache for incremental builds..."
+        chmod -R 0755 "${KP_OUT_DIR}"
+
+        # Remove METADATA and TEST_MAPPING files inside Bazel Cache
+        find "${KP_OUT_DIR}" \( -name METADATA -o -name TEST_MAPPING \) -delete
+    fi
+fi
+
+# Genarate fit image for Desktop OS Image
+if [ "${DESKTOPOS_PREBUILT}" == "1" ]; then
+    _MKDTBO="${ANDROID_BUILD_TOP}/system/libufdt/utils/src/mkdtboimg.py"
+    _DTBS="${ANDROID_KERNEL_OUT}/dtbs"
+    _CFG="${ROOT_DIR}/qcom/opensource/devicetree/qcom/${TARGET_BOARD_PLATFORM}_dtbo.config"
+    _LZ4="${ROOT_DIR}/prebuilts/kernel-build-tools/linux-x86/bin/lz4"
+    echo "  [Desktop OS] Creating dtbo.img via cfg_create from ${_CFG}"
+    "${_MKDTBO}" cfg_create \
+        "${_DTBS}/dtbo.img" \
+        "${_CFG}" \
+        --dtb-dir "${_DTBS}"
+    echo "  [Desktop OS] Recompressing Image to legacy lz4"
+    rm -f "${ANDROID_KERNEL_OUT}/Image.lz4"
+    "${_LZ4}" -l "${ANDROID_KERNEL_OUT}/Image" "${ANDROID_KERNEL_OUT}/Image.lz4"
+fi

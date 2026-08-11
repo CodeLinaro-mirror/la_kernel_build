@@ -301,6 +301,8 @@ def _generate_kbuild_and_extra(
         is_library: bool,
         is_pkvm_el2: bool,
         copy_rule_hack: bool,
+        support_ftrace: bool,
+        gcov: str,
         **unused_kwargs
 ):
     """Generates all relevant Kbuild files and extra flag files.
@@ -449,6 +451,16 @@ def _generate_kbuild_and_extra(
                 if (out not in out_files_with_cflags and
                         _should_apply_cflags(src)):
                     out_files_with_cflags.add(out)
+
+                    if not support_ftrace:
+                        out_file.write(textwrap.dedent(f"""\
+                            CFLAGS_REMOVE_{out} += $(CC_FLAGS_FTRACE)
+                            """))
+
+                    if gcov != "inherit":
+                        out_file.write(textwrap.dedent(f"""\
+                            GCOV_PROFILE_{out} := {"y" if gcov == "always" else "n"}
+                            """))
                     # kernel_module() copies makefiles and .cflags files to
                     # $(ROOT_DIR)/<package> (aka $ROOT_DIR/<ext_mod>) and fix up
                     # .cflags files there before building.
@@ -804,6 +816,8 @@ if __name__ == "__main__":
     parser.add_argument("--is-library", action="store_true")
     parser.add_argument("--pkvm-el2-out", type=pathlib.Path)
     parser.add_argument("--copy-rule-hack", action="store_true")
+    parser.add_argument("--support-ftrace", action="store_true")
+    parser.add_argument("--gcov", choices=["inherit", "always", "never"], required=True)
     args = parser.parse_args()
 
     die_exception = None

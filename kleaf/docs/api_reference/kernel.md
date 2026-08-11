@@ -149,6 +149,50 @@ semantically identical to the original `ddk_headers` definition.
 | <a id="ddk_headers_archive-srcs"></a>srcs |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 
 
+<a id="ddk_prebuilt_module"></a>
+
+## ddk_prebuilt_module
+
+<pre>
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_prebuilt_module")
+
+ddk_prebuilt_module(<a href="#ddk_prebuilt_module-name">name</a>, <a href="#ddk_prebuilt_module-src">src</a>, <a href="#ddk_prebuilt_module-hdrs">hdrs</a>, <a href="#ddk_prebuilt_module-config">config</a>, <a href="#ddk_prebuilt_module-includes">includes</a>, <a href="#ddk_prebuilt_module-kernel_build">kernel_build</a>, <a href="#ddk_prebuilt_module-linux_includes">linux_includes</a>, <a href="#ddk_prebuilt_module-module_symvers">module_symvers</a>,
+                    <a href="#ddk_prebuilt_module-modules_order">modules_order</a>)
+</pre>
+
+Wraps ddk_module prebuilt files so it can be used in [ddk_module.deps](#ddk_module-deps).
+
+Example:
+
+```
+# Optional
+ddk_config(
+    name = "foo_config",
+)
+ddk_prebuilt_module(
+    name = "foo",
+    src = "foo.ko",
+    module_symvers = "foo_Module.symvers",
+    config = ":foo_config", # Optional
+)
+```
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="ddk_prebuilt_module-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="ddk_prebuilt_module-src"></a>src |  The .ko file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="ddk_prebuilt_module-hdrs"></a>hdrs |  [ddk_headers.hdrs](#ddk_headers-hdrs)   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="ddk_prebuilt_module-config"></a>config |  A [ddk_config](#ddk_config).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="ddk_prebuilt_module-includes"></a>includes |  [ddk_headers.hdrs](#ddk_headers-includes)   | List of strings | optional |  `[]`  |
+| <a id="ddk_prebuilt_module-kernel_build"></a>kernel_build |  The [`kernel_build`](#kernel_build).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="ddk_prebuilt_module-linux_includes"></a>linux_includes |  [ddk_headers.hdrs](#ddk_headers-linux_includes)   | List of strings | optional |  `[]`  |
+| <a id="ddk_prebuilt_module-module_symvers"></a>module_symvers |  Module.symvers file.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="ddk_prebuilt_module-modules_order"></a>modules_order |  modules.order file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+
+
 <a id="ddk_prebuilt_object"></a>
 
 ## ddk_prebuilt_object
@@ -198,7 +242,7 @@ ddk_module(
 <pre>
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_uapi_headers")
 
-ddk_uapi_headers(<a href="#ddk_uapi_headers-name">name</a>, <a href="#ddk_uapi_headers-srcs">srcs</a>, <a href="#ddk_uapi_headers-out">out</a>, <a href="#ddk_uapi_headers-kernel_build">kernel_build</a>)
+ddk_uapi_headers(<a href="#ddk_uapi_headers-name">name</a>, <a href="#ddk_uapi_headers-srcs">srcs</a>, <a href="#ddk_uapi_headers-out">out</a>, <a href="#ddk_uapi_headers-kernel_build">kernel_build</a>, <a href="#ddk_uapi_headers-strip_prefix">strip_prefix</a>)
 </pre>
 
 A rule that generates a sanitized UAPI header tarball.
@@ -223,6 +267,7 @@ ddk_uapi_headers(
 | <a id="ddk_uapi_headers-srcs"></a>srcs |  UAPI headers files which can be sanitized by "make headers_install"   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="ddk_uapi_headers-out"></a>out |  Name of the output tarball   | String | required |  |
 | <a id="ddk_uapi_headers-kernel_build"></a>kernel_build |  [`kernel_build`](#kernel_build).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="ddk_uapi_headers-strip_prefix"></a>strip_prefix |  Prefix to strip from UAPI header paths before copying them to usr/include. Must begin with include/uapi.   | String | optional |  `"include/uapi"`  |
 
 
 <a id="dependency_graph_drawer"></a>
@@ -441,7 +486,7 @@ gki_artifacts_prebuilts(<a href="#gki_artifacts_prebuilts-name">name</a>, <a hre
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "initramfs")
 
 initramfs(<a href="#initramfs-name">name</a>, <a href="#initramfs-deps">deps</a>, <a href="#initramfs-create_modules_order">create_modules_order</a>, <a href="#initramfs-kernel_modules_install">kernel_modules_install</a>, <a href="#initramfs-modules_blocklist">modules_blocklist</a>,
-          <a href="#initramfs-modules_charger_list">modules_charger_list</a>, <a href="#initramfs-modules_list">modules_list</a>, <a href="#initramfs-modules_options">modules_options</a>, <a href="#initramfs-modules_recovery_list">modules_recovery_list</a>,
+          <a href="#initramfs-modules_charger_list">modules_charger_list</a>, <a href="#initramfs-modules_list">modules_list</a>, <a href="#initramfs-modules_load">modules_load</a>, <a href="#initramfs-modules_options">modules_options</a>, <a href="#initramfs-modules_recovery_list">modules_recovery_list</a>,
           <a href="#initramfs-ramdisk_compression">ramdisk_compression</a>, <a href="#initramfs-ramdisk_compression_args">ramdisk_compression_args</a>, <a href="#initramfs-trim_unused_modules">trim_unused_modules</a>, <a href="#initramfs-vendor_boot_name">vendor_boot_name</a>,
           <a href="#initramfs-vendor_ramdisk_dev_nodes">vendor_ramdisk_dev_nodes</a>)
 </pre>
@@ -471,6 +516,7 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 | <a id="initramfs-modules_blocklist"></a>modules_blocklist |  A file containing a list of modules which are blocked from being loaded.<br><br>This file is copied directly to staging directory, and should be in the format: <pre><code>blocklist module_name</code></pre>   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="initramfs-modules_charger_list"></a>modules_charger_list |  A file containing a list of modules to load when booting intocharger mode.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="initramfs-modules_list"></a>modules_list |  A file containing list of modules to use for `vendor_boot.modules.load`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="initramfs-modules_load"></a>modules_load |  A file containing list of modules to load.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="initramfs-modules_options"></a>modules_options |  a file copied to `/lib/modules/<kernel_version>/modules.options` on the ramdisk.<br><br>Lines in the file should be of the form: <pre><code>options &lt;modulename&gt; &lt;param1&gt;=&lt;val&gt; &lt;param2&gt;=&lt;val&gt; ...</code></pre>   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="initramfs-modules_recovery_list"></a>modules_recovery_list |  A file containing a list of modules to load when booting into recovery.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="initramfs-ramdisk_compression"></a>ramdisk_compression |  If provided it specfies the format used for any ramdisks generated.If not provided a fallback value from build.config is used.   | String | optional |  `""`  |
@@ -672,7 +718,7 @@ kernel_modules_install(
 <pre>
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_modules_install")
 
-kernel_modules_install(<a href="#kernel_modules_install-name">name</a>, <a href="#kernel_modules_install-outs">outs</a>, <a href="#kernel_modules_install-kernel_build">kernel_build</a>, <a href="#kernel_modules_install-kernel_modules">kernel_modules</a>)
+kernel_modules_install(<a href="#kernel_modules_install-name">name</a>, <a href="#kernel_modules_install-outs">outs</a>, <a href="#kernel_modules_install-check_dependencies">check_dependencies</a>, <a href="#kernel_modules_install-kernel_build">kernel_build</a>, <a href="#kernel_modules_install-kernel_modules">kernel_modules</a>)
 </pre>
 
 Generates a rule that runs depmod in the module installation directory.
@@ -717,6 +763,7 @@ In `foo_dist`, specifying `foo_modules_install` in `data` won't include
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="kernel_modules_install-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="kernel_modules_install-outs"></a>outs |  A list of additional outputs from `make modules_install`.<br><br>Since external modules are returned by default, it can be used to obtain modules.* related files (results of depmod). Only files with allowed names can be added to outs. (`_OUT_ALLOWLIST`) <pre><code>_OUT_ALLOWLIST = ["modules.dep", "modules.alias", "modules.builtin", "modules.symbols", "modules.softdep"]</code></pre> Example: <pre><code>kernel_modules_install(&#10;    name = "foo_modules_install",&#10;    kernel_modules = [":foo_module_list"],&#10;    outs = [&#10;        "modules.dep",&#10;        "modules.alias",&#10;    ],&#10;)</code></pre>   | List of strings | optional |  `[]`  |
+| <a id="kernel_modules_install-check_dependencies"></a>check_dependencies |  If True, check that all transitive dependencies of kernel_modules are installed.<br><br>This turns on a check during the analysis phase to ensure all the modules and their dependencies are explicitly listed, which could avoid missing dependencies at run time. It only does the check instead of adding the transitive modules silently to ensure that all modules are noticed, as a module dependency could be introduced by accident.   | Boolean | optional |  `False`  |
 | <a id="kernel_modules_install-kernel_build"></a>kernel_build |  Label referring to the `kernel_build` module. Otherwise, it is inferred from `kernel_modules`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="kernel_modules_install-kernel_modules"></a>kernel_modules |  A list of labels referring to `kernel_module`s to install.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 
@@ -739,9 +786,9 @@ Generate an SPDX SBOM for kernels.
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="kernel_sbom-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="kernel_sbom-srcs"></a>srcs |  List of [kernel_build](#kernel_build) and [kernel_module](#kernel_module) targets   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
+| <a id="kernel_sbom-srcs"></a>srcs |  List of [kernel_module](#kernel_module) targets   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="kernel_sbom-out"></a>out |  The output SPDX JSON file name.   | String | optional |  `"kernel_sbom.spdx.json"`  |
-| <a id="kernel_sbom-kernel_build"></a>kernel_build |  **DEPRECATED**; use `srcs` instead. The [`kernel_build()`](#kernel_build) target.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="kernel_sbom-kernel_build"></a>kernel_build |  The [`kernel_build()`](#kernel_build) target.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
 <a id="kernel_unstripped_modules_archive"></a>
@@ -846,7 +893,7 @@ the list have higher priority:
 <pre>
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "modinfo_summary_report")
 
-modinfo_summary_report(<a href="#modinfo_summary_report-name">name</a>, <a href="#modinfo_summary_report-deps">deps</a>)
+modinfo_summary_report(<a href="#modinfo_summary_report-name">name</a>, <a href="#modinfo_summary_report-deps">deps</a>, <a href="#modinfo_summary_report-verbose">verbose</a>)
 </pre>
 
 Generate a report from kernel modules of the given kernel build.
@@ -858,6 +905,7 @@ Generate a report from kernel modules of the given kernel build.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="modinfo_summary_report-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="modinfo_summary_report-deps"></a>deps |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="modinfo_summary_report-verbose"></a>verbose |  -   | Boolean | optional |  `False`  |
 
 
 <a id="super_image"></a>
@@ -897,7 +945,7 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "system_dlkm_image")
 
 system_dlkm_image(<a href="#system_dlkm_image-name">name</a>, <a href="#system_dlkm_image-deps">deps</a>, <a href="#system_dlkm_image-base">base</a>, <a href="#system_dlkm_image-build_flatten">build_flatten</a>, <a href="#system_dlkm_image-fs_types">fs_types</a>, <a href="#system_dlkm_image-internal_extra_archive_files">internal_extra_archive_files</a>,
-                  <a href="#system_dlkm_image-kernel_modules_install">kernel_modules_install</a>, <a href="#system_dlkm_image-modules_blocklist">modules_blocklist</a>, <a href="#system_dlkm_image-modules_list">modules_list</a>, <a href="#system_dlkm_image-props">props</a>)
+                  <a href="#system_dlkm_image-kernel_modules_install">kernel_modules_install</a>, <a href="#system_dlkm_image-modules_blocklist">modules_blocklist</a>, <a href="#system_dlkm_image-modules_list">modules_list</a>, <a href="#system_dlkm_image-modules_load">modules_load</a>, <a href="#system_dlkm_image-props">props</a>)
 </pre>
 
 Build system_dlkm partition image with signed GKI modules.
@@ -923,6 +971,7 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 | <a id="system_dlkm_image-kernel_modules_install"></a>kernel_modules_install |  The [`kernel_modules_install`](#kernel_modules_install).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="system_dlkm_image-modules_blocklist"></a>modules_blocklist |  An optional file containing a list of modules which are blocked from being loaded.<br><br>This file is copied directly to the staging directory and should be in the format: <pre><code>blocklist module_name</code></pre>   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="system_dlkm_image-modules_list"></a>modules_list |  An optional file containing the list of kernel modules which shall be copied into a system_dlkm partition image.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="system_dlkm_image-modules_load"></a>modules_load |  An optional file containing the list of kernel modules which shall be loaded.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="system_dlkm_image-props"></a>props |  A text file containing the properties to be used for creation of a `system_dlkm` image (filesystem, partition size, etc). If this is not set (and `build_system_dlkm` is), a default set of properties will be used which assumes an ext4 filesystem and a dynamic partition.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 
 
@@ -1000,7 +1049,7 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "vendor_dlkm_image")
 
 vendor_dlkm_image(<a href="#vendor_dlkm_image-name">name</a>, <a href="#vendor_dlkm_image-deps">deps</a>, <a href="#vendor_dlkm_image-archive">archive</a>, <a href="#vendor_dlkm_image-base_system_dlkm_image">base_system_dlkm_image</a>, <a href="#vendor_dlkm_image-build_flatten">build_flatten</a>, <a href="#vendor_dlkm_image-create_modules_order">create_modules_order</a>,
                   <a href="#vendor_dlkm_image-dedup_dlkm_modules">dedup_dlkm_modules</a>, <a href="#vendor_dlkm_image-etc_files">etc_files</a>, <a href="#vendor_dlkm_image-fs_type">fs_type</a>, <a href="#vendor_dlkm_image-kernel_modules_install">kernel_modules_install</a>, <a href="#vendor_dlkm_image-modules_blocklist">modules_blocklist</a>,
-                  <a href="#vendor_dlkm_image-modules_list">modules_list</a>, <a href="#vendor_dlkm_image-props">props</a>, <a href="#vendor_dlkm_image-system_dlkm_image">system_dlkm_image</a>, <a href="#vendor_dlkm_image-vendor_boot_modules_load">vendor_boot_modules_load</a>)
+                  <a href="#vendor_dlkm_image-modules_list">modules_list</a>, <a href="#vendor_dlkm_image-modules_load">modules_load</a>, <a href="#vendor_dlkm_image-props">props</a>, <a href="#vendor_dlkm_image-system_dlkm_image">system_dlkm_image</a>, <a href="#vendor_dlkm_image-vendor_boot_modules_load">vendor_boot_modules_load</a>)
 </pre>
 
 Build vendor_dlkm image.
@@ -1030,6 +1079,7 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 | <a id="vendor_dlkm_image-kernel_modules_install"></a>kernel_modules_install |  The [`kernel_modules_install`](#kernel_modules_install).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="vendor_dlkm_image-modules_blocklist"></a>modules_blocklist |  An optional file containing a list of modules which are blocked from being loaded.<br><br>This file is copied directly to the staging directory and should be in the format: <pre><code>blocklist module_name</code></pre>   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="vendor_dlkm_image-modules_list"></a>modules_list |  An optional file containing the list of kernel modules which shall be copied into a `vendor_dlkm` partition image. Any modules passed into `MODULES_LIST` which become part of the `vendor_boot.modules.load` will be trimmed from the `vendor_dlkm.modules.load`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="vendor_dlkm_image-modules_load"></a>modules_load |  An optional file containing the list of kernel modules which shall be loaded.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="vendor_dlkm_image-props"></a>props |  A text file containing the properties to be used for creation of a `vendor_dlkm` image (filesystem, partition size, etc). If this is not set (and `build_vendor_dlkm` is), a default set of properties will be used which assumes an ext4 filesystem and a dynamic partition.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="vendor_dlkm_image-system_dlkm_image"></a>system_dlkm_image |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="vendor_dlkm_image-vendor_boot_modules_load"></a>vendor_boot_modules_load |  File to `vendor_boot.modules.load`.<br><br>Modules listed in this file is stripped away from the `vendor_dlkm` image.<br><br>As a special case, you may also provide a [`initramfs`](#initramfs) target here, in which case the `vendor_boot.modules.load` of the initramfs is used.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
@@ -1044,7 +1094,7 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_library")
 
 ddk_library(<a href="#ddk_library-name">name</a>, <a href="#ddk_library-kernel_build">kernel_build</a>, <a href="#ddk_library-srcs">srcs</a>, <a href="#ddk_library-deps">deps</a>, <a href="#ddk_library-hdrs">hdrs</a>, <a href="#ddk_library-includes">includes</a>, <a href="#ddk_library-linux_includes">linux_includes</a>, <a href="#ddk_library-local_defines">local_defines</a>, <a href="#ddk_library-copts">copts</a>,
             <a href="#ddk_library-removed_copts">removed_copts</a>, <a href="#ddk_library-asopts">asopts</a>, <a href="#ddk_library-config">config</a>, <a href="#ddk_library-kconfig">kconfig</a>, <a href="#ddk_library-defconfig">defconfig</a>, <a href="#ddk_library-autofdo_profile">autofdo_profile</a>,
-            <a href="#ddk_library-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_library-pkvm_el2">pkvm_el2</a>, <a href="#ddk_library-kwargs">**kwargs</a>)
+            <a href="#ddk_library-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_library-pkvm_el2">pkvm_el2</a>, <a href="#ddk_library-support_ftrace">support_ftrace</a>, <a href="#ddk_library-gcov">gcov</a>, <a href="#ddk_library-kwargs">**kwargs</a>)
 </pre>
 
 **EXPERIMENTAL**. A library that may be used by a DDK module.
@@ -1082,6 +1132,8 @@ Known issues:
 | <a id="ddk_library-autofdo_profile"></a>autofdo_profile |  see [`ddk_module.autofdo_profile`](#ddk_module-autofdo_profile)   |  `None` |
 | <a id="ddk_library-debug_info_for_profiling"></a>debug_info_for_profiling |  see [`ddk_module.debug_info_for_profiling`](#ddk_module-debug_info_for_profiling)   |  `None` |
 | <a id="ddk_library-pkvm_el2"></a>pkvm_el2 |  **EXPERIMENTAL**. If True, builds EL2 hypervisor code.<br><br>If True: - The output list is the fixed `["kvm_nvhe.o"]`, plus relevant .o.cmd files - The generated Makefile is modified to build EL2 hypervisor code.<br><br>Note: This is only supported in selected branches.   |  `None` |
+| <a id="ddk_library-support_ftrace"></a>support_ftrace |  see [`ddk_module.support_ftrace`](#ddk_module-support_ftrace)   |  `None` |
+| <a id="ddk_library-gcov"></a>gcov |  see [`ddk_module.gcov`](#ddk_module-gcov)   |  `None` |
 | <a id="ddk_library-kwargs"></a>kwargs |  Additional attributes to the internal rule. See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 
@@ -1095,7 +1147,7 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_module")
 ddk_module(<a href="#ddk_module-name">name</a>, <a href="#ddk_module-kernel_build">kernel_build</a>, <a href="#ddk_module-srcs">srcs</a>, <a href="#ddk_module-deps">deps</a>, <a href="#ddk_module-hdrs">hdrs</a>, <a href="#ddk_module-textual_hdrs">textual_hdrs</a>, <a href="#ddk_module-includes">includes</a>, <a href="#ddk_module-conditional_srcs">conditional_srcs</a>,
            <a href="#ddk_module-crate_root">crate_root</a>, <a href="#ddk_module-linux_includes">linux_includes</a>, <a href="#ddk_module-out">out</a>, <a href="#ddk_module-local_defines">local_defines</a>, <a href="#ddk_module-copts">copts</a>, <a href="#ddk_module-removed_copts">removed_copts</a>, <a href="#ddk_module-asopts">asopts</a>, <a href="#ddk_module-linkopts">linkopts</a>,
            <a href="#ddk_module-config">config</a>, <a href="#ddk_module-kconfig">kconfig</a>, <a href="#ddk_module-defconfig">defconfig</a>, <a href="#ddk_module-generate_btf">generate_btf</a>, <a href="#ddk_module-autofdo_profile">autofdo_profile</a>, <a href="#ddk_module-debug_info_for_profiling">debug_info_for_profiling</a>,
-           <a href="#ddk_module-kwargs">**kwargs</a>)
+           <a href="#ddk_module-support_ftrace">support_ftrace</a>, <a href="#ddk_module-gcov">gcov</a>, <a href="#ddk_module-kwargs">**kwargs</a>)
 </pre>
 
 Defines a DDK (Driver Development Kit) module.
@@ -1397,6 +1449,8 @@ $(LINUXINCLUDE)
 | <a id="ddk_module-generate_btf"></a>generate_btf |  Allows generation of BTF type information for the module. See [kernel_module.generate_btf](#kernel_module-generate_btf)   |  `None` |
 | <a id="ddk_module-autofdo_profile"></a>autofdo_profile |  Label to an AutoFDO profile.   |  `None` |
 | <a id="ddk_module-debug_info_for_profiling"></a>debug_info_for_profiling |  If true, enables extra debug information to be emitted to make profile matching during AutoFDO more accurate.   |  `None` |
+| <a id="ddk_module-support_ftrace"></a>support_ftrace |  Default to `True`. If `False`, removes ftrace flags from the compile command.   |  `None` |
+| <a id="ddk_module-gcov"></a>gcov |  Default to `inherit`. Value must be one of `inherit`, `always` and `never`.<br><br>*   If `inherit`, inherit gcov configuration from parent configurations. This is equivalent     to setting nothing in the `Kbuild` file. If `CONFIG_GCOV_KERNEL=y` and     `CONFIG_GCOV_PROFILE_ALL=y`, gcov is enabled.<br><br>    *   In particular, if `--gcov_mode=profile_all` is set (or the legacy `--gcov` flag is set to true),         and you are building the kernel from source (not using prebuilts), the kernel has `CONFIG_GCOV_KERNEL` and         `CONFIG_GCOV_PROFILE_ALL` set. In this case, `ddk_module(gcov="inherit")` inherits         these two configs and enables gcov in this module.<br><br>    *   If `--gcov_mode=enabled` is set, only         `CONFIG_GCOV_KERNEL` is set, so `gcov="inherit"` will not enable gcov profiling for         this module.<br><br>*   If `always`, enable gcov in this module if `CONFIG_GCOV_KERNEL=y`. This is equivalent     to setting `GCOV_PROFILE_<file> := y` for each file in `srcs`.<br><br>    *   In particular, if `--gcov_mode` is set to `enabled` or `profile_all` (or the legacy `--gcov` flag         is set to true), and you are building the kernel from source (not using prebuilts),         the kernel has `CONFIG_GCOV_KERNEL` set. In this case, `ddk_module(gcov="always")`         enables gcov in this module.<br><br>*   If `never`, never enable gcov for this module, regardless of the value of     `CONFIG_GCOV_KERNEL` and `CONFIG_GCOV_PROFILE_ALL`. This is equivalent to setting     `GCOV_PROFILE_<file> := n` for each file in `srcs`.   |  `None` |
 | <a id="ddk_module-kwargs"></a>kwargs |  Additional attributes to the internal rule. See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 
@@ -1408,7 +1462,7 @@ $(LINUXINCLUDE)
 load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_submodule")
 
 ddk_submodule(<a href="#ddk_submodule-name">name</a>, <a href="#ddk_submodule-out">out</a>, <a href="#ddk_submodule-srcs">srcs</a>, <a href="#ddk_submodule-deps">deps</a>, <a href="#ddk_submodule-hdrs">hdrs</a>, <a href="#ddk_submodule-includes">includes</a>, <a href="#ddk_submodule-local_defines">local_defines</a>, <a href="#ddk_submodule-copts">copts</a>, <a href="#ddk_submodule-removed_copts">removed_copts</a>, <a href="#ddk_submodule-asopts">asopts</a>,
-              <a href="#ddk_submodule-linkopts">linkopts</a>, <a href="#ddk_submodule-conditional_srcs">conditional_srcs</a>, <a href="#ddk_submodule-crate_root">crate_root</a>, <a href="#ddk_submodule-autofdo_profile">autofdo_profile</a>, <a href="#ddk_submodule-debug_info_for_profiling">debug_info_for_profiling</a>,
+              <a href="#ddk_submodule-linkopts">linkopts</a>, <a href="#ddk_submodule-conditional_srcs">conditional_srcs</a>, <a href="#ddk_submodule-crate_root">crate_root</a>, <a href="#ddk_submodule-autofdo_profile">autofdo_profile</a>, <a href="#ddk_submodule-debug_info_for_profiling">debug_info_for_profiling</a>, <a href="#ddk_submodule-gcov">gcov</a>,
               <a href="#ddk_submodule-kwargs">**kwargs</a>)
 </pre>
 
@@ -1498,6 +1552,7 @@ dependencies are stable, it is recommended to:
 | <a id="ddk_submodule-crate_root"></a>crate_root |  See [`ddk_module.crate_root`](#ddk_module-crate_root).   |  `None` |
 | <a id="ddk_submodule-autofdo_profile"></a>autofdo_profile |  See [`ddk_module.autofdo_profile`](#ddk_module-autofdo_profile).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).   |  `None` |
 | <a id="ddk_submodule-debug_info_for_profiling"></a>debug_info_for_profiling |  See [`ddk_module.debug_info_for_profiling`](#ddk_module-debug_info_for_profiling).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).   |  `None` |
+| <a id="ddk_submodule-gcov"></a>gcov |  See [`ddk_module.gcov`](#ddk_module-gcov).<br><br>These are only effective in the current submodule, not other submodules declared in the same [`ddk_module.deps`](#ddk_module-deps).   |  `None` |
 | <a id="ddk_submodule-kwargs"></a>kwargs |  Additional attributes to the internal rule, e.g. [`visibility`](https://docs.bazel.build/versions/main/visibility.html). See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 

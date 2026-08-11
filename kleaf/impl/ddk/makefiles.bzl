@@ -544,6 +544,11 @@ def _makefiles_impl(ctx):
     if ctx.attr.module_pkvm_el2:
         args.add("--pkvm-el2-out", _PKVM_EL2_OUT)
 
+    if ctx.attr.module_support_ftrace:
+        args.add("--support-ftrace")
+
+    args.add("--gcov", ctx.attr.module_gcov)
+
     if VARS.get("KLEAF_INTERNAL_COPY_RULE_HACK") == "1":
         args.add("--copy-rule-hack")
 
@@ -655,6 +660,15 @@ makefiles = rule(
         "module_autofdo_profile": attr.label(allow_single_file = True),
         "module_debug_info_for_profiling": attr.bool(),
         "module_pkvm_el2": attr.bool(),
+        "module_support_ftrace": attr.bool(
+            doc = "Whether to support ftrace. If false, removes ftrace flags.",
+            default = True,
+        ),
+        "module_gcov": attr.string(
+            doc = "Whether to use gcov",
+            values = ["inherit", "always", "never"],
+            default = "inherit",
+        ),
         "top_level_makefile": attr.bool(),
         "kbuild_has_linux_include": attr.bool(
             doc = "Whether to add LINUXINCLUDE to Kbuild",

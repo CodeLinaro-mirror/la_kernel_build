@@ -92,6 +92,10 @@ def _kernel_module_group_impl(ctx):
             transitive = [target[KernelModuleInfo].modules_order for target in targets],
             order = "postorder",
         ),
+        transitive_files = depset(transitive = [
+            target[KernelModuleInfo].transitive_files
+            for target in targets
+        ]),
     )
 
     unstripped_modules_info = KernelUnstrippedModulesInfo(
@@ -195,6 +199,7 @@ kernel_modules_install(
         "srcs": attr.label_list(
             doc = "List of [`kernel_module`](#kernel_module)s or [`ddk_module`](#ddk_module)s.",
             providers = [
+                CompileCommandsInfo,
                 DdkLibraryInfo,
                 DdkHeadersInfo,
                 DefaultInfo,
