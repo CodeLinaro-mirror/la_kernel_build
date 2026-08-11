@@ -36,24 +36,19 @@ import urllib.request
 from pathlib import Path
 
 BASE_URL = "https://ci.android.com/builds/submitted/{build_id}/{target}/latest/raw"
-ARM_TARGETS = ["u-boot_qemu_arm"]
 ARM64_TARGETS = ["kernel_aarch64",
                  "kernel_aarch64_16k",
                  "kernel_debug_aarch64",
                  "kernel_microdroid_aarch64",
                  "kernel_rockpi4",
                  "u-boot_crosvm_aarch64",
-                 "u-boot_crosvm_locked_aarch64",
-                 "u-boot_gem5_aarch64",
-                 "u-boot_qemu_aarch64",
-                 "u-boot_rockpi4"]
+                 "u-boot_qemu_aarch64"]
 RISCV64_TARGETS = ["u-boot_qemu_riscv64"]
 X86_TARGETS = ["kernel_virt_i686"]
 X86_64_TARGETS = ["kernel_x86_64",
                   "kernel_debug_x86_64",
                   "kernel_microdroid_x86_64",
                   "u-boot_crosvm_x86_64",
-                  "u-boot_crosvm_locked_x86_64",
                   "u-boot_qemu_x86_64"]
 GIT_COMMIT_LOG_LENGTH = 100
 
@@ -675,32 +670,13 @@ def download_u_boot(target, output_dir):
     os.mkdir(output_dir)
 
   extension = "rom"
-  if target == "u-boot_gem5_aarch64":
-    extension = "elf"
-  elif target == "u-boot_rockpi4":
-    extension = "itb"
-  elif target in ARM_TARGETS + ARM64_TARGETS + RISCV64_TARGETS:
+  if target in ARM64_TARGETS + RISCV64_TARGETS:
     extension = "bin"
-  files = [f"u-boot.{extension}"]
-  files.append("System.map")
-  if target == "u-boot_rockpi4":
-    files.append("idbloader.img")
+  files = [f"u-boot.{extension}", "System.map"]
 
   url_base = BASE_URL.format(build_id=_args.build_id, target=target)
   func = functools.partial(download, url_base, output_dir)
   _pool.map(func, files)
-
-def download_u_boot_tools(target, output_dir):
-  if not os.path.isdir(output_dir):
-    os.mkdir(output_dir)
-
-  files = ["mkenvimage", "mkimage"]
-
-  url_base = BASE_URL.format(build_id=_args.build_id, target=target)
-  func = functools.partial(download, url_base, output_dir)
-  _pool.map(func, files)
-
-  subprocess.check_call(["chmod", "a+x"] + files, cwd=output_dir)
 
 def update_u_boot_mainline(output_dir):
   cf_dir = os.path.join(output_dir, "device", "google", "cuttlefish_prebuilts")
@@ -708,59 +684,33 @@ def update_u_boot_mainline(output_dir):
 
   crosvm_aarch64_dir = os.path.join(bootloader_dir, "crosvm_aarch64")
   crosvm_x86_64_dir = os.path.join(bootloader_dir, "crosvm_x86_64")
-  crosvm_locked_aarch64_dir = os.path.join(bootloader_dir, "crosvm_locked_aarch64")
-  crosvm_locked_x86_64_dir = os.path.join(bootloader_dir, "crosvm_locked_x86_64")
-  gem5_aarch64_dir = os.path.join(bootloader_dir, "gem5_aarch64")
   qemu_aarch64_dir = os.path.join(bootloader_dir, "qemu_aarch64")
-  qemu_arm_dir = os.path.join(bootloader_dir, "qemu_arm")
   qemu_riscv64_dir = os.path.join(bootloader_dir, "qemu_riscv64")
   qemu_x86_64_dir = os.path.join(bootloader_dir, "qemu_x86_64")
-  rockpi_aarch64_dir = os.path.join(bootloader_dir, "rockpi_aarch64")
 
   crosvm_aarch64_u_boot = os.path.join(crosvm_aarch64_dir, "u-boot.bin")
 
   (old_version, old_sha) = get_binary_u_boot_version(crosvm_aarch64_u_boot)
 
-  if os.path.exists(crosvm_locked_aarch64_dir):
-    subprocess.check_call(["git", "rm", "-rf", "*"], cwd=crosvm_locked_aarch64_dir)
-    download_u_boot("u-boot_crosvm_locked_aarch64", crosvm_locked_aarch64_dir)
-  if os.path.exists(crosvm_locked_x86_64_dir):
-    subprocess.check_call(["git", "rm", "-rf", "*"], cwd=crosvm_locked_x86_64_dir)
-    download_u_boot("u-boot_crosvm_locked_x86_64", crosvm_locked_x86_64_dir)
   if os.path.exists(crosvm_aarch64_dir):
     subprocess.check_call(["git", "rm", "-rf", "*"], cwd=crosvm_aarch64_dir)
     download_u_boot("u-boot_crosvm_aarch64", crosvm_aarch64_dir)
   if os.path.exists(crosvm_x86_64_dir):
     subprocess.check_call(["git", "rm", "-rf", "*"], cwd=crosvm_x86_64_dir)
     download_u_boot("u-boot_crosvm_x86_64", crosvm_x86_64_dir)
-  if os.path.exists(gem5_aarch64_dir):
-    subprocess.check_call(["git", "rm", "-rf", "*"], cwd=gem5_aarch64_dir)
-    download_u_boot("u-boot_gem5_aarch64", gem5_aarch64_dir)
   if os.path.exists(qemu_aarch64_dir):
     subprocess.check_call(["git", "rm", "-rf", "*"], cwd=qemu_aarch64_dir)
     download_u_boot("u-boot_qemu_aarch64", qemu_aarch64_dir)
-  if os.path.exists(qemu_arm_dir):
-    subprocess.check_call(["git", "rm", "-rf", "*"], cwd=qemu_arm_dir)
-    download_u_boot("u-boot_qemu_arm", qemu_arm_dir)
   if os.path.exists(qemu_riscv64_dir):
     subprocess.check_call(["git", "rm", "-rf", "*", ":(exclude)OWNERS"], cwd=qemu_riscv64_dir)
     download_u_boot("u-boot_qemu_riscv64", qemu_riscv64_dir)
   if os.path.exists(qemu_x86_64_dir):
     subprocess.check_call(["git", "rm", "-rf", "*"], cwd=qemu_x86_64_dir)
     download_u_boot("u-boot_qemu_x86_64", qemu_x86_64_dir)
-  if os.path.exists(rockpi_aarch64_dir):
-    subprocess.check_call(["git", "rm", "-rf", "*"], cwd=rockpi_aarch64_dir)
-    download_u_boot("u-boot_rockpi4", rockpi_aarch64_dir)
-
-  tools_dir = os.path.join(cf_dir, "uboot_tools")
-  if os.path.exists(tools_dir):
-    subprocess.check_call(["git", "rm", "-rf", "*"], cwd=tools_dir)
-    download_u_boot_tools("u-boot_tools", tools_dir)
-    subprocess.run(["git", "checkout", "HEAD", "mkenvimage_mac.sh"], cwd=tools_dir)
 
   (new_version, new_sha) = get_binary_u_boot_version(crosvm_aarch64_u_boot)
   gitlog = get_git_log(old_sha, new_sha, get_u_boot_dir())
-  commit_prebuilts(cf_dir, gitlog, "bootloader, u-boot tools")
+  commit_prebuilts(cf_dir, gitlog, "bootloader")
 
 def update_u_boot():
   url_base = BASE_URL.format(build_id=_args.build_id, target="u-boot_crosvm_aarch64")
