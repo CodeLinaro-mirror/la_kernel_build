@@ -50,7 +50,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":stg_cc_proto",
-        "@//prebuilts/kernel-build-tools:imported_libs",
+        "@kleaf//prebuilts/kernel-build-tools:imported_libs",
     ],
 )
 
