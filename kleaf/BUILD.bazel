@@ -464,7 +464,7 @@ bool_flag(
 # If true, build stg from sources
 bool_flag(
     name = "stg_from_sources",
-    build_setting_default = False,
+    build_setting_default = True,
     visibility = ["//visibility:private"],
 )
 
