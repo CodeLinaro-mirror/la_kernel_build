@@ -203,6 +203,7 @@ def _kernel_toolchains_impl(ctx):
         rust_toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"],
         bindgen_toolchain = ctx.toolchains["@rules_rust_bindgen//:toolchain_type"],
         host_libc = exec.libc,
+        exec_info = exec,
         exec_glibc_info = ctx.attr.exec_glibc_toolchain[KernelPlatformToolchainInfo],
     )
     kernel_setup_env_var_cmd += rust_env.cmd
@@ -221,7 +222,7 @@ def _kernel_toolchains_impl(ctx):
         host_sysroot = exec.sysroot,
     )
 
-def _get_rust_env_impl(_subrule_ctx, rust_toolchain, bindgen_toolchain, host_libc, exec_glibc_info):
+def _get_rust_env_impl(_subrule_ctx, rust_toolchain, bindgen_toolchain, host_libc, exec_info, exec_glibc_info):
     if not rust_toolchain or not bindgen_toolchain:
         return _RustEnvInfo(
             inputs = depset(),
@@ -258,6 +259,13 @@ def _get_rust_env_impl(_subrule_ctx, rust_toolchain, bindgen_toolchain, host_lib
     else:
         fail("Unknown libc {}".format(host_libc))
 
+    if rust_toolchain.exec_triple.abi == "gnu":
+        proc_macro_info = exec_glibc_info
+    elif rust_toolchain.exec_triple.abi == "musl":
+        proc_macro_info = exec_info
+    else:
+        fail("{}: Unknown ABI for rust toolchain: {}".format(_subrule_ctx.label, rust_toolchain.exec_triple))
+
     # RUNPATH_EXECROOT: A heuristic path to execroot expressed relative to $ORIGIN.
     # RUNPATH_EXECROOT assumes that all binaries built by Kbuild are several levels
     #   below OUT_DIR,
@@ -288,11 +296,11 @@ def _get_rust_env_impl(_subrule_ctx, rust_toolchain, bindgen_toolchain, host_lib
         quoted_rust_bin_short = shell.quote(paths.dirname(rustc.short_path)),
         quoted_clangtools_bin = shell.quote(bindgen_file.dirname),
         quoted_clangtools_bin_short = shell.quote(paths.dirname(bindgen_file.short_path)),
-        quoted_proc_macro_ldflags = _quote_sanitize_flags(exec_glibc_info.ldflags),
+        quoted_proc_macro_ldflags = _quote_sanitize_flags(proc_macro_info.ldflags),
     )
 
     return _RustEnvInfo(
-        inputs = depset(transitive = [rust_toolchain.all_files, exec_glibc_info.all_files, bindgen_files]),
+        inputs = depset(transitive = [rust_toolchain.all_files, proc_macro_info.all_files, bindgen_files]),
         cmd = cmd,
     )
 
