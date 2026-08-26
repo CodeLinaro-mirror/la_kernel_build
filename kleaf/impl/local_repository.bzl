@@ -18,8 +18,8 @@ paths are resolved against Kleaf sub-repository.
 """
 
 visibility([
-    "//build/kernel/kleaf/...",
     "//",  # for root MODULE.bazel
+    "//build/kernel/kleaf/...",
 ])
 
 def _common_attrs():
@@ -42,10 +42,16 @@ def _common_attrs():
         ),
     }
 
-def _get_kleaf_repo_dir(repository_ctx):
+def get_kleaf_repo_dir(repository_ctx):
     """Returns the root dir of the repository that contains Kleaf tools.
 
-    That is, where this extension should exist."""
+    That is, where this extension should exist.
+
+    Args:
+        repository_ctx: repository_ctx
+    Returns:
+        A path object pointing to a directory below @kleaf.
+    """
     mylabel = Label(":local_repository.bzl")
     mypath = str(repository_ctx.path(mylabel))
     package_path = mypath.removesuffix(mylabel.name).removesuffix("/")
@@ -56,7 +62,7 @@ def _kleaf_local_repository_impl(repository_ctx):
     if repository_ctx.attr.path and repository_ctx.attr.path_candidates:
         fail("@{}: path and path_candidates cannot be set simultaneously".format(repository_ctx.name))
 
-    kleaf_repo_dir = _get_kleaf_repo_dir(repository_ctx)
+    kleaf_repo_dir = get_kleaf_repo_dir(repository_ctx)
 
     target = None
     if repository_ctx.attr.path:
@@ -92,7 +98,7 @@ kleaf_local_repository = repository_rule(
 def _new_kleaf_local_repository_impl(repository_ctx):
     _kleaf_local_repository_impl(repository_ctx)
 
-    kleaf_repo_dir = _get_kleaf_repo_dir(repository_ctx)
+    kleaf_repo_dir = get_kleaf_repo_dir(repository_ctx)
 
     if repository_ctx.attr.build_file:
         repository_ctx.symlink(
