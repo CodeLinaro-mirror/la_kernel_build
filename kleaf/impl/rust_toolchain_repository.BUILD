@@ -19,7 +19,7 @@ load("@rules_cc//cc:cc_import.bzl", "cc_import")
 load("@rules_rust//rust:toolchain.bzl", "rust_toolchain", "rustfmt_toolchain")
 load("@rules_rust_bindgen//:defs.bzl", "rust_bindgen_toolchain")
 
-_RUST_PKG = package_relative_label("@prebuilt_rust//" + VARS["RUSTC_VERSION"])
+_RUST_PKG = package_relative_label("@prebuilt_rust//" + VARS.get("RUSTC_VERSION", "fake"))
 
 # Extract Rust binaries from prebuilt using bazel_skylib's select_file
 select_file(
@@ -43,6 +43,7 @@ select_file(
 # Toolchains
 
 ## Host glibc
+# buildifier: disable=no-effect
 rust_toolchain(
     name = "rust_toolchain_x86_64-unknown-linux-gnu",
     binary_ext = "",
@@ -55,8 +56,9 @@ rust_toolchain(
     staticlib_ext = ".a",
     stdlib_linkflags = [],
     target_triple = "x86_64-unknown-linux-gnu",
-)
+) if "RUSTC_VERSION" in VARS else None
 
+# buildifier: disable=no-effect
 toolchain(
     name = "2_x86_64-unknown-linux-gnu",
     exec_compatible_with = [
@@ -70,9 +72,10 @@ toolchain(
     toolchain = ":rust_toolchain_x86_64-unknown-linux-gnu",
     toolchain_type = "@rules_rust//rust:toolchain_type",
     visibility = ["//visibility:public"],
-)
+) if "RUSTC_VERSION" in VARS else None
 
 ## Host musl
+# buildifier: disable=no-effect
 rust_toolchain(
     name = "rust_toolchain_x86_64-unknown-linux-musl",
     binary_ext = "",
@@ -85,8 +88,9 @@ rust_toolchain(
     staticlib_ext = ".a",
     stdlib_linkflags = [],
     target_triple = "x86_64-unknown-linux-musl",
-)
+) if "RUSTC_VERSION" in VARS else None
 
+# buildifier: disable=no-effect
 toolchain(
     name = "1_x86_64-unknown-linux-musl",
     exec_compatible_with = [
@@ -101,9 +105,10 @@ toolchain(
     toolchain = ":rust_toolchain_x86_64-unknown-linux-musl",
     toolchain_type = "@rules_rust//rust:toolchain_type",
     visibility = ["//visibility:public"],
-)
+) if "RUSTC_VERSION" in VARS else None
 
 ## Target Android ARM64
+# buildifier: disable=no-effect
 rust_toolchain(
     name = "rust_toolchain_aarch64-linux-android",
     binary_ext = "",
@@ -116,8 +121,9 @@ rust_toolchain(
     staticlib_ext = ".a",
     stdlib_linkflags = [],
     target_triple = "aarch64-linux-android",
-)
+) if "RUSTC_VERSION" in VARS else None
 
+# buildifier: disable=no-effect
 toolchain(
     name = "aarch64-linux-android",
     exec_compatible_with = [
@@ -131,9 +137,10 @@ toolchain(
     toolchain = ":rust_toolchain_aarch64-linux-android",
     toolchain_type = "@rules_rust//rust:toolchain_type",
     visibility = ["//visibility:public"],
-)
+) if "RUSTC_VERSION" in VARS else None
 
 ## Target Android RISCV64
+# buildifier: disable=no-effect
 rust_toolchain(
     name = "rust_toolchain_riscv64-linux-android",
     binary_ext = "",
@@ -146,8 +153,9 @@ rust_toolchain(
     staticlib_ext = ".a",
     stdlib_linkflags = [],
     target_triple = "riscv64-linux-android",
-)
+) if "RUSTC_VERSION" in VARS else None
 
+# buildifier: disable=no-effect
 toolchain(
     name = "riscv64-linux-android",
     exec_compatible_with = [
@@ -161,9 +169,10 @@ toolchain(
     toolchain = ":rust_toolchain_riscv64-linux-android",
     toolchain_type = "@rules_rust//rust:toolchain_type",
     visibility = ["//visibility:public"],
-)
+) if "RUSTC_VERSION" in VARS else None
 
 ## Target Android X86_64
+# buildifier: disable=no-effect
 rust_toolchain(
     name = "rust_toolchain_x86_64-linux-android",
     binary_ext = "",
@@ -176,8 +185,9 @@ rust_toolchain(
     staticlib_ext = ".a",
     stdlib_linkflags = [],
     target_triple = "x86_64-linux-android",
-)
+) if "RUSTC_VERSION" in VARS else None
 
+# buildifier: disable=no-effect
 toolchain(
     name = "x86_64-linux-android",
     exec_compatible_with = [
@@ -191,7 +201,7 @@ toolchain(
     toolchain = ":rust_toolchain_x86_64-linux-android",
     toolchain_type = "@rules_rust//rust:toolchain_type",
     visibility = ["//visibility:public"],
-)
+) if "RUSTC_VERSION" in VARS else None
 
 # Rustfmt
 rustfmt_toolchain(
