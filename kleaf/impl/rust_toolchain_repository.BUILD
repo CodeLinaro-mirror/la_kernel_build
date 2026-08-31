@@ -18,8 +18,9 @@ load("@kleaf//build/kernel/kleaf/impl:cc.bzl", "resolved_clang_extractor")
 load("@rules_cc//cc:cc_import.bzl", "cc_import")
 load("@rules_rust//rust:toolchain.bzl", "rust_toolchain", "rustfmt_toolchain")
 load("@rules_rust_bindgen//:defs.bzl", "rust_bindgen_toolchain")
+load(":constants.scl", "EXEC_TRIPLE")
 
-_RUST_PKG = package_relative_label("@prebuilt_rust//" + VARS.get("RUSTC_VERSION", "fake"))
+_RUST_PKG = package_relative_label("//toolchain/" + VARS.get("RUSTC_VERSION", "fake"))
 
 # Extract Rust binaries from prebuilt using bazel_skylib's select_file
 select_file(
@@ -48,7 +49,7 @@ rust_toolchain(
     name = "rust_toolchain_x86_64-unknown-linux-gnu",
     binary_ext = "",
     dylib_ext = ".so",
-    exec_triple = "x86_64-unknown-linux-gnu",
+    exec_triple = EXEC_TRIPLE,
     rust_doc = ":rustdoc_file",
     rust_std = _RUST_PKG.same_package_label("stdlib_x86_64-unknown-linux-gnu"),
     rustc = ":rustc_file",
@@ -80,7 +81,7 @@ rust_toolchain(
     name = "rust_toolchain_x86_64-unknown-linux-musl",
     binary_ext = "",
     dylib_ext = ".so",
-    exec_triple = "x86_64-unknown-linux-gnu",
+    exec_triple = EXEC_TRIPLE,
     rust_doc = ":rustdoc_file",
     rust_std = _RUST_PKG.same_package_label("stdlib_x86_64-unknown-linux-musl"),
     rustc = ":rustc_file",
@@ -113,7 +114,7 @@ rust_toolchain(
     name = "rust_toolchain_aarch64-linux-android",
     binary_ext = "",
     dylib_ext = ".so",
-    exec_triple = "x86_64-unknown-linux-gnu",
+    exec_triple = EXEC_TRIPLE,
     rust_doc = ":rustdoc_file",
     rust_std = _RUST_PKG.same_package_label("stdlib_aarch64-linux-android"),
     rustc = ":rustc_file",
@@ -145,7 +146,7 @@ rust_toolchain(
     name = "rust_toolchain_riscv64-linux-android",
     binary_ext = "",
     dylib_ext = ".so",
-    exec_triple = "x86_64-unknown-linux-gnu",
+    exec_triple = EXEC_TRIPLE,
     rust_doc = ":rustdoc_file",
     rust_std = _RUST_PKG.same_package_label("stdlib_riscv64-linux-android"),
     rustc = ":rustc_file",
@@ -177,7 +178,7 @@ rust_toolchain(
     name = "rust_toolchain_x86_64-linux-android",
     binary_ext = "",
     dylib_ext = ".so",
-    exec_triple = "x86_64-unknown-linux-gnu",
+    exec_triple = EXEC_TRIPLE,
     rust_doc = ":rustdoc_file",
     rust_std = _RUST_PKG.same_package_label("stdlib_x86_64-linux-android"),
     rustc = ":rustc_file",
