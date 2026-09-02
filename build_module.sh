@@ -327,7 +327,9 @@ for EXT_MOD in ${EXT_MODULES}; do
       break
     fi
   done
-  if [[ "$TARGET_BOARD_PLATFORM" = "gen4" ||
+  if [ -n "$TARGET_KERNEL_DDK_TARGET" ]; then
+     btgt="$TARGET_KERNEL_DDK_TARGET"
+  elif [[ "$TARGET_BOARD_PLATFORM" = "gen4" ||
 	  "$TARGET_BOARD_PLATFORM" = "gen5" ||
 	  "$TARGET_BOARD_PLATFORM" = "auto_gen" ]]; then
      btgt="autogvm"
@@ -347,7 +349,7 @@ for EXT_MOD in ${EXT_MODULES}; do
      btgt="$TARGET_BOARD_PLATFORM"
   fi
 
-  if [[ "$btgt" == "hamoa_la" ]]; then
+  if [[ "$btgt" == "hamoa_la" || "$btgt" == "shikra_tiny" ]]; then
      filter_regex="${btgt}_${VARIANT/_/-}_${SUBTARGET_REGEX:-.*}_dist$"
   else
      filter_regex="${btgt/_/-}_${VARIANT/_/-}_${SUBTARGET_REGEX:-.*}_dist$"
