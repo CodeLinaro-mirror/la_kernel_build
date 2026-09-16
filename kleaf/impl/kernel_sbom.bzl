@@ -20,10 +20,11 @@ load(":common_providers.bzl", "KernelBuildUnameInfo")
 visibility("//build/kernel/kleaf/...")
 
 def _kernel_sbom_impl(ctx):
-    output_file = ctx.actions.declare_file("{}/kernel_sbom.spdx.json".format(ctx.label.name))
     kernel_release = ctx.attr.kernel_build[KernelBuildUnameInfo].kernel_release
 
-    srcs_depset = depset(transitive = [target.files for target in ctx.attr.srcs])
+    srcs = [ctx.attr.kernel_build] + ctx.attr.srcs
+    srcs_depset = depset(transitive = [target.files for target in srcs])
+    output_file = ctx.actions.declare_file("{}/{}".format(ctx.label.name, ctx.attr.out))
 
     args = ctx.actions.args()
     args.add("--output_file", output_file)
@@ -48,10 +49,19 @@ kernel_sbom = rule(
     implementation = _kernel_sbom_impl,
     doc = """Generate an SPDX SBOM for kernels.""",
     attrs = {
-        "srcs": attr.label_list(mandatory = True, allow_files = True),
+        "srcs": attr.label_list(
+            mandatory = False,
+            allow_files = True,
+            doc = "List of [kernel_module](#kernel_module) targets",
+        ),
         "kernel_build": attr.label(
             mandatory = True,
             providers = [KernelBuildUnameInfo],
+            doc = """The [`kernel_build()`](#kernel_build) target.""",
+        ),
+        "out": attr.string(
+            default = "kernel_sbom.spdx.json",
+            doc = "The output SPDX JSON file name.",
         ),
         "_kernel_sbom": attr.label(
             default = "//build/kernel/kleaf:kernel_sbom",

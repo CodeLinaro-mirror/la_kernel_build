@@ -27,7 +27,7 @@ Like filegroup, but applies transitions to Android.
 ## checkpatch
 
 <pre>
-checkpatch(<a href="#checkpatch-name">name</a>, <a href="#checkpatch-checkpatch_pl">checkpatch_pl</a>, <a href="#checkpatch-ignorelist">ignorelist</a>)
+checkpatch(<a href="#checkpatch-name">name</a>, <a href="#checkpatch-checkpatch_pl">checkpatch_pl</a>, <a href="#checkpatch-ignorelist">ignorelist</a>, <a href="#checkpatch-strict">strict</a>)
 </pre>
 
 Run `checkpatch.sh` at the root of this package.
@@ -40,6 +40,7 @@ Run `checkpatch.sh` at the root of this package.
 | <a id="checkpatch-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="checkpatch-checkpatch_pl"></a>checkpatch_pl |  Label to `checkpatch.pl`.<br><br>This is usually `//<common_package>:scripts/checkpatch.pl`.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="checkpatch-ignorelist"></a>ignorelist |  checkpatch ignorelist   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@kleaf//build/kernel/static_analysis:checkpatch_ignorelist"`  |
+| <a id="checkpatch-strict"></a>strict |  Adds --strict to checkpatch invocation   | Boolean | optional |  `False`  |
 
 
 <a id="ddk_headers"></a>
@@ -57,8 +58,7 @@ Example:
 ```
 ddk_headers(
    name = "headers",
-   hdrs = ["include/module.h"],
-   textual_hdrs = ["template.c"],
+   hdrs = ["include/module.h", "template.c"],
    includes = ["include"],
 )
 ```
@@ -90,7 +90,7 @@ ddk_headers(
 | <a id="ddk_headers-includes"></a>includes |  A list of directories, relative to the current package, that are re-exported as include directories.<br><br>[`ddk_module`](#ddk_module) with `deps` including this target automatically adds the given include directory in the generated `Kbuild` files.<br><br>You still need to add the actual header files to `hdrs`.   | List of strings | optional |  `[]`  |
 | <a id="ddk_headers-kconfigs"></a>kconfigs |  Kconfig files.<br><br>See [`Documentation/kbuild/kconfig-language.rst`](https://www.kernel.org/doc/html/latest/kbuild/kconfig.html) for its format.<br><br>Kconfig is optional for a `ddk_module`. The final Kconfig known by this module consists of the following:<br><br>- Kconfig from `kernel_build` - Kconfig from dependent modules, if any - Kconfig of this module, if any   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="ddk_headers-linux_includes"></a>linux_includes |  Like `includes` but specified in `LINUXINCLUDES` instead.<br><br>Setting this attribute allows you to override headers from `${KERNEL_DIR}`. See "Order of includes" in [`ddk_module`](#ddk_module) for details.<br><br>Like `includes`, `linux_includes` is applied to dependent `ddk_module`s.   | List of strings | optional |  `[]`  |
-| <a id="ddk_headers-textual_hdrs"></a>textual_hdrs |  The list of header files to be textually included by sources.<br><br>This is the location for declaring header files that cannot be compiled on their own; that is, they always need to be textually included by other source files to build valid code.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="ddk_headers-textual_hdrs"></a>textual_hdrs |  DEPRECATED. Use `hdrs` instead.<br><br>The list of header files to be textually included by sources.<br><br>This is the location for declaring header files that cannot be compiled on their own; that is, they always need to be textually included by other source files to build valid code.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 
 
 <a id="ddk_headers_archive"></a>
@@ -120,7 +120,7 @@ semantically identical to the original `ddk_headers` definition.
 ## ddk_uapi_headers
 
 <pre>
-ddk_uapi_headers(<a href="#ddk_uapi_headers-name">name</a>, <a href="#ddk_uapi_headers-srcs">srcs</a>, <a href="#ddk_uapi_headers-out">out</a>, <a href="#ddk_uapi_headers-kernel_build">kernel_build</a>)
+ddk_uapi_headers(<a href="#ddk_uapi_headers-name">name</a>, <a href="#ddk_uapi_headers-srcs">srcs</a>, <a href="#ddk_uapi_headers-out">out</a>, <a href="#ddk_uapi_headers-kernel_build">kernel_build</a>, <a href="#ddk_uapi_headers-strip_prefix">strip_prefix</a>)
 </pre>
 
 A rule that generates a sanitized UAPI header tarball.
@@ -145,6 +145,7 @@ ddk_uapi_headers(
 | <a id="ddk_uapi_headers-srcs"></a>srcs |  UAPI headers files which can be sanitized by "make headers_install"   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="ddk_uapi_headers-out"></a>out |  Name of the output tarball   | String | required |  |
 | <a id="ddk_uapi_headers-kernel_build"></a>kernel_build |  [`kernel_build`](#kernel_build).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="ddk_uapi_headers-strip_prefix"></a>strip_prefix |  Prefix to strip from UAPI header paths before copying them to usr/include. Must begin with include/uapi.   | String | optional |  `"include/uapi"`  |
 
 
 <a id="dependency_graph_drawer"></a>
@@ -227,6 +228,26 @@ It works by matching undefined symbols from one module with exported symbols fro
 | <a id="dependency_graph_extractor-exclude_base_kernel_modules"></a>exclude_base_kernel_modules |  Whether the analysis should made for only external modules.   | Boolean | optional |  `False`  |
 | <a id="dependency_graph_extractor-kernel_build"></a>kernel_build |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="dependency_graph_extractor-kernel_modules"></a>kernel_modules |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+
+
+<a id="dtb_image"></a>
+
+## dtb_image
+
+<pre>
+dtb_image(<a href="#dtb_image-name">name</a>, <a href="#dtb_image-srcs">srcs</a>, <a href="#dtb_image-out">out</a>)
+</pre>
+
+Build `dtb` image.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="dtb_image-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="dtb_image-srcs"></a>srcs |  DTB sources to add to the dtb image   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="dtb_image-out"></a>out |  Name of `dtb` image.<br><br>Default to `name` if not set   | String | optional |  `""`  |
 
 
 <a id="extract_symbols"></a>
@@ -519,6 +540,27 @@ In `foo_dist`, specifying `foo_modules_install` in `data` won't include
 | <a id="kernel_modules_install-outs"></a>outs |  A list of additional outputs from `make modules_install`.<br><br>Since external modules are returned by default, it can be used to obtain modules.* related files (results of depmod). Only files with allowed names can be added to outs. (`_OUT_ALLOWLIST`) <pre><code>_OUT_ALLOWLIST = ["modules.dep", "modules.alias", "modules.builtin", "modules.symbols", "modules.softdep"]</code></pre> Example: <pre><code>kernel_modules_install(&#10;    name = "foo_modules_install",&#10;    kernel_modules = [":foo_module_list"],&#10;    outs = [&#10;        "modules.dep",&#10;        "modules.alias",&#10;    ],&#10;)</code></pre>   | List of strings | optional |  `[]`  |
 | <a id="kernel_modules_install-kernel_build"></a>kernel_build |  Label referring to the `kernel_build` module. Otherwise, it is inferred from `kernel_modules`.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="kernel_modules_install-kernel_modules"></a>kernel_modules |  A list of labels referring to `kernel_module`s to install.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+
+
+<a id="kernel_sbom"></a>
+
+## kernel_sbom
+
+<pre>
+kernel_sbom(<a href="#kernel_sbom-name">name</a>, <a href="#kernel_sbom-srcs">srcs</a>, <a href="#kernel_sbom-out">out</a>, <a href="#kernel_sbom-kernel_build">kernel_build</a>)
+</pre>
+
+Generate an SPDX SBOM for kernels.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="kernel_sbom-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="kernel_sbom-srcs"></a>srcs |  List of [kernel_module](#kernel_module) targets   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="kernel_sbom-out"></a>out |  The output SPDX JSON file name.   | String | optional |  `"kernel_sbom.spdx.json"`  |
+| <a id="kernel_sbom-kernel_build"></a>kernel_build |  The [`kernel_build()`](#kernel_build) target.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
 <a id="kernel_unstripped_modules_archive"></a>
@@ -871,7 +913,7 @@ $(LINUXINCLUDE)
 | <a id="ddk_module-srcs"></a>srcs |  sources and local headers.<br><br>Source files (`.c`, `.S`, `.rs`) must be in the package of this `ddk_module` target, or in subpackages.<br><br>Generated source files (`.c`, `.S`, `.rs`) are accepted as long as they are in the package of this `ddk_module` target, or in subpackages.<br><br>Header files specified here are only visible to this `ddk_module` target, but not dependencies. To export a header so dependencies can use it, put it in `hdrs` and set `includes` accordingly.<br><br>Generated header files are accepted.   |  `None` |
 | <a id="ddk_module-deps"></a>deps |  A list of dependent targets. Each of them must be one of the following:<br><br>- [`kernel_module`](#kernel_module) - [`ddk_module`](#ddk_module) - [`ddk_headers`](#ddk_headers).   |  `None` |
 | <a id="ddk_module-hdrs"></a>hdrs |  See [`ddk_headers.hdrs`](#ddk_headers-hdrs)   |  `None` |
-| <a id="ddk_module-textual_hdrs"></a>textual_hdrs |  See [`ddk_headers.textual_hdrs`](#ddk_headers-textual_hdrs)   |  `None` |
+| <a id="ddk_module-textual_hdrs"></a>textual_hdrs |  See [`ddk_headers.textual_hdrs`](#ddk_headers-textual_hdrs). DEPRECATED. Use `hdrs`.   |  `None` |
 | <a id="ddk_module-includes"></a>includes |  See [`ddk_headers.includes`](#ddk_headers-includes)   |  `None` |
 | <a id="ddk_module-conditional_srcs"></a>conditional_srcs |  A dictionary that specifies sources conditionally compiled based on configs.<br><br>Example:<br><br><pre><code>conditional_srcs = {&#10;    "CONFIG_FOO": {&#10;        True: ["foo.c"],&#10;        False: ["notfoo.c"]&#10;    }&#10;}</code></pre><br><br>In the above example, if `CONFIG_FOO` is `y` or `m`, `foo.c` is compiled. Otherwise, `notfoo.c` is compiled instead.   |  `None` |
 | <a id="ddk_module-linux_includes"></a>linux_includes |  See [`ddk_headers.linux_includes`](#ddk_headers-linux_includes)<br><br>Unlike `ddk_headers.linux_includes`, `ddk_module.linux_includes` is **NOT** applied to dependent `ddk_module`s.   |  `None` |
@@ -1153,7 +1195,7 @@ kernel_build(<a href="#kernel_build-name">name</a>, <a href="#kernel_build-build
              <a href="#kernel_build-collect_unstripped_modules">collect_unstripped_modules</a>, <a href="#kernel_build-enable_interceptor">enable_interceptor</a>, <a href="#kernel_build-kbuild_symtypes">kbuild_symtypes</a>, <a href="#kernel_build-toolchain_version">toolchain_version</a>,
              <a href="#kernel_build-strip_modules">strip_modules</a>, <a href="#kernel_build-module_signing_key">module_signing_key</a>, <a href="#kernel_build-system_trusted_key">system_trusted_key</a>,
              <a href="#kernel_build-modules_prepare_force_generate_headers">modules_prepare_force_generate_headers</a>, <a href="#kernel_build-defconfig_fragments">defconfig_fragments</a>, <a href="#kernel_build-page_size">page_size</a>, <a href="#kernel_build-pack_module_env">pack_module_env</a>,
-             <a href="#kernel_build-sanitizers">sanitizers</a>, <a href="#kernel_build-ddk_module_defconfig_fragments">ddk_module_defconfig_fragments</a>, <a href="#kernel_build-kwargs">kwargs</a>)
+             <a href="#kernel_build-sanitizers">sanitizers</a>, <a href="#kernel_build-ddk_module_defconfig_fragments">ddk_module_defconfig_fragments</a>, <a href="#kernel_build-clang_autofdo_profile">clang_autofdo_profile</a>, <a href="#kernel_build-kwargs">kwargs</a>)
 </pre>
 
 Defines a kernel build target with all dependent targets.
@@ -1211,6 +1253,7 @@ For example, if name is `"kernel_aarch64"`:
 | <a id="kernel_build-pack_module_env"></a>pack_module_env |  If `True`, create `{name}_module_env.tar.gz` and other archives as part of the default output of this target.<br><br>These archives contains necessary files to build external modules.   |  `None` |
 | <a id="kernel_build-sanitizers"></a>sanitizers |  **non-configurable**. A list of sanitizer configurations. By default, no sanitizers are explicity configured; values in defconfig are respected. Possible values are:   - `["kasan_any_mode"]`   - `["kasan_sw_tags"]`   - `["kasan_generic"]`   - `["kcsan"]`   |  `None` |
 | <a id="kernel_build-ddk_module_defconfig_fragments"></a>ddk_module_defconfig_fragments |  A list of additional defconfigs, to be used in `ddk_module`s building against this kernel. Unlike `defconfig_fragments`, `ddk_module_defconfig_fragments` is not applied to this `kernel_build` target, nor dependent legacy `kernel_module`s.   |  `None` |
+| <a id="kernel_build-clang_autofdo_profile"></a>clang_autofdo_profile |  Path to an AutoFDO profile, For example: <pre><code>  clang_autofdo_profile = "//toolchain/pgo-profiles/kernel:aarch64/android15-6.6/kernel.afdo"</code></pre>   |  `None` |
 | <a id="kernel_build-kwargs"></a>kwargs |  Additional attributes to the internal rule, e.g. [`visibility`](https://docs.bazel.build/versions/main/visibility.html). See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 
@@ -1243,9 +1286,9 @@ Specify a kernel DTS tree.
 kernel_images(<a href="#kernel_images-name">name</a>, <a href="#kernel_images-kernel_modules_install">kernel_modules_install</a>, <a href="#kernel_images-kernel_build">kernel_build</a>, <a href="#kernel_images-base_kernel_images">base_kernel_images</a>, <a href="#kernel_images-build_initramfs">build_initramfs</a>,
               <a href="#kernel_images-build_vendor_dlkm">build_vendor_dlkm</a>, <a href="#kernel_images-build_vendor_dlkm_flatten">build_vendor_dlkm_flatten</a>, <a href="#kernel_images-build_boot">build_boot</a>, <a href="#kernel_images-build_vendor_boot">build_vendor_boot</a>,
               <a href="#kernel_images-build_vendor_kernel_boot">build_vendor_kernel_boot</a>, <a href="#kernel_images-build_system_dlkm">build_system_dlkm</a>, <a href="#kernel_images-build_system_dlkm_flatten">build_system_dlkm_flatten</a>, <a href="#kernel_images-build_dtbo">build_dtbo</a>,
-              <a href="#kernel_images-dtbo_srcs">dtbo_srcs</a>, <a href="#kernel_images-dtbo_config">dtbo_config</a>, <a href="#kernel_images-mkbootimg">mkbootimg</a>, <a href="#kernel_images-deps">deps</a>, <a href="#kernel_images-boot_image_outs">boot_image_outs</a>, <a href="#kernel_images-modules_list">modules_list</a>,
-              <a href="#kernel_images-modules_recovery_list">modules_recovery_list</a>, <a href="#kernel_images-modules_charger_list">modules_charger_list</a>, <a href="#kernel_images-modules_blocklist">modules_blocklist</a>, <a href="#kernel_images-modules_options">modules_options</a>,
-              <a href="#kernel_images-vendor_ramdisk_binaries">vendor_ramdisk_binaries</a>, <a href="#kernel_images-vendor_ramdisk_dev_nodes">vendor_ramdisk_dev_nodes</a>, <a href="#kernel_images-system_dlkm_fs_type">system_dlkm_fs_type</a>,
+              <a href="#kernel_images-build_vendor_dtb">build_vendor_dtb</a>, <a href="#kernel_images-dtbo_srcs">dtbo_srcs</a>, <a href="#kernel_images-dtbo_config">dtbo_config</a>, <a href="#kernel_images-mkbootimg">mkbootimg</a>, <a href="#kernel_images-deps">deps</a>, <a href="#kernel_images-boot_image_outs">boot_image_outs</a>,
+              <a href="#kernel_images-modules_list">modules_list</a>, <a href="#kernel_images-modules_recovery_list">modules_recovery_list</a>, <a href="#kernel_images-modules_charger_list">modules_charger_list</a>, <a href="#kernel_images-modules_blocklist">modules_blocklist</a>,
+              <a href="#kernel_images-modules_options">modules_options</a>, <a href="#kernel_images-vendor_ramdisk_binaries">vendor_ramdisk_binaries</a>, <a href="#kernel_images-vendor_ramdisk_dev_nodes">vendor_ramdisk_dev_nodes</a>, <a href="#kernel_images-system_dlkm_fs_type">system_dlkm_fs_type</a>,
               <a href="#kernel_images-system_dlkm_fs_types">system_dlkm_fs_types</a>, <a href="#kernel_images-system_dlkm_modules_list">system_dlkm_modules_list</a>, <a href="#kernel_images-system_dlkm_modules_blocklist">system_dlkm_modules_blocklist</a>,
               <a href="#kernel_images-system_dlkm_props">system_dlkm_props</a>, <a href="#kernel_images-vendor_dlkm_archive">vendor_dlkm_archive</a>, <a href="#kernel_images-vendor_dlkm_etc_files">vendor_dlkm_etc_files</a>, <a href="#kernel_images-vendor_dlkm_fs_type">vendor_dlkm_fs_type</a>,
               <a href="#kernel_images-vendor_dlkm_modules_list">vendor_dlkm_modules_list</a>, <a href="#kernel_images-vendor_dlkm_modules_blocklist">vendor_dlkm_modules_blocklist</a>, <a href="#kernel_images-vendor_dlkm_props">vendor_dlkm_props</a>,
@@ -1305,6 +1348,7 @@ For details, see
 | <a id="kernel_images-build_system_dlkm"></a>build_system_dlkm |  Whether to build system_dlkm.img an image with GKI modules.   |  `None` |
 | <a id="kernel_images-build_system_dlkm_flatten"></a>build_system_dlkm_flatten |  Whether to build system_dlkm.flatten.<fs>.img. This image have directory structure as `/lib/modules/*.ko` i.e. no `uname -r` in the path.   |  `None` |
 | <a id="kernel_images-build_dtbo"></a>build_dtbo |  Whether to build dtbo image. Keep this in sync with `BUILD_DTBO_IMG`.<br><br>If `dtbo_srcs` is non-empty, `build_dtbo` is `True` by default. Otherwise it is `False` by default.   |  `None` |
+| <a id="kernel_images-build_vendor_dtb"></a>build_vendor_dtb |  Whether to build `dtb.img` when building any boot images. For compatibility reasons it is True by default when building any boot image.   |  `None` |
 | <a id="kernel_images-dtbo_srcs"></a>dtbo_srcs |  list of `*.dtbo` files used to package the `dtbo.img`. Keep this in sync with `MKDTIMG_DTBOS`; see example below.<br><br>If `dtbo_srcs` is non-empty, `build_dtbo` must not be explicitly set to `False`.<br><br>Example: <pre><code>kernel_build(&#10;    name = "tuna_kernel",&#10;    outs = [&#10;        "path/to/foo.dtbo",&#10;        "path/to/bar.dtbo",&#10;    ],&#10;)&#10;kernel_images(&#10;    name = "tuna_images",&#10;    kernel_build = ":tuna_kernel",&#10;    dtbo_srcs = [&#10;        ":tuna_kernel/path/to/foo.dtbo",&#10;        ":tuna_kernel/path/to/bar.dtbo",&#10;    ]&#10;)</code></pre>   |  `None` |
 | <a id="kernel_images-dtbo_config"></a>dtbo_config |  a config file to create dtbo image by cfg_create command.   |  `None` |
 | <a id="kernel_images-mkbootimg"></a>mkbootimg |  Path to the mkbootimg.py script which builds boot.img. Only used if `build_boot`. If `None`, default to `//tools/mkbootimg:mkbootimg.py`. NOTE: This overrides `MKBOOTIMG_PATH`.   |  `None` |
@@ -1449,5 +1493,27 @@ from the tarball, a source file would `#include <linux/time.h>`.
 | :------------- | :------------- | :------------- |
 | <a id="kernel_uapi_headers_cc_library-name"></a>name |  Name of target.   |  none |
 | <a id="kernel_uapi_headers_cc_library-kernel_build"></a>kernel_build |  [`kernel_build`](#kernel_build)   |  none |
+
+
+<a id="kunit_test"></a>
+
+## kunit_test
+
+<pre>
+kunit_test(<a href="#kunit_test-name">name</a>, <a href="#kunit_test-test_name">test_name</a>, <a href="#kunit_test-modules">modules</a>, <a href="#kunit_test-deps">deps</a>, <a href="#kunit_test-kwargs">kwargs</a>)
+</pre>
+
+A kunit test.
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="kunit_test-name"></a>name |  name of the test   |  none |
+| <a id="kunit_test-test_name"></a>test_name |  name of the kunit test suite   |  none |
+| <a id="kunit_test-modules"></a>modules |  list of modules to be installed for kunit test   |  none |
+| <a id="kunit_test-deps"></a>deps |  dependencies for kunit test runner   |  none |
+| <a id="kunit_test-kwargs"></a>kwargs |  additional arguments for py_test   |  none |
 
 

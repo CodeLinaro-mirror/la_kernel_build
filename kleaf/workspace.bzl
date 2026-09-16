@@ -16,6 +16,7 @@
 Defines repositories in a Kleaf workspace.
 """
 
+load("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 load("//build/kernel/kleaf:key_value_repo.bzl", "key_value_repo")
 load("//build/kernel/kleaf/impl:declare_host_tools.bzl", "kleaf_host_tools_repo")
@@ -110,6 +111,12 @@ WARNING: define_kleaf_workspace() should be called with common_kernel_package={}
         repo_rule = kleaf_local_repository,
         name = "rules_pkg",
         path = "external/bazelbuild-rules_pkg",
+    )
+
+    maybe(
+        repo_rule = kleaf_local_repository,
+        name = "rules_devicetree",
+        path = "external/bazel-contrib-rules_devicetree",
     )
 
     maybe(
