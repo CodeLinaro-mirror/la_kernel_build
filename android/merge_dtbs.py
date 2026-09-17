@@ -33,7 +33,9 @@ import os
 import sys
 import subprocess
 import shutil
+import hashlib
 from itertools import product, combinations_with_replacement, chain
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import argparse
 
@@ -422,6 +424,87 @@ def parse_dt_files(dt_folder):
 			devicetrees.append(DeviceTree(filepath))
 	return devicetrees
 
+def apply_overlay_check(base, dtbo):
+	if os.path.splitext(base.filename)[1] != '.dtb' or os.path.splitext(dtbo.filename)[1] != '.dtbo':
+		return
+	# See DeviceTreeInfo.__gt__; this checks whether dtbo is more specific than the base
+	if dtbo > base:
+		cmd = ['ufdt_apply_overlay', base.filename, dtbo.filename, '/dev/null']
+		logging.debug(' '.join(cmd))
+		subprocess.run(cmd, check=True)
+	else:
+		return
+
+# ---Define whitelist outside function (need to overwrite attributes of merged DTB root node)----
+OVERLAY_ROOT_PROP_WHITELIST = {
+    "qcom,board-id",
+    "compatible",
+    "model",
+}
+
+def apply_overlay_check_and_save(base, dtbo, out_dir):
+	"""
+	Check if dtbo can be applied to base, and save the result if compatible.
+	Args:
+		base: Base DeviceTree object
+		dtbo: Overlay DeviceTree object
+		out_dir: Directory to save merged DTB
+	Returns:
+		True if compatible and saved, False otherwise
+	"""
+	if os.path.splitext(base.filename)[1] != '.dtb' or os.path.splitext(dtbo.filename)[1] != '.dtbo':
+		return False
+
+	# See DeviceTreeInfo.__gt__; this checks whether dtbo is more specific than the base
+	if dtbo > base:
+		# Generate output filename.
+		# base.filename can already be a very long merged name; concatenating
+		# base+dtbo would exceed the filesystem's 255-byte limit and make the
+		# write fail. Use a short, deterministic, collision-free hashed name.
+		base_name = os.path.splitext(os.path.basename(base.filename))[0]
+		dtbo_name = os.path.splitext(os.path.basename(dtbo.filename))[0]
+		digest = hashlib.sha1(f"{base_name}-{dtbo_name}".encode()).hexdigest()[:16]
+		output_file = f"merged-{digest}.dtb"
+		output_path = os.path.join(out_dir, output_file)
+		logging.info(f"Start merge: {base_name} + {dtbo_name} -> {output_file}")
+		# Run overlay command
+		cmd = ['ufdt_apply_overlay', base.filename, dtbo.filename, output_path]
+		logging.debug(' '.join(cmd))
+
+		try:
+			subprocess.run(cmd, check=True)
+			logging.info(f"Successfully merged: {output_file}")
+			# merge DTBO root props into DTB
+			logging.info(f"Start merged root props")
+			props = subprocess.run( ["fdtget", dtbo.filename, "/", "-p"], stdout=subprocess.PIPE, check=False ).stdout.decode().strip().splitlines()
+			props = [p for p in props if p in OVERLAY_ROOT_PROP_WHITELIST]
+
+			for prop in props:
+				raw = subprocess.run( ["fdtget", dtbo.filename, "/", prop], stdout=subprocess.PIPE, check=False ).stdout.decode().rstrip("\n")
+				if not raw:
+					continue
+				tokens = raw.split()
+				is_all_numbers = all(t.startswith("0x") or t.isdigit() for t in tokens)
+
+				if is_all_numbers:
+					cmd_put = ["fdtput", "-t", "i", output_path, "/", prop] + tokens
+				else:
+					cmd_put = ["fdtput", "-t", "s", output_path, "/", prop, raw]
+
+				logging.debug(' '.join(cmd_put))
+				try:
+					subprocess.run(cmd_put, check=True)
+				except subprocess.CalledProcessError:
+					logging.warning(f"Failed to set prop {prop} on {output_path}")
+
+			logging.info(f"Successfully merged root props")
+			return True
+		except subprocess.CalledProcessError:
+			logging.warning(f"Failed to apply {dtbo.filename} to {base.filename}")
+			return False
+	else:
+		return False
+
 def main():
 
 	parser = argparse.ArgumentParser(description='Merge devicetree blobs of techpacks with Kernel Platform SoCs')
@@ -477,6 +560,48 @@ def main():
 			logging.debug(' '.join(cmd))
 			subprocess.run(cmd, check=True)
 
+	# 5. merge dtb + dtbo = dtb
+	# if enable merge dtbo into dtb please control the number of dtbs and dtbos you actually
+	# need, because too many msm-id increase the number of dtb that are finally generated,
+	# thus increasing the size of the final boot.img.
+	env_disable_dtbo = os.environ.get('MERGE_DISABLE_DTBO', '').strip().lower() in ['1', 'true', 'yes', 'on']
+	if env_disable_dtbo:
+		logging.info("disable-dtbo: merging DTBO into DTB and saving merged DTBs")
+		merged_dir = os.path.join(args.out, "merged")
+		os.makedirs(merged_dir, exist_ok=True)
+		logging.info(f"Created merged directory: {merged_dir}")
+
+		# Candidate (base, dtbo) pairs; apply_overlay_check_and_save filters
+		# for .dtb/.dtbo and checks dtbo specificity (see DeviceTreeInfo.__gt__).
+		combinations = list(product(created, created))
+
+		with ThreadPoolExecutor(max_workers=20) as executor:
+			futures = {}
+			for idx, (base, dtbo) in enumerate(combinations):
+				future = executor.submit(apply_overlay_check_and_save, base, dtbo, merged_dir)
+				futures[future] = (base, dtbo, idx + 1)
+
+			compatible_count = 0
+			for future in as_completed(futures):
+				if future.result():
+					compatible_count += 1
+		logging.info(f"5: Saved {compatible_count} merged DTBs to {merged_dir}")
+
+		import glob
+
+		# 6. mv files
+		temp_dir = os.path.join(args.out, "temp")
+		os.makedirs(temp_dir, exist_ok=True)
+
+		# mv --out .dtb to temp & mv merged .dtb to --out
+		for file in glob.glob(os.path.join(args.out, "*.dtb")):
+			shutil.move(file, temp_dir)
+		for file in glob.glob(os.path.join(merged_dir, "*.dtb")):
+			dest = os.path.join(args.out, os.path.basename(file))
+			shutil.move(file, dest)
+		logging.info(f"6: Already move DTB/DTBO to {temp_dir}，merged dtb to {args.out}")
+	else:
+		logging.info("normal: generate DTBs and DTBOs separately")
 
 if __name__ == "__main__":
 	main()
