@@ -1004,6 +1004,7 @@ test_suite(
         ":bazelrc_writer_test",
         ":check_declared_output_list_test",
         ":empty_test",
+        ":flag_alias_rewriter_test",
         "//build/kernel:init_ddk_test",
         "//build/kernel/kleaf/impl:check_config_test",
         "//build/kernel/kleaf/impl:get_kmi_string_test",
@@ -1034,6 +1035,7 @@ py_binary(
     visibility = ["//build/kernel:__subpackages__"],
     deps = [
         ":bazelrc_writer",
+        ":flag_alias_rewriter",
         "//build/kernel/kleaf/impl:default_host_tools",
     ],
 )
