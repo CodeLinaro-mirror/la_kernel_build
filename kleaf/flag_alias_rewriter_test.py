@@ -82,6 +82,69 @@ class FlagAliasRewriterTest(absltest.TestCase):
             "--no//device:foo",
         )
 
+    def test_rewrites_device_bazelrc_and_nested_imports(self):
+        flags_rc = self.root / "flags.bazelrc"
+        flags_rc.write_text(
+            textwrap.dedent("""\
+                build --flag_alias=nokmi_strict=no@kleaf//kleaf:kmi_strict
+                build --flag_alias=nokmi_check=no@kleaf//kleaf:kmi_check
+                build --flag_alias=notrim=@kleaf//kleaf/impl:disable_trim
+            """),
+            encoding="utf-8",
+        )
+
+        debug_rc = self.root / "sub/debug.bazelrc"
+        debug_rc.parent.mkdir(parents=True, exist_ok=True)
+        debug_rc.write_text(
+            textwrap.dedent("""\
+                build:debug_config --notrim
+                build:debug_config --nokmi_strict
+                build:debug_config --nokmi_check
+                build:debug_config --nouse_prebuilt
+                build:debug_config --nocustom_feature
+            """),
+            encoding="utf-8",
+        )
+
+        device_rc = self.root / "device.bazelrc"
+        device_rc.write_text(
+            textwrap.dedent("""\
+                build --flag_alias=use_prebuilt=//common:use_prebuilt
+                build --flag_alias=nouse_prebuilt=no//common:use_prebuilt
+                build --flag_alias=custom_feature=//device:custom_feature
+                build --flag_alias=nocustom_feature=no//device:custom_feature
+                build --nokmi_strict --nokmi_check
+                import "%workspace%/sub/debug.bazelrc"
+                build:16k --nocustom_feature
+                build --noreuse_sandbox_directories
+            """),
+            encoding="utf-8",
+        )
+
+        rewriter = flag_alias_rewriter.FlagAliasRewriter()
+        rewriter.add_aliases_from(
+            flag_alias_rewriter.read_rc_file(flags_rc, self.root)
+        )
+        device_lines = flag_alias_rewriter.read_rc_file(device_rc, self.root)
+        rewriter.add_aliases_from(device_lines)
+
+        self.assertEqual(
+            list(rewriter.rewrite_rc_lines(device_lines)),
+            [
+                "build --flag_alias=use_prebuilt=//common:use_prebuilt",
+                "build --flag_alias=custom_feature=//device:custom_feature",
+                "build --no@kleaf//kleaf:kmi_strict"
+                " --no@kleaf//kleaf:kmi_check",
+                "build:debug_config --notrim",
+                "build:debug_config --no@kleaf//kleaf:kmi_strict",
+                "build:debug_config --no@kleaf//kleaf:kmi_check",
+                "build:debug_config --no//common:use_prebuilt",
+                "build:debug_config --no//device:custom_feature",
+                "build:16k --no//device:custom_feature",
+                "build --noreuse_sandbox_directories",
+            ],
+        )
+
 
 if __name__ == "__main__":
     absltest.main()

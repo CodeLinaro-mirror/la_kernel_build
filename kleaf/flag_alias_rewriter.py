@@ -27,10 +27,13 @@ settings, and drops negated alias definitions so that Bazel never sees them.
 import dataclasses
 import pathlib
 import shlex
+from collections.abc import Iterable, Iterator
+from typing import Optional
 
 _WORKSPACE_PREFIX = "%workspace%/"
 _IMPORT_COMMANDS = ("import", "try-import")
 
+_FLAG_ALIAS_PREFIX = "--flag_alias="
 _NEGATION_PREFIX = "no"
 # "@" covers @kleaf//... flags; "//" covers root-workspace flags in
 # device.bazelrc or user.bazelrc.
@@ -115,6 +118,16 @@ def _import(
         return [line]
 
 
+def _parse_flag_alias(option: str) -> Optional[tuple[str, str]]:
+    """Returns (name, target) for `--flag_alias=<name>=<target>`, else None."""
+    if not option.startswith(_FLAG_ALIAS_PREFIX):
+        return None
+    name, sep, target = option[len(_FLAG_ALIAS_PREFIX):].partition("=")
+    if not sep or not name or not target:
+        return None
+    return name, target
+
+
 def _is_negated_target(target: str) -> bool:
     """Whether a flag alias target has the form `no<label>`."""
     return (target.startswith(_NEGATION_PREFIX) and
@@ -141,6 +154,13 @@ class FlagAliasRewriter:
                 self._negated_aliases.pop(_NEGATION_PREFIX + name, None)
             self._aliases[name] = target
 
+    def add_aliases_from(self, lines: Iterable[RcLine]) -> None:
+        """Registers all `--flag_alias` options found in the given lines."""
+        for line in lines:
+            for option in line.args:
+                if alias := _parse_flag_alias(option):
+                    self.add_alias(*alias)
+
     def rewrite_option(self, option: str) -> str:
         """Rewrites a single `--<name>` or `--no<name>` option if known.
 
@@ -160,3 +180,32 @@ class FlagAliasRewriter:
             if positive_name in self._aliases:
                 return f"--no{self._aliases[positive_name]}"
         return option
+
+    def rewrite_rc_line(self, line: RcLine) -> Optional[str]:
+        """Returns the bazelrc text for `line`, or None to drop the line.
+
+        Negated alias definitions are removed and `--no<name>` options are
+        rewritten. Lines that need no change are returned verbatim.
+        """
+        changed = False
+        options = []
+        for option in line.args:
+            alias = _parse_flag_alias(option)
+            if alias and _is_negated_target(alias[1]):
+                changed = True
+                continue
+            rewritten = self.rewrite_option(option)
+            changed = changed or rewritten != option
+            options.append(rewritten)
+
+        if not changed:
+            return line.raw
+        if not options and ":" not in line.command:
+            return None
+        return " ".join([line.command, *(shlex.quote(opt) for opt in options)])
+
+    def rewrite_rc_lines(self, lines: Iterable[RcLine]) -> Iterator[str]:
+        """Rewrites bazelrc lines, dropping the ones that become empty."""
+        for line in lines:
+            if (text := self.rewrite_rc_line(line)) is not None:
+                yield text
