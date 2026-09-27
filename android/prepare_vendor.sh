@@ -146,9 +146,14 @@ case "${KERNEL_TARGET}" in
   mahua)
     KERNEL_TARGET="glymur"
     ;;
+
 esac
 
 export KERNEL_TARGET
+
+# Determine if the lunch target is LA Prime (Cuttlefish-based) to be able to
+# alter specific build steps.
+ENABLE_VENDOR_CUTTLEFISH="$(get_build_var ENABLE_VENDOR_CUTTLEFISH)"
 
 ################################################################################
 # Configure LTO
@@ -400,6 +405,13 @@ if [ "${COPY_NEEDED}" == "1" ]; then
       cp ${ANDROID_KP_OUT_DIR}/dist/modules.load ${ANDROID_KERNEL_OUT}/modules.load
     fi
 
+    # Ensure that vendor_dlkm.modules.blocklist for LA Prime is empty.
+    # Through this blocklist, autogvm blocks modules exclusive to LA Prime
+    # for all other lunch targets that use autogvm.
+    if [ "${ENABLE_VENDOR_CUTTLEFISH}" == "true" ]; then
+      echo > "${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist"
+    fi
+
     if [ -f "${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist" ]; then
       VENDOR_RAMDISK_MODULES_DIR="${ANDROID_PRODUCT_OUT}/vendor_ramdisk/lib/modules"
       mkdir -p "${VENDOR_RAMDISK_MODULES_DIR}"
@@ -499,9 +511,36 @@ if [ "${COPY_NEEDED}" == "1" ]; then
 
   cp "${files[@]/#/${ANDROID_KP_OUT_DIR}/dist/}" ${ANDROID_KERNEL_OUT}/
 
-  rm -rf ${ANDROID_KERNEL_OUT}/kp-dtbs
-  mkdir ${ANDROID_KERNEL_OUT}/kp-dtbs
-  cp ${ANDROID_KP_OUT_DIR}/dist/*.dtb* ${ANDROID_KERNEL_OUT}/kp-dtbs/
+  # LA Prime has its own set of DTB files, prefixed with "prime".
+  # However, board-id, msm-id and vmid in these DTBs collide with the ones that
+  # already used by autogvm. To avoid the collision, Prime DTBs use an unsupported
+  # "qcom,board-id" value. The value is corrected only for builds that need it:
+  # VENDOR SI targets with ENABLE_VENDOR_CUTTLEFISH set to "true".
+  rm -rf "${ANDROID_KERNEL_OUT}/kp-dtbs"
+  mkdir "${ANDROID_KERNEL_OUT}/kp-dtbs"
+  if [ "${ENABLE_VENDOR_CUTTLEFISH}" == "true" ] ; then
+    # Copy only Prime DTBs and correct their "qcom,board-id".
+    # The correct value is taken from the original DTB, without the "prime" prefix.
+    readarray -t PDTBS < <(cd "${ANDROID_KP_OUT_DIR}/dist" && find . -name "prime-*.dtb*")
+    for PDTB in "${PDTBS[@]}" ; do
+      # Original DTB file path, erase the "prime-" from the Prime DTB path.
+      ODTB="${PDTB/"prime-"/}"
+      # Copy the Prime DTB first - only this copy will be corrected.
+      cp "${ANDROID_KP_OUT_DIR}/dist/${PDTB}" "${ANDROID_KERNEL_OUT}/kp-dtbs/"
+      # Correct the board-id only if the original DTB exists.
+      if [ -f "${ANDROID_KP_OUT_DIR}/dist/${ODTB}" ] ; then
+        # Retrieve the original "qcom,board-id" value, it is an array of signed integers.
+        readarray -t -d ' ' BOARDID < <("${ANDROID_KP_OUT_DIR}/host/bin/fdtget" \
+          "${ANDROID_KP_OUT_DIR}/dist/${ODTB}" "/" "qcom,board-id")
+        # Put the "qcom,board-id" property from the original DTB into the Prime DTB.
+        "${ANDROID_KP_OUT_DIR}/host/bin/fdtput" \
+          "${ANDROID_KERNEL_OUT}/kp-dtbs/${PDTB}" "/" "qcom,board-id" "${BOARDID[@]}"
+      fi
+    done
+  else
+    # For all other builds, copy all DTBs - no extra steps needed.
+    cp "${ANDROID_KP_OUT_DIR}/dist/"*.dtb* "${ANDROID_KERNEL_OUT}/kp-dtbs/"
+  fi
 
   rm -rf ${ANDROID_KERNEL_OUT}/host
   cp -r ${ANDROID_KP_OUT_DIR}/host ${ANDROID_KERNEL_OUT}/
@@ -705,41 +744,18 @@ if [ "${RECOMPILE_MODULE}" == "1" ] && [ "${DESKTOPOS_PREBUILT}" == "1" ]; then
     fi
 fi
 
-if [ "${TARGET_BOARD_PLATFORM}" == "mahua" ] ; then
-    # Genarate fit image for Desktop Image
-    if [ "${DESKTOPOS_PREBUILT}" == "1" ]; then
-        TOP="${ANDROID_BUILD_TOP}"
-        ITS="${TOP}/vendor/google/desktop/dev/kernel/build_fit_image_desktop/generate-its-script.sh"
-
-        # Run fdtoverlay to generate new dtb
-        fdtoverlay -v -i "${ANDROID_KERNEL_OUT}/dtbs/mahua.dtb" \
-          "${ANDROID_KERNEL_OUT}/dtbs/mahua-crd-overlay.dtbo" \
-            -o "${ANDROID_KERNEL_OUT}/dtbs/mahua-crd.dtb"
-
-        # Generate FIT image using script and dtc
-        "${ITS}" -a arm64 -c lz4 -d "${ANDROID_KERNEL_OUT}/dtbs" \
-          "${ANDROID_KERNEL_OUT}/Image" mahua-crd.dtb \
-            | dtc -I dts -O dtb -p 1024 > "${ANDROID_KERNEL_OUT}/Image.fit"
-
-        # Move Image.fit to Image
-        mv "${ANDROID_KERNEL_OUT}/Image.fit" \
-          "${ANDROID_KERNEL_OUT}/Image"
-    fi
-else
-    # Genarate fit image for Desktop OS Image
-    if [ "${DESKTOPOS_PREBUILT}" == "1" ]; then
-        _MKDTBO="${ANDROID_BUILD_TOP}/system/libufdt/utils/src/mkdtboimg.py"
-        _DTBS="${ANDROID_KERNEL_OUT}/dtbs"
-        _CFG="${ROOT_DIR}/qcom/opensource/devicetree/qcom/hamoa_dtbo.config"
-        _LZ4="${ROOT_DIR}/prebuilts/kernel-build-tools/linux-x86/bin/lz4"
-        echo "  [Desktop OS] Creating dtbo.img via cfg_create from ${_CFG}"
-        "${_MKDTBO}" cfg_create \
-            "${_DTBS}/dtbo.img" \
-            "${_CFG}" \
-            --dtb-dir "${_DTBS}"
-        echo "  [Desktop OS] Recompressing Image to legacy lz4"
-        rm -f "${ANDROID_KERNEL_OUT}/Image.lz4"
-        "${_LZ4}" -l "${ANDROID_KERNEL_OUT}/Image" "${ANDROID_KERNEL_OUT}/Image.lz4"
-    fi
+# Genarate fit image for Desktop OS Image
+if [ "${DESKTOPOS_PREBUILT}" == "1" ]; then
+    _MKDTBO="${ANDROID_BUILD_TOP}/system/libufdt/utils/src/mkdtboimg.py"
+    _DTBS="${ANDROID_KERNEL_OUT}/dtbs"
+    _CFG="${ROOT_DIR}/qcom/opensource/devicetree/qcom/${TARGET_BOARD_PLATFORM}_dtbo.config"
+    _LZ4="${ROOT_DIR}/prebuilts/kernel-build-tools/linux-x86/bin/lz4"
+    echo "  [Desktop OS] Creating dtbo.img via cfg_create from ${_CFG}"
+    "${_MKDTBO}" cfg_create \
+        "${_DTBS}/dtbo.img" \
+        "${_CFG}" \
+        --dtb-dir "${_DTBS}"
+    echo "  [Desktop OS] Recompressing Image to legacy lz4"
+    rm -f "${ANDROID_KERNEL_OUT}/Image.lz4"
+    "${_LZ4}" -l "${ANDROID_KERNEL_OUT}/Image" "${ANDROID_KERNEL_OUT}/Image.lz4"
 fi
-
