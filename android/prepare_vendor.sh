@@ -693,15 +693,19 @@ fi
 rm -rf ${ANDROID_BUILD_TOP}/kernel_platform/out/bazel
 
 # Remove bazel-cache for incremental builds for Desktop OS
+echo "Jump to clean Bazel Cache for incremental builds..."
 if [ "${RECOMPILE_MODULE}" == "1" ] && [ "${DESKTOPOS_PREBUILT}" == "1" ]; then
     KP_OUT_DIR="${ANDROID_BUILD_TOP}/bazel-cache/"
 
+    echo "begain to clean Bazel Cache for incremental builds..."
     if [ -d "${KP_OUT_DIR}" ]; then
         echo "Cleaning Bazel Cache for incremental builds..."
         chmod -R 0755 "${KP_OUT_DIR}"
 
-        # Remove METADATA and TEST_MAPPING files inside Bazel Cache
-        find "${KP_OUT_DIR}" \( -name METADATA -o -name TEST_MAPPING \) -delete
+        # Remove the Bazel Cache
+        echo "ready to clean Bazel Cache"
+        rm -rf "${KP_OUT_DIR}"
+        echo "clean Bazel Cache done"
     fi
 fi
 
