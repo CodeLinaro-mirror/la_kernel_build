@@ -54,7 +54,6 @@ def _kernel_module_group_impl(ctx):
     )
     default_info = DefaultInfo(
         files = depset(merge_gcno_step.outputs, transitive = [target.files for target in targets]),
-        runfiles = ctx.runfiles().merge_all([target[DefaultInfo].default_runfiles for target in targets]),
     )
 
     setup_transitive_inputs = []
