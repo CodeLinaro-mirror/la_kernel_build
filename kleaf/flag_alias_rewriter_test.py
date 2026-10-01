@@ -61,6 +61,27 @@ class FlagAliasRewriterTest(absltest.TestCase):
             ],
         )
 
+    def test_override_positive_alias_and_non_no_negated_alias(self):
+        rewriter = flag_alias_rewriter.FlagAliasRewriter()
+        rewriter.add_alias(
+            "notrim", "@kleaf//build/kernel/kleaf/impl:force_disable_trim"
+        )
+        rewriter.add_alias("rust", "@kleaf//build/kernel/kleaf:rust")
+        rewriter.add_alias("norust", "no@kleaf//build/kernel/kleaf:rust")
+        rewriter.add_alias("rust", "//device:custom_rust")
+        rewriter.add_alias("disable_foo", "no//device:foo")
+
+        self.assertEqual(rewriter.rewrite_option("--notrim"), "--notrim")
+        self.assertEqual(rewriter.rewrite_option("--nobuild"), "--nobuild")
+        self.assertEqual(
+            rewriter.rewrite_option("--norust"),
+            "--no//device:custom_rust",
+        )
+        self.assertEqual(
+            rewriter.rewrite_option("--disable_foo"),
+            "--no//device:foo",
+        )
+
 
 if __name__ == "__main__":
     absltest.main()
