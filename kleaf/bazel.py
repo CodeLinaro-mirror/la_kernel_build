@@ -26,6 +26,7 @@ from typing import BinaryIO, Generator, TextIO, Tuple, Optional
 
 from bazelrc_writer import BazelrcWriter
 from impl.default_host_tools import DEFAULT_HOST_TOOLS
+from flag_alias_rewriter import FlagAliasRewriter, read_rc_file
 from kleaf_help import KleafHelpPrinter, FLAGS_BAZEL_RC
 
 _BAZEL_REL_PATH = "prebuilts/kernel-build-tools/bazel/linux-x86_64/bazel"
@@ -542,8 +543,23 @@ class BazelWrapper(KleafHelpPrinter):
 
         with self.bazelrc_writer.open_file() as f:
             self._generate_bazelrc(f)
+            f.flush()
+            self._rewrite_bazelrc(pathlib.Path(f.name))
             self.transformed_startup_options.append(
                 f"--bazelrc={f.name}")
+
+    def _rewrite_bazelrc(self, rc_path: pathlib.Path):
+        rc_lines = read_rc_file(rc_path, self.workspace_dir)
+        rewriter = FlagAliasRewriter()
+        rewriter.add_aliases_from(rc_lines)
+        rc_path.write_text(
+            "\n".join(rewriter.rewrite_rc_lines(rc_lines)) + "\n",
+            encoding="utf-8",
+        )
+        self.transformed_command_args = [
+            rewriter.rewrite_option(arg)
+            for arg in self.transformed_command_args
+        ]
 
     def _generate_bazelrc(self, f: TextIO):
         kleaf_repo = self._kleaf_repo_rel()
@@ -602,7 +618,7 @@ class BazelWrapper(KleafHelpPrinter):
                 self._override_module(override_module_path, f)
 
         if self.known_args.hermetic_actions:
-            f.write(f'import {kleaf_repo / "build/kernel/kleaf/bazelrc/hermetic_actions.bazelrc"}')
+            f.write(f'import {kleaf_repo / "build/kernel/kleaf/bazelrc/hermetic_actions.bazelrc"}\n')
 
         f.write("".join("import {}\n".format(e) for e in [
             # Toolchains and platforms
