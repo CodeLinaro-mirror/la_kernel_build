@@ -1043,3 +1043,21 @@ py_library(
     srcs = ["bazelrc_writer.py"],
     imports = ["."],
 )
+
+py_library(
+    name = "flag_alias_rewriter",
+    srcs = ["flag_alias_rewriter.py"],
+    imports = ["."],
+)
+
+py_test(
+    name = "flag_alias_rewriter_test",
+    timeout = "short",
+    srcs = [
+        "flag_alias_rewriter_test.py",
+    ],
+    deps = [
+        ":flag_alias_rewriter",
+        "@io_abseil_py//absl/testing:absltest",
+    ],
+)
