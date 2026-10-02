@@ -101,6 +101,12 @@ cc_binary(
         "-fdata-sections",
         '-DTOYBOX_VENDOR=\\"-kleaf\\"',
     ],
+    # Pass `includes` as -isystem so diagnostics from the pre-generated
+    # headers (e.g. -Winvalid-source-encoding from raw bytes in
+    # generated/flags.h) are suppressed as system-header diagnostics.
+    # Bazel 8's native cc rules did this by default; rules_cc (Bazel 9)
+    # passes `includes` as -I unless this feature is requested.
+    features = ["system_include_paths"],
     includes = ["android/linux"],
     linkstatic = False,
     visibility = ["//visibility:public"],
