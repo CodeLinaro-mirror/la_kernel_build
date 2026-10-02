@@ -34,7 +34,7 @@
 
 # https://github.com/bazelbuild/bazel/issues/4867
 # --quiet is too quiet that we can't use it.
-^Starting local Bazel server and connecting to it...$
+^Starting local Bazel server( \(.*\))? and connecting to it...$
 ^Extracting Bazel installation...$
 
 # Allow ignored ABI difference warning
