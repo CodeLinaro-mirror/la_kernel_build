@@ -100,5 +100,11 @@ def kernel_uapi_headers_cc_library(name, kernel_build):
     cc_library(
         name = name,
         hdrs = [":" + unarchived_headers_rule],
+        # Pass `includes` as -isystem so dependents treat the kernel UAPI
+        # headers as system headers, like the libc <linux/*.h> headers they
+        # stand in for. Bazel 8's native cc rules did this by default;
+        # rules_cc (Bazel 9) passes `includes` as -I unless this feature is
+        # requested.
+        features = ["system_include_paths"],
         includes = [unarchived_headers_rule],
     )
