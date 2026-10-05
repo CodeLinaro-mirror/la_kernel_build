@@ -18,6 +18,7 @@ load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("//build/kernel/kleaf/impl:ddk/ddk_module_config.bzl", "ddk_module_config")
 load("//build/kernel/kleaf/tests/utils:config_test.bzl", "config_test")
 load("//build/kernel/kleaf/tests/utils:contain_lines_test.bzl", "contain_lines_test")
+load("//build/kernel/kleaf/tests/utils:output_group_files.bzl", "output_group_files")
 
 def ddk_config_inheritance_test(
         name,
@@ -52,9 +53,9 @@ def ddk_config_inheritance_test(
         **kwargs
     )
 
-    native.filegroup(
+    output_group_files(
         name = name + "_dot_config",
-        srcs = [name + "_module_config"],
+        src = name + "_module_config",
         output_group = ".config",
         **kwargs
     )
@@ -67,9 +68,9 @@ def ddk_config_inheritance_test(
     )
     tests.append(name + "_config_test")
 
-    native.filegroup(
+    output_group_files(
         name = name + "_override_parent_log_actual",
-        srcs = [name + "_module_config"],
+        src = name + "_module_config",
         output_group = "override_parent_log",
         **kwargs
     )
