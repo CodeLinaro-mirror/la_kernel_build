@@ -20,6 +20,7 @@ Require `//common` package.
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("//build/kernel/kleaf:kernel.bzl", "ddk_module", "kernel_build")
 load("//build/kernel/kleaf/tests/utils:contain_lines_test.bzl", "contain_lines_test")
+load("//build/kernel/kleaf/tests/utils:output_group_files.bzl", "output_group_files")
 
 def ddk_module_config_test_suite(name):
     """Defines analysis test for `ddk_module_config`.
@@ -59,9 +60,9 @@ def ddk_module_config_test_suite(name):
         tags = ["manual"],
     )
 
-    native.filegroup(
+    output_group_files(
         name = name + "_actual",
-        srcs = [name + "_ddk_module"],
+        src = name + "_ddk_module",
         output_group = ".config",
         tags = ["manual"],
     )
