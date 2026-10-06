@@ -809,8 +809,6 @@ def _kernel_module_impl(ctx):
         # Sync list of infos with kernel_module_group.
         DefaultInfo(
             files = depset(default_info_files + grab_gcno_step.outputs),
-            # For kernel_module_test
-            runfiles = ctx.runfiles(files = output_files),
         ),
         OutputGroupInfo(**output_group_args),
         KernelModuleSetupInfo(

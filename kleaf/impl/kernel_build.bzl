@@ -2345,8 +2345,6 @@ def _create_infos(
         default_info_files.append(kmi_symbol_list_violations_check_out)
     default_info = DefaultInfo(
         files = depset(default_info_files),
-        # For kernel_build_test
-        runfiles = ctx.runfiles(files = default_info_files),
     )
     module_symvers_file_info = ModuleSymversFileInfo(
         module_symvers = depset(main_action_ret.module_symvers_outputs),
