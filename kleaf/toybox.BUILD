@@ -95,6 +95,7 @@ cc_binary(
     ],
     copts = [
         "-O3",
+        "-Wno-incompatible-pointer-types-discards-qualifiers",
         "-Wno-string-plus-int",
         "-funsigned-char",
         "-ffunction-sections",
