@@ -32,14 +32,14 @@ def _kernel_kythe_transition_impl(_settings, _attr):
         # sandbox.
         # TODO(b/201801372): Consider dropping the sandbox
         "//build/kernel/kleaf:config_local": False,
-        "//build/kernel/kleaf/impl:build_compile_commands": True,
+        "//build/kernel/kleaf:build_compile_commands": True,
     }
 
 _kernel_kythe_transition = transition(
     implementation = _kernel_kythe_transition_impl,
     inputs = [],
     outputs = [
-        "//build/kernel/kleaf/impl:build_compile_commands",
+        "//build/kernel/kleaf:build_compile_commands",
         "//build/kernel/kleaf:config_local",
     ],
 )

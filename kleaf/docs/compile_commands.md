@@ -41,6 +41,28 @@ See `kernel_compile_commands` in
 **NOTE:** For out-of-tree modules built with the `kernel_module` macro, make
 sure your `Makefile` files support the `compile_commands.json` target.
 
+## Avoiding rebuilding the kernel {#build-compile-commands}
+
+Because `kernel_compile_commands` transitions its dependencies to set
+`--build_compile_commands`, running a `kernel_compile_commands` target after a
+regular build without `--build_compile_commands` causes the kernel and modules
+to be rebuilt due to the configuration difference.
+
+To avoid building the kernel twice during local development, pass
+`--build_compile_commands` to **both** the regular `build` / `run` command and
+the `kernel_compile_commands` command (or add `build --build_compile_commands`
+to `user.bazelrc`) so both invocations share the same baseline build
+configuration (`bazel-out/k8-fastbuild/`) and cached actions:
+
+```shell
+$ tools/bazel build --build_compile_commands //common:kernel_aarch64_dist
+$ tools/bazel run --build_compile_commands //common:kernel_aarch64_compile_commands
+```
+
+**WARNING:** Enabling `--build_compile_commands` increases build time. Only set
+this flag for debugging or development builds; do not enable it for production
+builds.
+
 ## See also
 
 See also the following links to incorporate clangd to your editor.
