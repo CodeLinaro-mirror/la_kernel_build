@@ -777,6 +777,18 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
+# If true, also build compile_commands.json and collect necessary files in
+# $OUT_DIR that may be used in compile_commands.json (namely generated source
+# files).
+# Note: This may hurt build time. Only set this flag for debugging or
+# development builds, not production builds.
+# See kleaf/docs/compile_commands.md for details.
+bool_flag(
+    name = "build_compile_commands",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
 # Tools visible to all packages that uses kernel_build.
 # Implementation detail of kernel_build; do not use directly.
 sh_binary(

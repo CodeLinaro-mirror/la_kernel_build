@@ -26,14 +26,14 @@ visibility("//build/kernel/kleaf/...")
 
 def _kernel_compile_commands_transition_impl(_settings, _attr):
     return {
-        "//build/kernel/kleaf/impl:build_compile_commands": True,
+        "//build/kernel/kleaf:build_compile_commands": True,
     }
 
 _kernel_compile_commands_transition = transition(
     implementation = _kernel_compile_commands_transition_impl,
     inputs = [],
     outputs = [
-        "//build/kernel/kleaf/impl:build_compile_commands",
+        "//build/kernel/kleaf:build_compile_commands",
     ],
 )
 

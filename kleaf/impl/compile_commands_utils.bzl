@@ -21,7 +21,7 @@ visibility("//build/kernel/kleaf/...")
 def _compile_commands_config_settings_raw():
     """Attributes of rules that supports `compile_commands.json`."""
     return {
-        "_build_compile_commands": "//build/kernel/kleaf/impl:build_compile_commands",
+        "_build_compile_commands": "//build/kernel/kleaf:build_compile_commands",
     }
 
 def _building_compdb(ctx):
