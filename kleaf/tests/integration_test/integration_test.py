@@ -41,6 +41,7 @@ import contextlib
 import dataclasses
 import hashlib
 import io
+import itertools
 import json
 import os
 import re
@@ -1464,7 +1465,7 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
         extraversion_pattern = re.compile(r"^EXTRAVERSION\s*=")
         self.replace_lines(self.makefile_path,
                            lambda x: re.search(extraversion_pattern, x),
-                           ["EXTRAVERSION = -rc999"])
+                           itertools.repeat("EXTRAVERSION = -rc999"))
 
     def _setup_release_branch(self):
         self._setup_constants(branch="android99-100.110", kmi_generation="56")
@@ -1472,7 +1473,7 @@ class ScmversionIntegrationTest(KleafIntegrationTestBase):
         extraversion_pattern = re.compile(r"^EXTRAVERSION\s*=")
         self.replace_lines(self.makefile_path,
                            lambda x: re.search(extraversion_pattern, x),
-                           ["EXTRAVERSION ="])
+                           itertools.repeat("EXTRAVERSION ="))
 
     def _get_vmlinux_scmversion(self, workspace_root=pathlib.Path("."),
                                 package : str | pathlib.Path | None = None):
