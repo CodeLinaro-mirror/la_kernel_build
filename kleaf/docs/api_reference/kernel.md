@@ -1142,7 +1142,7 @@ When included in a `pkg_files` target included by `pkg_install`, this rule copie
 `destdir`:
 
 - `vendor_dlkm.img`
-- `vendor_dlkm_flatten.img` if build_vendor_dlkm_flatten is True
+- `vendor_dlkm.flatten.img` if build_vendor_dlkm_flatten is True
 
 **ATTRIBUTES**
 
@@ -2046,7 +2046,7 @@ filegroup(
 
 Allowed strings in `filegroup.output_group`:
 * `vendor_dlkm.img`, if `build_vendor_dlkm` is set
-* `vendor_dlkm_flatten.img` if `build_vendor_dlkm_flatten` is not empty
+* `vendor_dlkm.flatten.img` if `build_vendor_dlkm_flatten` is not empty
 * `system_dlkm.img`, if `build_system_dlkm` and `system_dlkm_fs_type` is set
 * `system_dlkm.<type>.img` for each of `system_dlkm_fs_types`, if
     `build_system_dlkm` is set and `system_dlkm_fs_types` is not empty.
