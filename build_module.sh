@@ -355,13 +355,21 @@ for EXT_MOD in ${EXT_MODULES}; do
      filter_regex="${btgt/_/-}_${VARIANT/_/-}_${SUBTARGET_REGEX:-.*}_dist$"
   fi
 
-  # Query for a target that matches the pattern for module distribution
-  if [ "$ENABLE_DDK_BUILD" = "true" ] \
-     && [ -n "$pkg_path" ] \
-     && [ -n "$btgt" ] \
-     && build_target=$(./tools/bazel query --ui_event_filters=-info --noshow_progress \
-          "filter('${filter_regex}', //${pkg_path}/...)") \
-     && [ -n "$build_target" ]
+  # Query for a target that matches the pattern for module distribution.
+  # For shikra, retry with shikra_auto if no matching target is found
+  build_target=""
+  if [ "$ENABLE_DDK_BUILD" = "true" ] && [ -n "$pkg_path" ] && [ -n "$btgt" ]; then
+    build_target=$(./tools/bazel query --ui_event_filters=-info --noshow_progress \
+         "filter('${filter_regex}', //${pkg_path}/...)")
+    if [ -z "$build_target" ] && [ "$btgt" = "shikra" ]; then
+      btgt="shikra_auto"
+      filter_regex="${btgt}_${VARIANT/_/-}_${SUBTARGET_REGEX:-.*}_dist$"
+      build_target=$(./tools/bazel query --ui_event_filters=-info --noshow_progress \
+           "filter('${filter_regex}', //${pkg_path}/...)")
+    fi
+  fi
+
+  if [ -n "$build_target" ]
   then
     if [ "$(printf "%s\n" "$build_target" | wc -l)" -gt 1 ]; then
       printf "error - multiple targets found matching \"%s\":\n%s\n" \
