@@ -41,6 +41,7 @@ ARM64_TARGETS = ["kernel_aarch64",
                  "kernel_debug_aarch64",
                  "kernel_microdroid_aarch64",
                  "kernel_rockpi4",
+                 "kernel_server_aarch64",
                  "u-boot_crosvm_aarch64",
                  "u-boot_qemu_aarch64"]
 RISCV64_TARGETS = ["u-boot_qemu_riscv64"]
@@ -48,6 +49,7 @@ X86_TARGETS = ["kernel_virt_i686"]
 X86_64_TARGETS = ["kernel_x86_64",
                   "kernel_debug_x86_64",
                   "kernel_microdroid_x86_64",
+                  "kernel_server_x86_64",
                   "u-boot_crosvm_x86_64",
                   "u-boot_qemu_x86_64"]
 GIT_COMMIT_LOG_LENGTH = 100
@@ -106,6 +108,10 @@ def parse_args():
       action="store_true",
       help="update Microdroid kernel prebuilts in Android platform (set $ANDROID_BUILD_TOP)")
   update_group.add_argument(
+      "--update-linux-server-kernel",
+      action="store_true",
+      help="update Linux server kernel prebuilts in Android platform (set $ANDROID_BUILD_TOP)")
+  update_group.add_argument(
       "--update-gbl",
       action="store_true",
       help="update GBL prebuilts in Android platform (set $ANDROID_BUILD_TOP)")
@@ -128,6 +134,7 @@ def parse_args():
     _args.update_16k,
     _args.update_u_boot,
     _args.update_microdroid,
+    _args.update_linux_server_kernel,
     _args.update_gbl)):
     if _args.build_target is not None:
       raise Exception("build_target cannot be specified when updating prebuilts")
@@ -385,10 +392,12 @@ def download_kernel_modules(target, output_dir, fetch_initramfs=False):
   _pool.map(func, files_to_fetch)
 
 def clean_download_dir(download_dir):
-  subprocess.run(["git", "rm", "-rf", "*"], cwd=download_dir)
+  if os.path.isdir(download_dir):
+    subprocess.run(["git", "rm", "-rf", "*"], cwd=download_dir)
   os.makedirs(download_dir, exist_ok=True)
   subprocess.run(["git", "checkout", "HEAD", "Android.bp"], cwd=download_dir)
   subprocess.run(["git", "checkout", "HEAD", "16k"], cwd=download_dir)
+  subprocess.run(["git", "checkout", "HEAD", "linux_server"], cwd=download_dir)
   subprocess.run(["git", "checkout", "HEAD", "microdroid-gki"], cwd=download_dir)
 
 def update_android_4_1x_pq(output_dir, version):
@@ -897,6 +906,41 @@ def update_gbl():
   update_gbl_prebuilts(output_dir)
 
 
+def update_linux_server_kernel_for_arch(output_dir, version, arch, target):
+  arch_dir = os.path.join(
+      output_dir, "kernel", "prebuilts", version, arch, "linux_server")
+  kernel_path = os.path.join(arch_dir, "kernel-" + version)
+
+  old_sha = None
+  if os.path.isfile(kernel_path):
+    (_, old_sha) = get_binary_kernel_version(kernel_path)
+
+  clean_download_dir(arch_dir)
+  download_kernel(target, version, arch_dir)
+  write_prebuilt_info(arch_dir)
+
+  (_, new_sha) = get_binary_kernel_version(kernel_path)
+  if old_sha is not None:
+    gitlog = get_git_log(old_sha, new_sha)
+  else:
+    gitlog = f"Initial prebuilts at commit {new_sha}\n"
+
+  commit_prebuilts(arch_dir, gitlog, f"{arch} Linux server kernel")
+
+
+def update_linux_server_kernel():
+  """Download kernel_server prebuilts into kernel/prebuilts/<ver>/<arch>/linux_server."""
+  data = get_build_info(["kernel_server_aarch64", "kernel_server_x86_64"])
+  version = get_build_kernel_version(data)
+  output_dir = os.environ["ANDROID_BUILD_TOP"]
+
+  for arch, target in [
+      ("arm64", "kernel_server_aarch64"),
+      ("x86_64", "kernel_server_x86_64"),
+  ]:
+    update_linux_server_kernel_for_arch(output_dir, version, arch, target)
+
+
 def main():
   global _pool
   _pool = multiprocessing.Pool(10)
@@ -921,6 +965,10 @@ def main():
 
   if _args.update_microdroid:
     update_microdroid_kernel()
+    return
+
+  if _args.update_linux_server_kernel:
+    update_linux_server_kernel()
     return
 
   url_base = BASE_URL.format(build_id=_args.build_id, target=_args.build_target)
