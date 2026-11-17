@@ -559,6 +559,30 @@ py_test(
     ],
 )
 
+py_test(
+    name = "repo_manifest_parser_test",
+    size = "small",
+    srcs = ["init/repo_manifest_parser_test.py"],
+    visibility = ["//visibility:private"],
+    deps = [
+        ":init_ddk",
+        "@io_abseil_py//absl/testing:absltest",
+        "@io_abseil_py//absl/testing:parameterized",
+    ],
+)
+
+py_test(
+    name = "repo_wrapper_test",
+    size = "small",
+    srcs = ["init/repo_wrapper_test.py"],
+    visibility = ["//visibility:private"],
+    deps = [
+        ":init_ddk",
+        "@io_abseil_py//absl/testing:absltest",
+        "@io_abseil_py//absl/testing:parameterized",
+    ],
+)
+
 # Target for distribution.
 filegroup(
     name = "init_ddk_zip",
