@@ -21,6 +21,7 @@ load(
     "DdkHeadersInfo",
     "KernelModuleInfo",
     "KernelModuleSetupInfo",
+    "ModuleSymversInfo",
 )
 load("//build/kernel/kleaf/impl:ddk/ddk_module.bzl", "ddk_module")
 load("//build/kernel/kleaf/impl:kernel_build.bzl", "kernel_build")
@@ -76,6 +77,9 @@ def _kernel_module_group_test_impl(ctx):
         _check_info_field_depset_merged(env, target, src, KernelModuleInfo, "modules_staging_dws_depset")
         _check_info_field_depset_merged(env, target, src, KernelModuleInfo, "kernel_uapi_headers_dws_depset")
         _check_info_field_depset_merged(env, target, src, KernelModuleInfo, "files")
+
+        # check that ModuleSymversInfo is merged
+        _check_info_field_depset_merged(env, target, src, ModuleSymversInfo, "entries")
 
     return analysistest.end(env)
 

@@ -462,9 +462,12 @@ ModuleSymversInfo = provider(
     This is  used for **external modules only** for correctly setting up these files.
     """,
     fields = {
-        "restore_paths": """A [depset](https://bazel.build/extending/depsets) of
-            paths relative to `COMMON_OUT_DIR` where the `Module.symvers` files will be
-            restored to by `KernelModuleSetupInfo`.""",
+        "entries": """A [depset](https://bazel.build/extending/depsets) of structs
+            identifying each `Module.symvers` entry with fields:
+
+            - `restore_path`: path relative to `COMMON_OUT_DIR` where the
+              `Module.symvers` file will be restored to by `KernelModuleSetupInfo`
+            - `owner`: `Label` of the target that owns this `Module.symvers` file.""",
     },
 )
 

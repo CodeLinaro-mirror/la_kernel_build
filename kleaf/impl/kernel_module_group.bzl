@@ -106,8 +106,8 @@ def _kernel_module_group_impl(ctx):
     )
 
     module_symvers_info = ModuleSymversInfo(
-        restore_paths = depset(transitive = [
-            target[ModuleSymversInfo].restore_paths
+        entries = depset(transitive = [
+            target[ModuleSymversInfo].entries
             for target in targets
         ]),
     )

@@ -401,6 +401,9 @@ _get_outs_list = subrule(
     ],
 )
 
+def _get_module_symvers_restore_path(entry):
+    return entry.restore_path
+
 def _makefiles_impl(ctx):
     module_label = Label(str(ctx.label).removesuffix("_makefiles"))
 
@@ -455,8 +458,8 @@ def _makefiles_impl(ctx):
         dirname = paths.dirname(out)
         submodule_linux_includes.setdefault(dirname, []).append(dep[DdkSubmoduleInfo].linux_includes_include_infos)
 
-    module_symvers_depset = depset(transitive = [
-        target[ModuleSymversInfo].restore_paths
+    module_symvers_entries = depset(transitive = [
+        target[ModuleSymversInfo].entries
         for target in module_symvers_deps
     ])
 
@@ -519,7 +522,12 @@ def _makefiles_impl(ctx):
     )
 
     if ctx.attr.top_level_makefile:
-        args.add_all("--module-symvers-list", module_symvers_depset)
+        args.add_all(
+            "--module-symvers-list",
+            module_symvers_entries,
+            map_each = _get_module_symvers_restore_path,
+            uniquify = True,
+        )
 
     args.add_all("--local-defines", ctx.attr.module_local_defines)
 
@@ -629,7 +637,7 @@ def _makefiles_impl(ctx):
             linux_includes_include_infos = include_infos,
         ),
         ModuleSymversInfo(
-            restore_paths = module_symvers_depset,
+            entries = module_symvers_entries,
         ),
         ModuleSymversFileInfo(
             module_symvers = depset(transitive = [
