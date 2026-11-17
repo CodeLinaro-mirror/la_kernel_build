@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_python//python:defs.bzl", "py_binary")
+load("@rules_python//python:defs.bzl", "py_binary", "py_test")
 
 exports_files([
     "checkpatch_ignorelist",
@@ -31,4 +31,20 @@ py_binary(
     ],
     main = "checkpatch_presubmit_bazel.py",
     visibility = ["//visibility:private"],
+)
+
+py_test(
+    name = "checkpatch_presubmit_test",
+    timeout = "short",
+    srcs = [
+        "checkpatch_presubmit_bazel_test.py",
+    ],
+    imports = ["."],
+    main = "checkpatch_presubmit_bazel_test.py",
+    visibility = ["//build/kernel/kleaf:__pkg__"],
+    deps = [
+        ":checkpatch_presubmit",
+        "@io_abseil_py//absl/testing:absltest",
+        "@io_abseil_py//absl/testing:parameterized",
+    ],
 )
