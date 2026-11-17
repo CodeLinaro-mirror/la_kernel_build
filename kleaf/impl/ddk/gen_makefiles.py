@@ -117,7 +117,7 @@ def _gen_makefile(
 
     for module_symvers in module_symvers_list:
         if is_library:
-            # TODO - b/395014894: Propagate Module.symvers to linking stage
+            # Module.symvers is propagated to the linking ddk_module instead.
             content += textwrap.dedent(f"""\
                 # Skipping {module_symvers} for ddk_library
             """)
