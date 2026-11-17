@@ -17,6 +17,7 @@ test_suite(
     tests = [
         "//build/kernel/kleaf/tests/ddk_full_test/built_with_ddk_test",
         "//build/kernel/kleaf/tests/ddk_full_test/ddk_library_all_srcs",
+        "//build/kernel/kleaf/tests/ddk_full_test/ddk_library_module_deps",
     ],
     visibility = ["//build/kernel/kleaf:__subpackages__"],
 )
