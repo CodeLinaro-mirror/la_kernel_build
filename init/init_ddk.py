@@ -78,6 +78,7 @@ class KleafProjectSetter:
     url_fmt: str | None
     superproject_tool: str
     sync: bool
+    groups: str = "ddk"
 
     def __post_init__(self):
         """Initializes the KleafProjectSetter."""
@@ -478,6 +479,7 @@ class KleafProjectSetter:
                     ddk_workspace=self.ddk_workspace,
                     repo_manifest_of_build=self._get_repo_manifest_of_build(),
                     sync=self.sync,
+                    groups=self.groups,
                 ).run()
 
     def _populate_kleaf_repo_extra_files(self) -> None:
@@ -494,6 +496,11 @@ class KleafProjectSetter:
         if not self.prebuilts_dir:
             logging.info(
                 "No prebuilts specified, skip populating %s", self.kleaf_repo
+            )
+            return
+        if self.groups == "all":
+            logging.info(
+                "Skipped populating %s with --groups=all.", self.kleaf_repo
             )
             return
         self._extract_headers_archive(self.prebuilts_dir, self.kleaf_repo)
@@ -631,6 +638,18 @@ if __name__ == "__main__":
         action="store_false",
         dest="sync",
         help="""Do not sync Git projects for Kleaf tooling. See --sync.""",
+    )
+    parser.add_argument(
+        "--groups",
+        choices=["ddk", "all"],
+        default="ddk",
+        help="""Groups of Git projects to check out from the repo manifest.
+
+        - "ddk" (default): Check out only Kleaf tooling projects
+          (groups="ddk" and groups="ddk-external").
+        - "all": Check out all Git projects in the manifest (including
+          common/, external/libcap, etc.).
+        """,
     )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO,
