@@ -380,6 +380,9 @@ function build_flattened_dlkm_image() {
   # Copy the flattened version of modules.load to the dist directory to be
   # consistent with the non-flattened output.
   cp ${staging_dir}/flatten/lib/modules/modules.load ${dist_dir}/${image_type}_dlkm.flatten.modules.load
+  if [[ -n $(find ${staging_dir} -name "modules.blocklist") ]]; then
+    cp $(find ${staging_dir} -name "modules.blocklist") ${staging_dir}/flatten/lib/modules
+  fi
 
   build_image "${staging_dir}/flatten" "${props_file}" \
   "${dist_dir}/${image_name}" /dev/null
@@ -1021,7 +1024,7 @@ function build_gki_boot_images() {
       # overwritten by the Android platform build to include an accurate SPL.
       # Note, the certified GKI release builds will not include the SPL
       # property.
-      local spl_month=$((($(date +'%-m') + 3) % 12))
+      local spl_month=$(((($(date +'%-m') - 1 + 3) % 12) + 1))
       local spl_year="$(date +'%Y')"
       if [ $((${spl_month} % 3)) -gt 0 ]; then
         # Round up to the next quarterly platform release (QPR) month

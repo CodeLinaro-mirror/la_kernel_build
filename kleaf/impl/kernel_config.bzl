@@ -974,7 +974,8 @@ def _get_config_script_impl(
                 orig_config=$(mktemp)
                 changed_config=$(mktemp)
                 new_fragment=$(mktemp)
-                trap "rm -f ${orig_config} ${changed_config} ${new_fragment}" EXIT
+                trap 'rm -f ${orig_config} ${changed_config} ${new_fragment} ${accumulated_raw} ${frag_tmp}; \\
+                    rm -rf ${accumulated_outdir}' EXIT
                 new_config="${OUT_DIR}/.config"
                 cp "${OUT_DIR}/.config" ${orig_config}
                 make -C ${KERNEL_DIR} ${TOOL_ARGS} O=${OUT_DIR} ${MAKE_ARGS} ${menucommand}
@@ -983,32 +984,67 @@ def _get_config_script_impl(
         if pre_defconfig_fragment_files:
             script += """
                 ${{KERNEL_DIR}}/scripts/diffconfig -m ${{orig_config}} ${{new_config}} > ${{changed_config}}
-                KCONFIG_CONFIG=${{new_fragment}} ${{ROOT_DIR}}/${{KERNEL_DIR}}/scripts/kconfig/merge_config.sh -m {fragments} ${{changed_config}}
+                KCONFIG_CONFIG=${{new_fragment}} ${{KERNEL_DIR}}/scripts/kconfig/merge_config.sh -m {fragments} ${{changed_config}}
             """.format(
                 fragments = " ".join([file.short_path for file in pre_defconfig_fragment_files]),
             )
+
+            # len(pre_defconfig_fragment_files) >= 1
+            # Only the last fragment is updated; earlier fragments are base layers.
+            non_last_frag_paths = [shell.quote(f.short_path) for f in pre_defconfig_fragment_files[:-1]]
+            last_frag_path = pre_defconfig_fragment_files[-1].short_path
+
             if len(pre_defconfig_fragment_files) == 1:
+                # Single fragment: write new_fragment directly.
+                # new_fragment = fragment + changed_config, so this always
+                # produces the correct content (with or without user changes).
                 script += """
-                    sort_config ${{new_fragment}} > $(realpath {fragment})
-                    echo "Updated $(realpath {fragment})"
+                    sort_config ${{new_fragment}} > $(realpath {last_frag})
+                    echo "Updated $(realpath {last_frag})"
                 """.format(
-                    fragment = pre_defconfig_fragment_files[0].short_path,
+                    last_frag = last_frag_path,
                 )
             else:
+                # len(pre_defconfig_fragment_files) > 1
+                # Build baseline .config_1 from pristine defconfig + non-last
+                # fragments (not orig_config, which already includes the last
+                # fragment). Expand with olddefconfig so diffconfig against the
+                # full new_config does not pull in Kconfig defaults.
                 script += """
-                    sorted_new_fragment=$(mktemp)
-                    sort_config ${{new_fragment}} > ${{sorted_new_fragment}}
-                    echo "ERROR: Unable to update any file because there are multiple pre_defconfig_fragments." >&2
-                    echo "  Please manually update the following files:" >&2
-                    echo "    "{quoted_indented_fragments} >&2
-                    echo "  ... with the content of ..." >&2
-                    echo "    ${{sorted_new_fragment}}" >&2
-                    # Intentionally not delete sorted_new_fragment
-                    exit 1
+                    echo "Using {base_defconfig} + non-last pre_defconfig_fragments as base"
+                    accumulated_raw=$(mktemp)
+                    KCONFIG_CONFIG=${{accumulated_raw}} ${{KERNEL_DIR}}/scripts/kconfig/merge_config.sh -m \\
+                        {base_defconfig} {non_last_frags}
+                    echo "Merging {non_last_frags}"
+
+                    accumulated_outdir=$(mktemp -d)
+                    cp "${{accumulated_raw}}" "${{accumulated_outdir}}/.config"
+                    make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{accumulated_outdir}} ${{MAKE_ARGS}} olddefconfig
+
+                    frag_tmp=$(mktemp)
+                    ${{KERNEL_DIR}}/scripts/diffconfig -m "${{accumulated_outdir}}/.config" "${{new_config}}" > "${{frag_tmp}}"
                 """.format(
-                    quoted_indented_fragments = shell.quote("\n    ".join([file.short_path for file in pre_defconfig_fragment_files])),
+                    base_defconfig = shell.quote(defconfig_info.file.short_path),
+                    non_last_frags = " ".join(non_last_frag_paths),
                 )
-        else:
+
+                # With menuconfig: always update the last fragment.
+                # Without menuconfig: warn if the computed content differs
+                # from the current fragment file, but do not overwrite it.
+                script += """
+                    if [ "${{menucommand}}" = "menuconfig" ]; then
+                        sort_config "${{frag_tmp}}" > $(realpath {last_frag})
+                        echo "Updated $(realpath {last_frag})"
+                    else
+                        if ! diff -q "${{frag_tmp}}" $(realpath {last_frag}) > /dev/null 2>&1; then
+                            echo "WARNING: $(realpath {last_frag}) is out of sync with the generated config." >&2
+                            echo "  Run with menuconfig to update it." >&2
+                        fi
+                    fi
+                """.format(
+                    last_frag = last_frag_path,
+                )
+        else:  # len(pre_defconfig_fragment_files) == 0
             script += """
                 make -C ${{KERNEL_DIR}} ${{TOOL_ARGS}} O=${{OUT_DIR}} ${{MAKE_ARGS}} savedefconfig
                 mv ${{OUT_DIR}}/defconfig $(realpath {defconfig})
