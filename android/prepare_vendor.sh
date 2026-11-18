@@ -143,9 +143,17 @@ case "${KERNEL_TARGET}" in
   chora)
     KERNEL_TARGET="canoe"
     ;;
+  mahua)
+    KERNEL_TARGET="glymur"
+    ;;
+
 esac
 
 export KERNEL_TARGET
+
+# Determine if the lunch target is LA Prime (Cuttlefish-based) to be able to
+# alter specific build steps.
+ENABLE_VENDOR_CUTTLEFISH="$(get_build_var ENABLE_VENDOR_CUTTLEFISH)"
 
 ################################################################################
 # Configure LTO
@@ -397,6 +405,13 @@ if [ "${COPY_NEEDED}" == "1" ]; then
       cp ${ANDROID_KP_OUT_DIR}/dist/modules.load ${ANDROID_KERNEL_OUT}/modules.load
     fi
 
+    # Ensure that vendor_dlkm.modules.blocklist for LA Prime is empty.
+    # Through this blocklist, autogvm blocks modules exclusive to LA Prime
+    # for all other lunch targets that use autogvm.
+    if [ "${ENABLE_VENDOR_CUTTLEFISH}" == "true" ]; then
+      echo > "${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist"
+    fi
+
     if [ -f "${ANDROID_KP_OUT_DIR}/dist/vendor_dlkm.modules.blocklist" ]; then
       VENDOR_RAMDISK_MODULES_DIR="${ANDROID_PRODUCT_OUT}/vendor_ramdisk/lib/modules"
       mkdir -p "${VENDOR_RAMDISK_MODULES_DIR}"
@@ -496,9 +511,36 @@ if [ "${COPY_NEEDED}" == "1" ]; then
 
   cp "${files[@]/#/${ANDROID_KP_OUT_DIR}/dist/}" ${ANDROID_KERNEL_OUT}/
 
-  rm -rf ${ANDROID_KERNEL_OUT}/kp-dtbs
-  mkdir ${ANDROID_KERNEL_OUT}/kp-dtbs
-  cp ${ANDROID_KP_OUT_DIR}/dist/*.dtb* ${ANDROID_KERNEL_OUT}/kp-dtbs/
+  # LA Prime has its own set of DTB files, prefixed with "prime".
+  # However, board-id, msm-id and vmid in these DTBs collide with the ones that
+  # already used by autogvm. To avoid the collision, Prime DTBs use an unsupported
+  # "qcom,board-id" value. The value is corrected only for builds that need it:
+  # VENDOR SI targets with ENABLE_VENDOR_CUTTLEFISH set to "true".
+  rm -rf "${ANDROID_KERNEL_OUT}/kp-dtbs"
+  mkdir "${ANDROID_KERNEL_OUT}/kp-dtbs"
+  if [ "${ENABLE_VENDOR_CUTTLEFISH}" == "true" ] ; then
+    # Copy only Prime DTBs and correct their "qcom,board-id".
+    # The correct value is taken from the original DTB, without the "prime" prefix.
+    readarray -t PDTBS < <(cd "${ANDROID_KP_OUT_DIR}/dist" && find . -name "prime-*.dtb*")
+    for PDTB in "${PDTBS[@]}" ; do
+      # Original DTB file path, erase the "prime-" from the Prime DTB path.
+      ODTB="${PDTB/"prime-"/}"
+      # Copy the Prime DTB first - only this copy will be corrected.
+      cp "${ANDROID_KP_OUT_DIR}/dist/${PDTB}" "${ANDROID_KERNEL_OUT}/kp-dtbs/"
+      # Correct the board-id only if the original DTB exists.
+      if [ -f "${ANDROID_KP_OUT_DIR}/dist/${ODTB}" ] ; then
+        # Retrieve the original "qcom,board-id" value, it is an array of signed integers.
+        readarray -t -d ' ' BOARDID < <("${ANDROID_KP_OUT_DIR}/host/bin/fdtget" \
+          "${ANDROID_KP_OUT_DIR}/dist/${ODTB}" "/" "qcom,board-id")
+        # Put the "qcom,board-id" property from the original DTB into the Prime DTB.
+        "${ANDROID_KP_OUT_DIR}/host/bin/fdtput" \
+          "${ANDROID_KERNEL_OUT}/kp-dtbs/${PDTB}" "/" "qcom,board-id" "${BOARDID[@]}"
+      fi
+    done
+  else
+    # For all other builds, copy all DTBs - no extra steps needed.
+    cp "${ANDROID_KP_OUT_DIR}/dist/"*.dtb* "${ANDROID_KERNEL_OUT}/kp-dtbs/"
+  fi
 
   rm -rf ${ANDROID_KERNEL_OUT}/host
   cp -r ${ANDROID_KP_OUT_DIR}/host ${ANDROID_KERNEL_OUT}/
@@ -690,15 +732,19 @@ fi
 rm -rf ${ANDROID_BUILD_TOP}/kernel_platform/out/bazel
 
 # Remove bazel-cache for incremental builds for Desktop OS
+echo "Jump to clean Bazel Cache for incremental builds..."
 if [ "${RECOMPILE_MODULE}" == "1" ] && [ "${DESKTOPOS_PREBUILT}" == "1" ]; then
     KP_OUT_DIR="${ANDROID_BUILD_TOP}/bazel-cache/"
 
+    echo "begain to clean Bazel Cache for incremental builds..."
     if [ -d "${KP_OUT_DIR}" ]; then
         echo "Cleaning Bazel Cache for incremental builds..."
         chmod -R 0755 "${KP_OUT_DIR}"
 
-        # Remove METADATA and TEST_MAPPING files inside Bazel Cache
-        find "${KP_OUT_DIR}" \( -name METADATA -o -name TEST_MAPPING \) -delete
+        # Remove the Bazel Cache
+        echo "ready to clean Bazel Cache"
+        rm -rf "${KP_OUT_DIR}"
+        echo "clean Bazel Cache done"
     fi
 fi
 
@@ -706,7 +752,7 @@ fi
 if [ "${DESKTOPOS_PREBUILT}" == "1" ]; then
     _MKDTBO="${ANDROID_BUILD_TOP}/system/libufdt/utils/src/mkdtboimg.py"
     _DTBS="${ANDROID_KERNEL_OUT}/dtbs"
-    _CFG="${ROOT_DIR}/qcom/opensource/devicetree/qcom/hamoa_dtbo.config"
+    _CFG="${ROOT_DIR}/qcom/opensource/devicetree/qcom/${TARGET_BOARD_PLATFORM}_dtbo.config"
     _LZ4="${ROOT_DIR}/prebuilts/kernel-build-tools/linux-x86/bin/lz4"
     echo "  [Desktop OS] Creating dtbo.img via cfg_create from ${_CFG}"
     "${_MKDTBO}" cfg_create \
