@@ -210,10 +210,10 @@ def kernel_module(
 def _check_module_symvers_restore_path(kernel_modules, this_label):
     all_restore_paths = dict()
     for kernel_module in kernel_modules:
-        for restore_path in kernel_module.module_symvers_info.restore_paths.to_list():
-            if restore_path not in all_restore_paths:
-                all_restore_paths[restore_path] = []
-            all_restore_paths[restore_path].append(str(kernel_module.label))
+        for entry in kernel_module.module_symvers_info.entries.to_list():
+            if entry.restore_path not in all_restore_paths:
+                all_restore_paths[entry.restore_path] = []
+            all_restore_paths[entry.restore_path].append(str(kernel_module.label))
 
     dups = dict()
     for key, values in all_restore_paths.items():
@@ -849,7 +849,10 @@ def _kernel_module_impl(ctx):
             # path/to/package/target_name/target_name_Module.symvers -> path/to/package/target_name_Module.symvers;
             # This is similar to ${{OUT_DIR}}/${{ext_mod_rel}}
             # It is needed to remove the `target_name` because we declare_file({name}/{internal_module_symvers_name}) above.
-            restore_paths = depset([module_symvers_restore_path]) if module_symvers_restore_path else depset(),
+            entries = depset([struct(
+                restore_path = module_symvers_restore_path,
+                owner = ctx.label,
+            )]) if module_symvers_restore_path else depset(),
         ),
         ddk_headers_info,
         ddk_config_info,
