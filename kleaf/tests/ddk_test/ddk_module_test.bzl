@@ -21,8 +21,10 @@ load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("//build/kernel/kleaf/impl:common_providers.bzl", "ModuleSymversInfo")
 load("//build/kernel/kleaf/impl:ddk/ddk_headers.bzl", "ddk_headers")
 load("//build/kernel/kleaf/impl:ddk/ddk_module.bzl", "ddk_module")
+load("//build/kernel/kleaf/impl:ddk/ddk_submodule.bzl", "ddk_submodule")
 load("//build/kernel/kleaf/impl:kernel_build.bzl", "kernel_build")
 load("//build/kernel/kleaf/impl:kernel_module.bzl", "kernel_module")
+load("//build/kernel/kleaf/impl:kernel_module_group.bzl", "kernel_module_group")
 load("//build/kernel/kleaf/tests:failure_test.bzl", "failure_test")
 load("//build/kernel/kleaf/tests/utils:contain_lines_test.bzl", "contain_lines_test")
 load(":ddk_headers_test.bzl", "check_ddk_headers_info")
@@ -161,6 +163,95 @@ def _conditional_srcs_test(
         expected = name + "_expected",
         actual = name + "_kbuild",
         order = True,
+    )
+
+def _shared_module_symvers_tests(name, kernel_build, base, legacy_module_a, legacy_module_b):
+    """Tests owner-based deduplication in _check_module_symvers_restore_path."""
+    tests = []
+
+    # Same owner via direct dep and kernel_module_group should pass.
+    kernel_module_group(
+        name = name + "_group_base",
+        srcs = [base],
+        tags = ["manual"],
+    )
+    _ddk_module_test_make(
+        name = name + "_direct_and_group",
+        srcs = ["dep.c"],
+        kernel_build = kernel_build,
+        deps = [
+            base,
+            name + "_group_base",
+        ],
+    )
+    tests.append(name + "_direct_and_group")
+
+    # Same owner referenced by two ddk_submodules (direct and via group) should pass.
+    ddk_submodule(
+        name = name + "_sub_a",
+        out = name + "_sub_a.ko",
+        srcs = ["dep.c"],
+        deps = [base],
+        tags = ["manual"],
+    )
+    ddk_submodule(
+        name = name + "_sub_b",
+        out = name + "_sub_b.ko",
+        srcs = ["self.c"],
+        deps = [name + "_group_base"],
+        tags = ["manual"],
+    )
+    ddk_module(
+        name = name + "_two_submodules_module",
+        kernel_build = kernel_build,
+        deps = [
+            name + "_sub_a",
+            name + "_sub_b",
+        ],
+        tags = ["manual"],
+    )
+    ddk_module_test(
+        name = name + "_two_submodules",
+        target_under_test = name + "_two_submodules_module",
+    )
+    tests.append(name + "_two_submodules")
+
+    # Distinct conflicting legacy kernel_modules wrapped in kernel_module_group still fail.
+    kernel_module_group(
+        name = name + "_group_legacy_a",
+        srcs = [legacy_module_a],
+        tags = ["manual"],
+    )
+    kernel_module_group(
+        name = name + "_group_legacy_b",
+        srcs = [legacy_module_b],
+        tags = ["manual"],
+    )
+    ddk_module(
+        name = name + "_legacy_conflict_groups_module",
+        out = name + "_legacy_conflict_groups_module.ko",
+        srcs = ["dep.c"],
+        kernel_build = kernel_build,
+        deps = [
+            name + "_group_legacy_a",
+            name + "_group_legacy_b",
+        ],
+        tags = ["manual"],
+    )
+    failure_test(
+        name = name + "_legacy_conflict_groups",
+        target_under_test = name + "_legacy_conflict_groups_module",
+        error_message_substrs = [
+            "Conflicting dependencies",
+            legacy_module_a,
+            legacy_module_b,
+        ],
+    )
+    tests.append(name + "_legacy_conflict_groups")
+
+    native.test_suite(
+        name = name,
+        tests = tests,
     )
 
 def ddk_module_test_suite(name):
@@ -328,6 +419,15 @@ def ddk_module_test_suite(name):
         kernel_build = name + "_kernel_build",
     )
     tests.append(name + "_conditional_srcs_test")
+
+    _shared_module_symvers_tests(
+        name = name + "_shared_module_symvers",
+        kernel_build = name + "_kernel_build",
+        base = name + "_base",
+        legacy_module_a = name + "_legacy_module_a",
+        legacy_module_b = name + "_legacy_module_b",
+    )
+    tests.append(name + "_shared_module_symvers")
 
     native.test_suite(
         name = name,

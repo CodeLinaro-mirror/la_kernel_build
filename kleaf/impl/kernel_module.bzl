@@ -208,17 +208,20 @@ def kernel_module(
     )
 
 def _check_module_symvers_restore_path(kernel_modules, this_label):
+    # {restore_path: {owner_label: None}}
     all_restore_paths = dict()
-    for kernel_module in kernel_modules:
-        for entry in kernel_module.module_symvers_info.entries.to_list():
-            if entry.restore_path not in all_restore_paths:
-                all_restore_paths[entry.restore_path] = []
-            all_restore_paths[entry.restore_path].append(str(kernel_module.label))
+    all_entries = depset(transitive = [
+        kernel_module.module_symvers_info.entries
+        for kernel_module in kernel_modules
+    ])
+    for entry in all_entries.to_list():
+        owners = all_restore_paths.setdefault(entry.restore_path, dict())
+        owners[str(entry.owner)] = None
 
     dups = dict()
-    for key, values in all_restore_paths.items():
-        if len(values) > 1:
-            dups[key] = values
+    for key, owners in all_restore_paths.items():
+        if len(owners) > 1:
+            dups[key] = sorted(owners.keys())
 
     if dups:
         fail("""{this_label}: Conflicting dependencies. Dependencies from a package must either be a list of `ddk_module`s only, or a single `kernel_module`.
