@@ -33,14 +33,15 @@ def _ddk_module_test_impl(ctx):
 
     target_under_test = analysistest.target_under_test(env)
 
-    module_symvers_restore_paths = target_under_test[ModuleSymversInfo].restore_paths.to_list()
+    entries = target_under_test[ModuleSymversInfo].entries.to_list()
     asserts.equals(
         env,
         1,
-        len(module_symvers_restore_paths),
+        len(entries),
         "{} has multiple Module.symvers, expected 1".format(target_under_test.label.name),
     )
-    module_symvers_restore_path = module_symvers_restore_paths[0]
+    asserts.equals(env, target_under_test.label, entries[0].owner)
+    module_symvers_restore_path = entries[0].restore_path
     asserts.true(
         env,
         target_under_test.label.name in module_symvers_restore_path,
