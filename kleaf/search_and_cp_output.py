@@ -27,6 +27,8 @@ def handle_outputs_with_slash(srcdir, dstdir, outputs):
 
 def handle_outputs_without_slash(srcdir, dstdir, outputs):
   errors = []
+  indexes = {}
+  wanted = frozenset(outputs)
   for out in outputs:
     found = False
     for sdir in srcdir:
@@ -35,7 +37,9 @@ def handle_outputs_without_slash(srcdir, dstdir, outputs):
         found = True
         break
       if not found:
-        ok, matches = search_and_cp_output_one(sdir, dstdir, out)
+        if sdir not in indexes:
+          indexes[sdir] = build_index(sdir, wanted)
+        ok, matches = search_and_cp_output_one(indexes[sdir], dstdir, out)
         if ok:
           found = True
           break
@@ -53,20 +57,29 @@ def handle_outputs_without_slash(srcdir, dstdir, outputs):
   return errors
 
 
-def search_and_cp_output_one(srcdir, dstdir, out):
+def build_index(srcdir, wanted):
+  """Walks <srcdir> once and indexes entries whose name is in <wanted>.
+
+  Returns a dict mapping each wanted name found under <srcdir> to the list of
+  paths (files or directories) with that name, in os.walk() order.
+  """
+  index = {}
+  for root, dirs, files in os.walk(srcdir):
+    for f in files + dirs:
+      if f in wanted:
+        index.setdefault(f, []).append(os.path.join(root, f))
+  return index
+
+
+def search_and_cp_output_one(index, dstdir, out):
   """Implements the search and move logic for outputs that need to be located.
 
-  For each output in <outputs>, searches <output> within <srcdir>, and moves it
-  to <dstdir>/<output>. if there's exactly one match, the file is moved.
-  Otherwise, nothing is performed.
+  Looks up <out> in <index> (see build_index()) and copies it to
+  <dstdir>/<out> if there's exactly one match. Otherwise, nothing is performed.
 
   Return all matches.
   """
-  matches = []
-  for root, dirs, files in os.walk(srcdir):
-    for f in files + dirs:
-      if f == out:
-        matches.append(os.path.join(root, f))
+  matches = index.get(out, [])
 
   # realpath() of each object in matches, deduplicated
   real_matches = set(os.path.realpath(f) for f in matches)
