@@ -126,11 +126,18 @@ def _kernel_toolchains_impl(ctx):
 
     kernel_setup_env_var_cmd = setup_env_var_cmd
 
-    # RUNPATH_EXECROOT: A heuristic path to execroot expressed relative to $ORIGIN.
-    # RUNPATH_EXECROOT assumes that all binaries built by Kbuild are 1~3 levels
-    #   below OUT_DIR,
-    #   e.g. $OUT_DIR/scripts/sign-file, $OUT_DIR/tools/bpf/resolve_btfids/resolve_btfids
-    # If this ever changes, edit kleaf_internal_eval_ldflags and add more levels.
+    # Write -rpath=$ORIGIN/... entries into a linker response file (-Wl,@<path>)
+    # instead of embedding escaped $ORIGIN directly in *LDFLAGS. Passing escaped
+    # $$$$\{ORIGIN\} through Make is fragile because different Makefiles expand
+    # HOSTLDFLAGS a different number of times (e.g. Kbuild expands it twice via
+    # KBUILD_HOSTLDFLAGS, while tools/objtool/Makefile expands $(HOSTLDFLAGS)
+    # directly once, causing /bin/sh to expand $$ into the shell PID).
+    #
+    # The response file is placed in $COMMON_OUT_DIR (outside $OUT_DIR so
+    # `make clean`/`mrproper` and $OUT_DIR tarballs do not touch it), uses a
+    # content-hashed filename (deterministic for Kbuild if_changed incremental
+    # builds), and is written atomically via mktemp + mv (safe under concurrent
+    # --config=local actions).
     #
     # We use `realpath -s` (no-symlinks) to calculate relative paths.
     #
@@ -163,30 +170,62 @@ def _kernel_toolchains_impl(ctx):
         export HOSTLDFLAGS={quoted_hostldflags}
         export USERLDFLAGS={quoted_userldflags}
 
-        mkdir -p ${{OUT_DIR}}
-        # Append to *LDFLAGS based on the current settings of $OUT_DIR.
-        function kleaf_internal_append_one_ldflags() {{
-            local backtrack_relative=$1
-            local RUNPATH_EXECROOT='$$$$\\{{ORIGIN\\}}/'"${{backtrack_relative}}"
-            export HOSTLDFLAGS="${{HOSTLDFLAGS}} "{hostldexpr}
-            export USERLDFLAGS="${{USERLDFLAGS}} "{userldexpr}
-        }}
-        export -f kleaf_internal_append_one_ldflags
-
-        function kleaf_internal_eval_ldflags() {{
-            local relative_to_output="$(realpath -s ${{ROOT_DIR}} --relative-to ${{OUT_DIR}})"
+        # Write -rpath entries to a content-hashed response file in $COMMON_OUT_DIR
+        # and print the corresponding -Wl,@<path> flag.
+        function kleaf_internal_write_rpath_rsp() {{
+            local prefix=$1
+            shift
+            if [[ $# -eq 0 ]]; then
+                return 0
+            fi
+            local relative_to_output
+            relative_to_output="$(realpath -s "${{ROOT_DIR}}" --relative-to "${{OUT_DIR}}")"
             local relative_to_output_prefix="${{relative_to_output%%[!./]*}}"
             local relative_to_output_suffix="${{relative_to_output#${{relative_to_output_prefix}}}}"
             local relative_depth="${{relative_to_output_prefix//[^\\/]/}}"
+            local suffix="${{relative_to_output_suffix:+/${{relative_to_output_suffix}}}}"
             # This comes from the maximum path seen so far (e.g.):
             #   arch/arm64/kernel/pi/relacheck and arch/arm64/kvm/hyp/nvhe/gen-hyprel
             local max_depth=$((${{#relative_depth}} + 7))
-            local backtrack=""
-            for depth in $(seq 1 ${{max_depth}}); do
-                backtrack="${{backtrack}}.."
-                kleaf_internal_append_one_ldflags "${{backtrack}}/${{relative_to_output_suffix}}"
-                backtrack="${{backtrack}}/"
-            done
+            local content
+            content="$(
+                backtrack=""
+                for depth in $(seq 1 "${{max_depth}}"); do
+                    backtrack="${{backtrack}}.."
+                    for runpath in "$@"; do
+                        printf -- '-rpath=$ORIGIN/%s%s/%s\\n' "${{backtrack}}" "${{suffix}}" "${{runpath}}"
+                    done
+                    backtrack="${{backtrack}}/"
+                done
+            )"
+            local rsp_dir
+            rsp_dir="$(readlink -m "${{COMMON_OUT_DIR:-$(dirname "${{OUT_DIR}}")}}")"
+            mkdir -p "${{rsp_dir}}"
+            local hash
+            hash="$(printf '%s\\n' "${{content}}" | sha1sum -b | cut -c-16)"
+            local rsp_file="${{rsp_dir}}/.kleaf_${{prefix}}_rpaths_${{hash}}.rsp"
+            if [[ ! -f "${{rsp_file}}" ]]; then
+                local tmp_file
+                tmp_file="$(mktemp "${{rsp_dir}}/.kleaf_${{prefix}}_rpaths_${{hash}}.XXXXXX")"
+                printf '%s\\n' "${{content}}" > "${{tmp_file}}"
+                mv -f "${{tmp_file}}" "${{rsp_file}}"
+            fi
+            printf '%s' "-Wl,@${{rsp_file}}"
+        }}
+        export -f kleaf_internal_write_rpath_rsp
+
+        function kleaf_internal_eval_ldflags() {{
+            mkdir -p "${{OUT_DIR}}"
+            local host_rpath_flag
+            host_rpath_flag="$(kleaf_internal_write_rpath_rsp host {quoted_host_runpaths})"
+            if [[ -n "${{host_rpath_flag}}" ]] && [[ " ${{HOSTLDFLAGS}} " != *" ${{host_rpath_flag}} "* ]]; then
+                export HOSTLDFLAGS="${{HOSTLDFLAGS}} ${{host_rpath_flag}}"
+            fi
+            local user_rpath_flag
+            user_rpath_flag="$(kleaf_internal_write_rpath_rsp user {quoted_user_runpaths})"
+            if [[ -n "${{user_rpath_flag}}" ]] && [[ " ${{USERLDFLAGS}} " != *" ${{user_rpath_flag}} "* ]]; then
+                export USERLDFLAGS="${{USERLDFLAGS}} ${{user_rpath_flag}}"
+            fi
         }}
         export -f kleaf_internal_eval_ldflags
 
@@ -195,9 +234,9 @@ def _kernel_toolchains_impl(ctx):
         quoted_hostcflags = _quote_sanitize_flags(exec.cflags),
         quoted_usercflags = _quote_sanitize_flags(target.cflags),
         quoted_hostldflags = _quote_sanitize_flags(exec.ldflags),
-        hostldexpr = exec.ldexpr,
+        quoted_host_runpaths = " ".join([shell.quote(p) for p in exec.runpaths]),
         quoted_userldflags = _quote_sanitize_flags(target.ldflags),
-        userldexpr = target.ldexpr,
+        quoted_user_runpaths = " ".join([shell.quote(p) for p in target.runpaths]),
     )
     rust_env = _get_rust_env(
         rust_toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"],
