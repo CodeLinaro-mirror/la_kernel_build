@@ -107,14 +107,11 @@ def _kernel_platform_toolchain_impl(ctx):
         variables = link_variables,
     )
 
-    # See kernel_toolchains.bzl on how RUNPATH_EXECROOT is interpreted.
+    # See kernel_toolchains.bzl on how runpaths are passed via linker response files.
     # Because Bazel isolates each .so in its own directory, $ORIGIN in these .so files no longer
     # works. So we have to rely on the source tree directly, instead of the generated
     # library_search_directories.
-    ldexpr = "' '".join([
-        '"-Wl,-rpath,${{RUNPATH_EXECROOT}}/{}"'.format(runpath.path)
-        for runpath in ctx.files.runpaths
-    ])
+    runpaths = [runpath.path for runpath in ctx.files.runpaths]
 
     all_files = depset(transitive = [
         depset(cc_info.compilation_context.direct_headers),
@@ -161,10 +158,9 @@ def _kernel_platform_toolchain_impl(ctx):
         all_files = all_files,
         cflags = compile_command_line,
         ldflags = link_command_line,
-        ldexpr = ldexpr,
         bin_path = bin_path,
         bin_path_short = bin_path_short,
-        runpaths = [runpath.path for runpath in ctx.files.runpaths],
+        runpaths = runpaths,
         sysroot = cc_toolchain.sysroot,
         libc = _get_libc(ctx),
     )
