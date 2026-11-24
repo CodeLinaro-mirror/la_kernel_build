@@ -475,7 +475,6 @@ class KleafProjectSetter:
             case "repo":
                 self._project_sync_states = RepoWrapper(
                     kleaf_repo=self.kleaf_repo,
-                    prebuilts_dir=self.prebuilts_dir,
                     ddk_workspace=self.ddk_workspace,
                     repo_manifest_of_build=self._get_repo_manifest_of_build(),
                     sync=self.sync,

@@ -49,7 +49,6 @@ class RepoWrapper:
     """Wrapper for repo operations."""
 
     kleaf_repo: pathlib.Path
-    prebuilts_dir: pathlib.Path | None
     ddk_workspace: pathlib.Path | None
     repo_manifest_of_build: str | None
     sync: bool
@@ -61,15 +60,24 @@ class RepoWrapper:
             set of ProjectSyncState, each describing the original
             path, fixed up path; and whether they were synced.
         """
-        self._update_manifest()
+        if not self._update_manifest():
+            return ProjectSyncStates(states=set(), synced=False)
         return self._do_sync()
 
-    def _update_manifest(self) -> None:
-        """Populates kleaf_repo by adding and syncing Git projects."""
+    def _update_manifest(self) -> bool:
+        """Populates kleaf_repo by adding and syncing Git projects.
+
+        Returns:
+            True if the manifest was updated, False otherwise.
+        """
         self._superproject_root = self._find_repo_root()
 
-        self._project_states = self._populate_kleaf_repo_manifest()
+        project_states = self._populate_kleaf_repo_manifest()
+        if project_states is None:
+            return False
+        self._project_states = project_states
         self._modify_main_repo_manifest()
+        return True
 
     def _find_repo_root(self) -> pathlib.Path:
         """If --kleaf_repo is under a repo manifest, return repo root.
@@ -101,26 +109,19 @@ class RepoWrapper:
         else:
             return self.kleaf_repo
 
-    def _populate_kleaf_repo_manifest(self) -> set[ProjectState]:
+    def _populate_kleaf_repo_manifest(self) -> set[ProjectState] | None:
         """Populates .repo/manifests/kleaf.xml.
 
         Returns:
-            set of ProjectState objects describing old and new paths.
+            set of ProjectState objects describing old and new paths, or None
+            if the manifest could not be populated.
         """
-        if not self.prebuilts_dir:
-            # TODO(b/345848548): Support checking out full git sources
-            #   without downloading GKI prebuilts
-            logging.info("Skip checking out Kleaf projects without "
-                         "--prebuilts_dir")
-            return set()
         if not self.repo_manifest_of_build:
             logging.warning(
                 "Unable to infer the list of projects from repo manifest "
                 "because there is no repo manifest")
-            return set()
+            return None
 
-        # TODO(b/345848548): if not self.prebuilts_dir, fixup_groups should be
-        #   None to sync everything
         fixup_groups = {"ddk"}
         preserve_groups = {"ddk-external"}
 
@@ -186,6 +187,10 @@ class RepoWrapper:
                             "run `repo sync` !**")
             return ProjectSyncStates(
                 states=project_abs_states, synced=False)
+
+        if not self._project_states:
+            logging.info("No Kleaf projects to sync.")
+            return ProjectSyncStates(states=project_abs_states, synced=True)
 
         subprocess_args = ["repo", "sync", "-c"]
         subprocess_args.extend(

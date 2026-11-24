@@ -480,6 +480,76 @@ class KleafProjectSetterTest(parameterized.TestCase):
                 ]
                 self.assertListEqual(include_names, ["kleaf.xml"])
 
+    def test_update_manifest_without_prebuilts(self):
+        """Tests checking out Kleaf tooling without --prebuilts_dir."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            ddk_workspace = tmp / "ddk_workspace"
+
+            repo_manifest = ddk_workspace / ".repo/manifests/default.xml"
+            repo_manifest.parent.mkdir(parents=True, exist_ok=True)
+            repo_manifest.write_text(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <manifest>
+                </manifest>
+            """))
+
+            remote_dir = tmp / "remote_dir"
+            remote_dir.mkdir(parents=True, exist_ok=True)
+            ci_target_mapping = remote_dir / "ci_target_mapping.json"
+            ci_target_mapping.write_text(json.dumps({"download_configs": {
+                "manifest.xml": {
+                    "target_suffix": "init_ddk_files",
+                    "mandatory": False,
+                    "remote_filename_fmt": "manifest_{build_number}.xml",
+                },
+            }}))
+
+            build_id = "12345"
+            shutil.copy(
+                pathlib.Path(__file__).parent / "test_data/sample_manifest.xml",
+                remote_dir / f"manifest_{build_id}.xml",
+            )
+
+            init_ddk.KleafProjectSetter(
+                build_id=build_id,
+                build_target=None,
+                ddk_workspace=ddk_workspace,
+                kleaf_repo=ddk_workspace / "external/kleaf",
+                local=False,
+                prebuilts_dir=None,
+                url_fmt=f"file://{remote_dir}/{{filename}}",
+                superproject_tool="repo",
+                sync=False,
+            ).run()
+
+            with xml.dom.minidom.parse(
+                    str(ddk_workspace / ".repo/manifests/kleaf.xml")) as dom:
+                projects = dom.documentElement.getElementsByTagName("project")
+                project_paths = [
+                    pathlib.Path(p.getAttribute("path") or p.getAttribute("name"))
+                    for p in projects
+                ]
+                self.assertCountEqual(
+                    project_paths, [
+                        pathlib.Path("external/kleaf/build/kernel"),
+                        pathlib.Path("external/bazel-skylib"),
+                    ])
+
+            with xml.dom.minidom.parse(
+                    str(ddk_workspace / ".repo/manifests/default.xml")) as dom:
+                includes = dom.documentElement.getElementsByTagName("include")
+                self.assertListEqual(
+                    [inc.getAttribute("name") for inc in includes],
+                    ["kleaf.xml"],
+                )
+
+            module_bazel = (
+                ddk_workspace / init_ddk._MODULE_BAZEL_FILE
+            ).read_text()
+            self.assertIn('bazel_dep(name = "kleaf")', module_bazel)
+            self.assertNotIn("declare_kernel_prebuilts", module_bazel)
+
 
 # This could be run as: tools/bazel test //build/kernel:init_ddk_test --test_output=all
 if __name__ == "__main__":
