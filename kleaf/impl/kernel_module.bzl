@@ -306,8 +306,9 @@ def _kernel_module_impl(ctx):
     module_srcs = depset(transitive = module_srcs)
 
     transitive_inputs = [module_srcs]
-    for kernel_module_dep in kernel_module_deps:
-        transitive_inputs.append(kernel_module_dep.kernel_module_setup_info.inputs)
+    if not ctx.attr.internal_is_ddk_library:
+        for kernel_module_dep in kernel_module_deps:
+            transitive_inputs.append(kernel_module_dep.kernel_module_setup_info.inputs)
 
     if ctx.attr.internal_ddk_makefiles_dir:
         transitive_inputs.append(ctx.attr.internal_ddk_makefiles_dir[DdkSubmoduleInfo].srcs)
@@ -437,23 +438,25 @@ def _kernel_module_impl(ctx):
         """.format(
             kernel_uapi_headers_dir = kernel_uapi_headers_dws.directory.path,
         )
-    dep_setup_sh = ctx.actions.declare_file("{}/dep_setup.sh".format(ctx.attr.name))
-    dep_setup_args = ctx.actions.args()
-    dep_setup_args.set_param_file_format("multiline")
-    dep_setup_args.add_all(depset(transitive = [
-        kernel_module_dep.kernel_module_setup_info.setup_script_fragments
-        for kernel_module_dep in kernel_module_deps
-    ]))
-    ctx.actions.write(
-        output = dep_setup_sh,
-        content = dep_setup_args,
-    )
-    inputs.append(dep_setup_sh)
-    command += """
-        . {dep_setup_sh}
-    """.format(
-        dep_setup_sh = dep_setup_sh.path,
-    )
+    dep_setup_sh = None
+    if not ctx.attr.internal_is_ddk_library:
+        dep_setup_sh = ctx.actions.declare_file("{}/dep_setup.sh".format(ctx.attr.name))
+        dep_setup_args = ctx.actions.args()
+        dep_setup_args.set_param_file_format("multiline")
+        dep_setup_args.add_all(depset(transitive = [
+            kernel_module_dep.kernel_module_setup_info.setup_script_fragments
+            for kernel_module_dep in kernel_module_deps
+        ]))
+        ctx.actions.write(
+            output = dep_setup_sh,
+            content = dep_setup_args,
+        )
+        inputs.append(dep_setup_sh)
+        command += """
+            . {dep_setup_sh}
+        """.format(
+            dep_setup_sh = dep_setup_sh.path,
+        )
 
     grab_unstripped_cmd = ""
     if unstripped_dir:
@@ -802,6 +805,8 @@ def _kernel_module_impl(ctx):
         default_info_files.append(module_symvers)
     if modules_order:
         output_group_args["modules.order"] = depset([modules_order])
+    if dep_setup_sh:
+        output_group_args["dep_setup.sh"] = depset([dep_setup_sh])
 
     # Generate an ABI dump for DDK modules, available on demand.
     if ctx.attr.internal_collect_unstripped_modules:
@@ -824,16 +829,48 @@ def _kernel_module_impl(ctx):
         for dep in kernel_module_deps
     ]
 
+    if ctx.attr.internal_is_ddk_library:
+        # ddk_library does not produce its own Module.symvers; propagate its
+        # dependencies' Module.symvers and setup to the linking ddk_module.
+        setup_info = KernelModuleSetupInfo(
+            inputs = depset(transitive = [
+                dep.kernel_module_setup_info.inputs
+                for dep in kernel_module_deps
+            ]),
+            setup_script_fragments = depset(transitive = [
+                dep.kernel_module_setup_info.setup_script_fragments
+                for dep in kernel_module_deps
+            ]),
+        )
+        module_symvers_info = ModuleSymversInfo(
+            entries = depset(transitive = [
+                dep.module_symvers_info.entries
+                for dep in kernel_module_deps
+            ]),
+        )
+    else:
+        setup_info = KernelModuleSetupInfo(
+            inputs = depset(setup_deps),
+            setup_script_fragments = depset(setup_script_fragments),
+        )
+        module_symvers_info = ModuleSymversInfo(
+            # path/to/package/target_name/Module.symvers -> path/to/package/Module.symvers;
+            # path/to/package/target_name/target_name_Module.symvers -> path/to/package/target_name_Module.symvers;
+            # This is similar to ${{OUT_DIR}}/${{ext_mod_rel}}
+            # It is needed to remove the `target_name` because we declare_file({name}/{internal_module_symvers_name}) above.
+            entries = depset([struct(
+                restore_path = module_symvers_restore_path,
+                owner = ctx.label,
+            )]) if module_symvers_restore_path else depset(),
+        )
+
     return [
         # Sync list of infos with kernel_module_group.
         DefaultInfo(
             files = depset(default_info_files + grab_gcno_step.outputs),
         ),
         OutputGroupInfo(**output_group_args),
-        KernelModuleSetupInfo(
-            inputs = depset(setup_deps),
-            setup_script_fragments = depset(setup_script_fragments),
-        ),
+        setup_info,
         KernelModuleInfo(
             kernel_build_infos = kernel_utils.create_kernel_module_kernel_build_info(ctx.attr.kernel_build),
             modules_staging_dws_depset = depset([modules_staging_dws]),
@@ -847,16 +884,7 @@ def _kernel_module_impl(ctx):
         KernelUnstrippedModulesInfo(
             directories = depset([unstripped_dir], order = "postorder"),
         ),
-        ModuleSymversInfo(
-            # path/to/package/target_name/Module.symvers -> path/to/package/Module.symvers;
-            # path/to/package/target_name/target_name_Module.symvers -> path/to/package/target_name_Module.symvers;
-            # This is similar to ${{OUT_DIR}}/${{ext_mod_rel}}
-            # It is needed to remove the `target_name` because we declare_file({name}/{internal_module_symvers_name}) above.
-            entries = depset([struct(
-                restore_path = module_symvers_restore_path,
-                owner = ctx.label,
-            )]) if module_symvers_restore_path else depset(),
-        ),
+        module_symvers_info,
         ddk_headers_info,
         ddk_config_info,
         GcovInfo(

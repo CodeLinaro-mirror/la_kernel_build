@@ -22,6 +22,7 @@ load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("//build/kernel/kleaf/impl:common_providers.bzl", "ModuleSymversInfo")
 load("//build/kernel/kleaf/impl:ddk/ddk_conditional_filegroup.bzl", "ddk_conditional_filegroup")
 load("//build/kernel/kleaf/impl:ddk/ddk_headers.bzl", "ddk_headers")
+load("//build/kernel/kleaf/impl:ddk/ddk_library.bzl", "ddk_library")
 load("//build/kernel/kleaf/impl:ddk/ddk_module.bzl", "ddk_module")
 load("//build/kernel/kleaf/impl:ddk/makefiles.bzl", "makefiles")
 load("//build/kernel/kleaf/impl:hermetic_toolchain.bzl", "hermetic_toolchain")
@@ -80,13 +81,14 @@ def _makefiles_test_impl(ctx):
         "--kernel-module-out mismatch",
     )
 
-    expected_module_symvers = []
-    for dep in ctx.attr.expected_deps:
-        if ModuleSymversInfo in dep:
-            expected_module_symvers += [
-                entry.restore_path
-                for entry in dep[ModuleSymversInfo].entries.to_list()
-            ]
+    expected_module_symvers = list(ctx.attr.expected_module_symvers)
+    if not expected_module_symvers:
+        for dep in ctx.attr.expected_deps:
+            if ModuleSymversInfo in dep:
+                expected_module_symvers += [
+                    entry.restore_path
+                    for entry in dep[ModuleSymversInfo].entries.to_list()
+                ]
     asserts.set_equals(
         env,
         sets.make(expected_module_symvers),
@@ -111,12 +113,14 @@ _makefiles_test = analysistest.make(
         "expected_module_out": attr.string(),
         "expected_includes": attr.string_list(),
         "expected_deps": attr.label_list(),
+        "expected_module_symvers": attr.string_list(),
     },
 )
 
 def _makefiles_test_make(
         name,
         expected_includes = None,
+        expected_module_symvers = None,
         **kwargs):
     makefiles(
         name = name + "_makefiles",
@@ -131,6 +135,7 @@ def _makefiles_test_make(
         expected_module_out = kwargs.get("module_out"),
         expected_includes = expected_includes,
         expected_deps = kwargs.get("module_deps"),
+        expected_module_symvers = expected_module_symvers,
     )
 
 def _bad_test_make(
@@ -206,6 +211,7 @@ def _create_makefiles_artifact_test(
         expected_lines = None,
         disallowed_kbuild_lines = None,
         expected_makefile_lines = None,
+        disallowed_makefile_lines = None,
         expected_cflags_lines = None,
         disallowed_cflags_lines = None,
         expected_asflags_lines = None,
@@ -270,6 +276,12 @@ def _create_makefiles_artifact_test(
         content = expected_makefile_lines,
     )
 
+    write_file(
+        name = name + "_disallowed_makefile",
+        out = name + "_disallowed_makefile/Makefile",
+        content = disallowed_makefile_lines,
+    )
+
     get_top_level_file(
         name = name + "_makefile",
         filename = "Makefile",
@@ -280,6 +292,7 @@ def _create_makefiles_artifact_test(
     contain_lines_test(
         name = name + "_makefile_test",
         expected = name + "_expected_makefile",
+        disallowed = name + "_disallowed_makefile",
         actual = name + "_makefile",
         order = True,
     )
@@ -742,6 +755,121 @@ def _makefiles_submodule_symvers_test(
                 name,
             ),
         ],
+    )
+
+def _makefiles_library_symvers_test(
+        name,
+        kernel_build):
+    """Test on Module.symvers propagation through ddk_library."""
+    tests = []
+
+    ddk_module(
+        name = name + "_parent",
+        kernel_build = kernel_build,
+        out = name + "_parent.ko",
+        srcs = ["base.c"],
+        tags = ["manual"],
+    )
+
+    parent_symvers = "{}/{}_parent_Module.symvers".format(
+        native.package_name(),
+        name,
+    )
+    expected_extra_symbols = "EXTRA_SYMBOLS += $(COMMON_OUT_DIR)/{}".format(parent_symvers)
+
+    # ddk_library's own Makefile skips EXTRA_SYMBOLS.
+    _create_makefiles_artifact_test(
+        name = name + "_library_skips_symvers",
+        out = "fake.ko",
+        srcs = ["dep.c"],
+        deps = [name + "_parent"],
+        top_level_makefile = True,
+        target_type = "library",
+        expected_makefile_lines = [
+            "# Skipping {} for ddk_library".format(parent_symvers),
+        ],
+        disallowed_makefile_lines = [
+            expected_extra_symbols,
+        ],
+    )
+    tests.append(name + "_library_skips_symvers")
+
+    ddk_library(
+        name = name + "_lib_a",
+        kernel_build = kernel_build,
+        srcs = ["dep.c"],
+        deps = [name + "_parent"],
+        tags = ["manual"],
+    )
+
+    ddk_library(
+        name = name + "_lib_b",
+        kernel_build = kernel_build,
+        srcs = ["self.c"],
+        deps = [name + "_parent"],
+        tags = ["manual"],
+    )
+
+    # child -> lib_a -> parent
+    _makefiles_test_make(
+        name = name + "_child",
+        module_out = name + "_child.ko",
+        module_srcs = ["self.c"],
+        module_deps = [name + "_lib_a"],
+        top_level_makefile = True,
+        expected_module_symvers = [parent_symvers],
+    )
+    tests.append(name + "_child")
+
+    # child -> [parent, lib_a]
+    _makefiles_test_make(
+        name = name + "_child_with_parent",
+        module_out = name + "_child_with_parent.ko",
+        module_srcs = ["self.c"],
+        module_deps = [
+            name + "_parent",
+            name + "_lib_a",
+        ],
+        top_level_makefile = True,
+        expected_module_symvers = [parent_symvers],
+    )
+    tests.append(name + "_child_with_parent")
+
+    # child -> [lib_a, lib_b] -> parent (diamond)
+    _makefiles_test_make(
+        name = name + "_child_diamond",
+        module_out = name + "_child_diamond.ko",
+        module_srcs = ["base.c"],
+        module_deps = [
+            name + "_lib_a",
+            name + "_lib_b",
+        ],
+        top_level_makefile = True,
+        expected_module_symvers = [parent_symvers],
+    )
+    tests.append(name + "_child_diamond")
+
+    # child -> submodule -> lib_a -> parent
+    makefiles(
+        name = name + "_sub",
+        module_srcs = ["self.c"],
+        module_deps = [name + "_lib_a"],
+        module_out = name + "_sub.ko",
+        target_type = "submodule",
+        top_level_makefile = False,
+        tags = ["manual"],
+    )
+    _makefiles_test_make(
+        name = name + "_child_via_submodule",
+        module_deps = [name + "_sub"],
+        top_level_makefile = True,
+        expected_module_symvers = [parent_symvers],
+    )
+    tests.append(name + "_child_via_submodule")
+
+    native.test_suite(
+        name = name,
+        tests = tests,
     )
 
 def _makefiles_cond_srcs_test(name):
@@ -1284,6 +1412,12 @@ def makefiles_test_suite(name):
         kernel_build = name + "_kernel_build",
     )
     tests.append(name + "_submodule_symvers_test")
+
+    _makefiles_library_symvers_test(
+        name = name + "_library_symvers_test",
+        kernel_build = name + "_kernel_build",
+    )
+    tests.append(name + "_library_symvers_test")
 
     _makefiles_cond_srcs_test(
         name = name + "_cond_srcs_test",

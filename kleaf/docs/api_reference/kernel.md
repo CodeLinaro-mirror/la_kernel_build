@@ -1189,8 +1189,6 @@ kconfig and defconfig are exported.
 Known issues:
     - (b/392186874) The generated .o.cmd files contain absolute paths and are not reproducible.
     - (b/394411899) kernel_compile_commands() doesn't work on ddk_library yet.
-    - (b/395014894) All ddk_module() dependency in ddk_library.deps must be duplicated
-        in the ddk_module() that depends on this ddk_library.
 
 
 **PARAMETERS**
