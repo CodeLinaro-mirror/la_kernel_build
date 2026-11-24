@@ -28,10 +28,13 @@ $ tools/bazel build --config=local //common:kernel_aarch64
 $ tools/bazel run //common:kernel_aarch64_abi_dist
 ```
 
-### Update symbol list
+### Update device symbol list
+
+See [abi_device.md](abi_device.md). Common kernel `symbols/base` lists are
+manually maintained and have no automated update target.
 
 ```shell
-$ tools/bazel run //common:kernel_aarch64_abi_update_symbol_list
+$ tools/bazel run //path/to/device:<device>_abi_update_symbol_list
 ```
 
 ### Update ABI definition
