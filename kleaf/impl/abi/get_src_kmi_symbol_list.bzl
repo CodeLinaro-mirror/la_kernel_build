@@ -22,9 +22,13 @@ load(
 visibility("//build/kernel/kleaf/...")
 
 def _get_src_kmi_symbol_list_impl(ctx):
-    return DefaultInfo(files = depset([
-        ctx.attr.kernel_build[KernelBuildAbiInfo].src_kmi_symbol_list,
-    ]))
+    src = ctx.attr.kernel_build[KernelBuildAbiInfo].src_kmi_symbol_list
+    if not src:
+        fail("{}: {} does not specify kmi_symbol_list.".format(
+            ctx.label,
+            ctx.attr.kernel_build.label,
+        ))
+    return DefaultInfo(files = depset([src]))
 
 get_src_kmi_symbol_list = rule(
     doc = "Returns `src_kmi_symbol_list` for a `kernel_build`.",
