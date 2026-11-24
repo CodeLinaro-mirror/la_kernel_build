@@ -18,6 +18,7 @@ import json
 import logging
 import pathlib
 import shutil
+import tarfile
 import tempfile
 import textwrap
 from typing import Any
@@ -543,6 +544,186 @@ class KleafProjectSetterTest(parameterized.TestCase):
                     [inc.getAttribute("name") for inc in includes],
                     ["kleaf.xml"],
                 )
+
+            module_bazel = (
+                ddk_workspace / init_ddk._MODULE_BAZEL_FILE
+            ).read_text()
+            self.assertIn('bazel_dep(name = "kleaf")', module_bazel)
+            self.assertNotIn("declare_kernel_prebuilts", module_bazel)
+
+    @staticmethod
+    def _create_fake_prebuilts_archive(remote_dir: pathlib.Path) -> None:
+        header_file = remote_dir / "header.h"
+        header_file.write_text("// fake header\n", encoding="utf-8")
+        archive_path = remote_dir / "kernel_aarch64_ddk_headers_archive.tar.gz"
+        with tarfile.open(archive_path, "w:gz") as tar:
+            tar.add(header_file, arcname="common/include/header.h")
+        header_file.unlink()
+        (remote_dir / "constants.scl").write_text(
+            'CLANG_VERSION = "r000000"\n', encoding="utf-8"
+        )
+
+    @parameterized.named_parameters(
+        ("DefaultDdk", "ddk", True),
+        ("GroupsAll", "all", False),
+    )
+    def test_groups_with_prebuilts(
+        self, groups: str, expect_extra_files: bool
+    ):
+        """Tests --groups=all with --prebuilts_dir keeps all projects and skips extra files."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            ddk_workspace = tmp / "ddk_workspace"
+            kleaf_repo = ddk_workspace / "external/kleaf"
+
+            repo_manifest = ddk_workspace / ".repo/manifests/default.xml"
+            repo_manifest.parent.mkdir(parents=True, exist_ok=True)
+            repo_manifest.write_text(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <manifest>
+                </manifest>
+            """))
+
+            remote_dir = tmp / "remote_dir"
+            remote_dir.mkdir(parents=True, exist_ok=True)
+            self._create_fake_prebuilts_archive(remote_dir)
+            (remote_dir / "ci_target_mapping.json").write_text(
+                json.dumps({
+                    "download_configs": {
+                        "kernel_aarch64_ddk_headers_archive.tar.gz": {
+                            "target_suffix": "init_ddk_files",
+                            "mandatory": True,
+                            "remote_filename_fmt": (
+                                "kernel_aarch64_ddk_headers_archive.tar.gz"
+                            ),
+                        },
+                        "constants.scl": {
+                            "target_suffix": "init_ddk_files",
+                            "mandatory": True,
+                            "remote_filename_fmt": "constants.scl",
+                        },
+                        "manifest.xml": {
+                            "target_suffix": "init_ddk_files",
+                            "mandatory": False,
+                            "remote_filename_fmt": "manifest_{build_number}.xml",
+                        },
+                    }
+                })
+            )
+
+            build_id = "12345"
+            shutil.copy(
+                pathlib.Path(__file__).parent / "test_data/sample_manifest.xml",
+                remote_dir / f"manifest_{build_id}.xml",
+            )
+
+            init_ddk.KleafProjectSetter(
+                build_id=build_id,
+                build_target=None,
+                ddk_workspace=ddk_workspace,
+                kleaf_repo=kleaf_repo,
+                local=False,
+                prebuilts_dir=ddk_workspace / "prebuilts_dir",
+                url_fmt=f"file://{remote_dir}/{{filename}}",
+                superproject_tool="repo",
+                sync=False,
+                groups=groups,
+            ).run()
+
+            expected_projects = [
+                pathlib.Path("external/kleaf/build/kernel"),
+                pathlib.Path("external/bazel-skylib"),
+            ]
+            if groups == "all":
+                expected_projects.append(pathlib.Path("external/kleaf/common"))
+
+            with xml.dom.minidom.parse(
+                    str(ddk_workspace / ".repo/manifests/kleaf.xml")) as dom:
+                projects = dom.documentElement.getElementsByTagName("project")
+                project_paths = [
+                    pathlib.Path(p.getAttribute("path") or p.getAttribute("name"))
+                    for p in projects
+                ]
+                self.assertCountEqual(project_paths, expected_projects)
+
+            module_bazel = (
+                ddk_workspace / init_ddk._MODULE_BAZEL_FILE
+            ).read_text()
+            self.assertIn("declare_kernel_prebuilts", module_bazel)
+
+            self.assertEqual(
+                (kleaf_repo / "common/include/header.h").is_file(),
+                expect_extra_files,
+            )
+            self.assertEqual(
+                (kleaf_repo / "common/bazel/constants.scl").is_file(),
+                expect_extra_files,
+            )
+            self.assertEqual(
+                (kleaf_repo / "common/BUILD.bazel").is_file(),
+                expect_extra_files,
+            )
+
+    def test_groups_all_without_prebuilts(self):
+        """Tests --groups=all without --prebuilts_dir checks out full source tree."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            ddk_workspace = tmp / "ddk_workspace"
+
+            repo_manifest = ddk_workspace / ".repo/manifests/default.xml"
+            repo_manifest.parent.mkdir(parents=True, exist_ok=True)
+            repo_manifest.write_text(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <manifest>
+                </manifest>
+            """))
+
+            remote_dir = tmp / "remote_dir"
+            remote_dir.mkdir(parents=True, exist_ok=True)
+            (remote_dir / "ci_target_mapping.json").write_text(
+                json.dumps({
+                    "download_configs": {
+                        "manifest.xml": {
+                            "target_suffix": "init_ddk_files",
+                            "mandatory": False,
+                            "remote_filename_fmt": "manifest_{build_number}.xml",
+                        },
+                    }
+                })
+            )
+
+            build_id = "12345"
+            shutil.copy(
+                pathlib.Path(__file__).parent / "test_data/sample_manifest.xml",
+                remote_dir / f"manifest_{build_id}.xml",
+            )
+
+            init_ddk.KleafProjectSetter(
+                build_id=build_id,
+                build_target=None,
+                ddk_workspace=ddk_workspace,
+                kleaf_repo=ddk_workspace / "external/kleaf",
+                local=False,
+                prebuilts_dir=None,
+                url_fmt=f"file://{remote_dir}/{{filename}}",
+                superproject_tool="repo",
+                sync=False,
+                groups="all",
+            ).run()
+
+            with xml.dom.minidom.parse(
+                    str(ddk_workspace / ".repo/manifests/kleaf.xml")) as dom:
+                projects = dom.documentElement.getElementsByTagName("project")
+                project_paths = [
+                    pathlib.Path(p.getAttribute("path") or p.getAttribute("name"))
+                    for p in projects
+                ]
+                self.assertCountEqual(
+                    project_paths, [
+                        pathlib.Path("external/kleaf/build/kernel"),
+                        pathlib.Path("external/kleaf/common"),
+                        pathlib.Path("external/bazel-skylib"),
+                    ])
 
             module_bazel = (
                 ddk_workspace / init_ddk._MODULE_BAZEL_FILE
