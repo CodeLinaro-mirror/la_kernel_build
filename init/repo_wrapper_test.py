@@ -89,7 +89,6 @@ class RepoWrapperTest(parameterized.TestCase):
 
             states = RepoWrapper(
                 kleaf_repo=kleaf_repo,
-                prebuilts_dir=workspace / "prebuilts",
                 ddk_workspace=workspace,
                 repo_manifest_of_build=_SAMPLE_MANIFEST,
                 sync=False,
@@ -117,7 +116,6 @@ class RepoWrapperTest(parameterized.TestCase):
 
             states = RepoWrapper(
                 kleaf_repo=kleaf_repo,
-                prebuilts_dir=kleaf_repo / "prebuilts",
                 ddk_workspace=None,
                 repo_manifest_of_build=_SAMPLE_MANIFEST,
                 sync=False,
@@ -158,14 +156,13 @@ class RepoWrapperTest(parameterized.TestCase):
             with self.assertRaises(KleafProjectSetterError) as cm:
                 RepoWrapper(
                     kleaf_repo=kleaf_repo,
-                    prebuilts_dir=ddk_workspace / "prebuilts",
                     ddk_workspace=ddk_workspace,
                     repo_manifest_of_build=_SAMPLE_MANIFEST,
                     sync=False,
                 ).run()
             self.assertIn(f"cd {expected_root} && repo init", str(cm.exception))
 
-    def test_update_manifest_with_prebuilts_ddk_only(self):
+    def test_update_manifest_ddk_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             workspace = pathlib.Path(tmp) / "workspace"
             default_xml = self._init_fake_repo(workspace)
@@ -175,7 +172,6 @@ class RepoWrapperTest(parameterized.TestCase):
             with mock.patch.object(subprocess, "check_call") as mock_call:
                 states = RepoWrapper(
                     kleaf_repo=kleaf_repo,
-                    prebuilts_dir=workspace / "prebuilts",
                     ddk_workspace=workspace,
                     repo_manifest_of_build=_SAMPLE_MANIFEST,
                     sync=False,
@@ -204,7 +200,6 @@ class RepoWrapperTest(parameterized.TestCase):
             for _ in range(2):
                 RepoWrapper(
                     kleaf_repo=kleaf_repo,
-                    prebuilts_dir=workspace / "prebuilts",
                     ddk_workspace=workspace,
                     repo_manifest_of_build=_SAMPLE_MANIFEST,
                     sync=False,
@@ -232,7 +227,6 @@ class RepoWrapperTest(parameterized.TestCase):
 
             RepoWrapper(
                 kleaf_repo=kleaf_repo,
-                prebuilts_dir=workspace / "prebuilts",
                 ddk_workspace=workspace,
                 repo_manifest_of_build=_SAMPLE_MANIFEST,
                 sync=False,
@@ -253,7 +247,6 @@ class RepoWrapperTest(parameterized.TestCase):
             with self.assertRaises(KleafProjectSetterError):
                 RepoWrapper(
                     kleaf_repo=kleaf_repo,
-                    prebuilts_dir=workspace / "prebuilts",
                     ddk_workspace=workspace,
                     repo_manifest_of_build=_SAMPLE_MANIFEST,
                     sync=False,
@@ -269,7 +262,6 @@ class RepoWrapperTest(parameterized.TestCase):
             with self.assertRaises(KleafProjectSetterError):
                 RepoWrapper(
                     kleaf_repo=kleaf_repo,
-                    prebuilts_dir=workspace / "prebuilts",
                     ddk_workspace=workspace,
                     repo_manifest_of_build=_SAMPLE_MANIFEST,
                     sync=False,
@@ -285,7 +277,6 @@ class RepoWrapperTest(parameterized.TestCase):
             with mock.patch.object(subprocess, "check_call") as mock_call:
                 states = RepoWrapper(
                     kleaf_repo=kleaf_repo,
-                    prebuilts_dir=workspace / "prebuilts",
                     ddk_workspace=workspace,
                     repo_manifest_of_build=_SAMPLE_MANIFEST,
                     sync=True,
@@ -331,11 +322,54 @@ class RepoWrapperTest(parameterized.TestCase):
                 with self.assertRaises(subprocess.CalledProcessError):
                     RepoWrapper(
                         kleaf_repo=kleaf_repo,
-                        prebuilts_dir=workspace / "prebuilts",
                         ddk_workspace=workspace,
                         repo_manifest_of_build=_SAMPLE_MANIFEST,
                         sync=True,
                     ).run()
+
+    def test_missing_repo_manifest_skips_default_xml_and_sync(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp) / "workspace"
+            default_xml = self._init_fake_repo(workspace)
+            kleaf_repo = workspace / "external/kleaf"
+            kleaf_repo.mkdir(parents=True)
+
+            with mock.patch.object(subprocess, "check_call") as mock_call:
+                states = RepoWrapper(
+                    kleaf_repo=kleaf_repo,
+                    ddk_workspace=workspace,
+                    repo_manifest_of_build=None,
+                    sync=True,
+                ).run()
+
+            mock_call.assert_not_called()
+            self.assertFalse((workspace / ".repo/manifests/kleaf.xml").exists())
+            self.assertEmpty(self._read_manifest_includes(default_xml))
+            self.assertEqual(states, ProjectSyncStates(states=set(), synced=False))
+
+    def test_empty_project_list_skips_repo_sync(self):
+        manifest = textwrap.dedent("""\
+            <?xml version="1.0" encoding="UTF-8"?>
+            <manifest>
+                <project path="common" name="kernel/common" />
+            </manifest>
+        """)
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp) / "workspace"
+            self._init_fake_repo(workspace)
+            kleaf_repo = workspace / "external/kleaf"
+            kleaf_repo.mkdir(parents=True)
+
+            with mock.patch.object(subprocess, "check_call") as mock_call:
+                states = RepoWrapper(
+                    kleaf_repo=kleaf_repo,
+                    ddk_workspace=workspace,
+                    repo_manifest_of_build=manifest,
+                    sync=True,
+                ).run()
+
+            mock_call.assert_not_called()
+            self.assertEqual(states, ProjectSyncStates(states=set(), synced=True))
 
 
 # This could be run as:
