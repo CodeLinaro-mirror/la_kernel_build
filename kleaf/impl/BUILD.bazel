@@ -77,7 +77,6 @@ bzl_library(
         "declare_kernel_prebuilts.bzl",
         "declare_toolchain_constants.bzl",
         "default_host_tools.scl",
-        "diff.bzl",
         "empty_binary.bzl",
         "executable_dispatcher.bzl",
         "file.bzl",
