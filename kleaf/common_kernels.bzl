@@ -52,6 +52,9 @@ _STRIP_MODULES = True
 _KEEP_MODULE_SYMVERS = True
 _KEEP_DOT_CONFIG = True
 
+# Common kernel base symbol lists are static and maintained manually.
+_ENABLE_UPDATE_SYMBOL_LIST = False
+
 # This transition is not needed for GKI
 _GKI_ADD_VMLINUX = False
 
@@ -146,7 +149,8 @@ def common_kernel(
             contain all modules in each branch in the select() of module_implicit_outs.
 
             The first module must not be in any conditional branch.
-        kmi_symbol_list_add_only: See [kernel_abi.kmi_symbol_list_add_only](kernel.md#kernel_abi-kmi_symbol_list_add_only)
+        kmi_symbol_list_add_only: **Deprecated.** Ignored because common kernel base symbol
+            lists are maintained manually.
         protected_module_names_list: See [kernel_config.protected_module_names_list](kernel.md#kernel_config-protected_module_names_list)
         make_goals: See [kernel_build.make_goals](kernel.md#kernel_build-make_goals)
         abi_definition_stg: See [kernel_abi.abi_definition_stg](kernel.md#kernel_abi-abi_definition_stg)
@@ -172,16 +176,22 @@ def common_kernel(
         actual = ":common_kernel_sources",
     )
 
-    all_kmi_symbol_lists = additional_kmi_symbol_lists
-    all_kmi_symbol_lists = [] if all_kmi_symbol_lists == None else list(all_kmi_symbol_lists)
+    if kmi_symbol_list_add_only != None:
+        # buildifier: disable=print
+        print("WARNING: {}: kmi_symbol_list_add_only is deprecated and ignored because common kernel base symbol lists are maintained manually.".format(
+            native.package_relative_label(name),
+        ))
 
-    # Add user KMI symbol lists to additional lists
-    additional_kmi_symbol_lists = all_kmi_symbol_lists + [
-        "//build/kernel/kleaf:user_kmi_symbol_lists",
-    ]
-
+    all_kmi_symbol_lists = []
     if kmi_symbol_list:
         all_kmi_symbol_lists.append(kmi_symbol_list)
+    if additional_kmi_symbol_lists:
+        all_kmi_symbol_lists.extend(additional_kmi_symbol_lists)
+
+    # Add user KMI symbol lists.
+    kernel_build_kmi_symbol_lists = all_kmi_symbol_lists + [
+        "//build/kernel/kleaf:user_kmi_symbol_lists",
+    ]
 
     native.filegroup(
         name = name + "_all_kmi_symbol_lists",
@@ -218,8 +228,8 @@ def common_kernel(
         strip_modules = _STRIP_MODULES,
         keep_module_symvers = _KEEP_MODULE_SYMVERS,
         keep_dot_config = _KEEP_DOT_CONFIG,
-        kmi_symbol_list = kmi_symbol_list,
-        additional_kmi_symbol_lists = additional_kmi_symbol_lists,
+        kmi_symbol_list = None,
+        additional_kmi_symbol_lists = kernel_build_kmi_symbol_lists,
         trim_nonlisted_kmi = trim_nonlisted_kmi,
         kmi_symbol_list_strict_mode = kmi_symbol_list_strict_mode,
         module_implicit_outs = module_implicit_outs,
@@ -266,11 +276,9 @@ WARNING: common_kernels(modules_superset=) is not set for {}.
         kernel_build = name,
         visibility = visibility,
         define_abi_targets = bool(kmi_symbol_list),
-        # Sync with KMI_SYMBOL_LIST_MODULE_GROUPING
-        module_grouping = None,
         abi_definition_stg = abi_definition_stg,
         kmi_enforced = kmi_enforced,
-        kmi_symbol_list_add_only = kmi_symbol_list_add_only,
+        enable_update_symbol_list = _ENABLE_UPDATE_SYMBOL_LIST,
         deprecation = deprecation,
         enable_add_vmlinux = _GKI_ADD_VMLINUX,
     )
