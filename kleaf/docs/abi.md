@@ -16,14 +16,13 @@ builds all ABI-related artifacts for distribution, and copies them to
 specified). The exit code reflects whether an ABI change is detected in the
 comparison, just like `build_abi.sh`.
 
-### Update symbol list
+### Symbol lists {#update-symbol-list}
 
-```shell
-$ tools/bazel run //common:kernel_aarch64_abi_update_symbol_list
-```
-
-This updates `kmi_symbol_list` of `//common:kernel_aarch64`, which is
-`common/gki/aarch64/symbols/base`.
+GKI base symbol lists (such as `common/gki/aarch64/symbols/base`) are static
+and maintained manually via reviewed CLs; there is no automated target to
+update them. To update a device symbol list, use the device's
+`<device>_abi_update_symbol_list` target as described in
+[abi_device.md](abi_device.md#update-symbol-list).
 
 ### Extracting the ABI
 
@@ -33,9 +32,9 @@ $ tools/bazel build //common:kernel_aarch64_abi_dump
 
 ### Update the ABI definition {#update-abi}
 
-**Note**: You must [update the symbol list](#update-symbol-list) before
-updating the ABI definition. The Bazel command below does not also update
-the source symbol list, unlike the `build_abi.sh` command.
+**Note**: If a device symbol list changed, update it via the device's
+[symbol list update target](abi_device.md#update-symbol-list) before updating
+the GKI ABI definition.
 
 If the ABI definition does not exist yet (for example, when generating it for
 the first time), create an empty `.stg` file, set `abi_definition_stg` on the
@@ -107,25 +106,21 @@ for `build_abi.sh`.
 according to the arguments it's given. So you don't have to look it up here.
 
 ```shell
-# build_abi.sh --update_symbol_list
-# Update symbol list [1]
-$ tools/bazel run //common:kernel_aarch64_abi_update_symbol_list
+# build_abi.sh --update_symbol_list (device targets only; see abi_device.md)
+# Update a device symbol list [1]
+$ tools/bazel run //path/to/package:<device>_abi_update_symbol_list
 
 # build_abi.sh --nodiff
 # Extract the ABI (but do not compare it) [2]
 $ tools/bazel build //common:kernel_aarch64_abi_dump
 
 # build_abi.sh --nodiff --update
-# Update symbol list, [1][3]
-$ tools/bazel run //common:kernel_aarch64_abi_update_symbol_list &&
-# Extract the ABI (but do not compare it), then update `abi_definition_stg` [2][3]
-> tools/bazel run //common:kernel_aarch64_abi_nodiff_update
+# Extract the ABI (but do not compare it), then update `abi_definition_stg` [2]
+$ tools/bazel run //common:kernel_aarch64_abi_nodiff_update
 
 # build_abi.sh --update
-# Update symbol list, [1][3]
-$ tools/bazel run //common:kernel_aarch64_abi_update_symbol_list &&
-# Extract the ABI and compare it, then update `abi_definition_stg` [2][3]
-> tools/bazel run //common:kernel_aarch64_abi_update
+# Extract the ABI and compare it, then update `abi_definition_stg` [2]
+$ tools/bazel run //common:kernel_aarch64_abi_update
 
 # build_abi.sh
 # Extract the ABI and compare it, then copy artifacts to distribution directory
@@ -134,13 +129,13 @@ $ tools/bazel run //common:kernel_aarch64_abi_dist
 
 Notes:
 
-1. The command updates `kmi_symbol_list` but it does not update
-   `$DIST_DIR/abi_symbollist`, unlike the `build_abi.sh --update-symbol-list`
-   command.
+1. The device command updates the device's `kmi_symbol_list` but does not
+   update `$DIST_DIR/abi_symbollist`, unlike `build_abi.sh --update-symbol-list`.
+   If you also need to update the ABI definition, run the device symbol list
+   update before `//common:kernel_aarch64_abi_update` (they cannot run in
+   parallel). GKI `symbols/base` is manually maintained and has no automated
+   update target.
 2. The Bazel command extracts the ABI and/or compares the ABI like the
    `build_abi.sh` command, but it does not copy the ABI dump and/or the diff
    report to `$DIST_DIR` like the `build_abi.sh` command. You may find the ABI
    dump in Bazel's output directory under `bazel-bin/`.
-3. Order matters, and the commands cannot run in parallel. This is because
-   updating the ABI definition requires the **source**
-   `kmi_symbol_list` to be updated first.
