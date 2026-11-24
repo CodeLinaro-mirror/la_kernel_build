@@ -52,6 +52,7 @@ class RepoWrapper:
     ddk_workspace: pathlib.Path | None
     repo_manifest_of_build: str | None
     sync: bool
+    groups: str = "ddk"
 
     def run(self) -> ProjectSyncStates:
         """Updates manifest and run repo sync if requested.
@@ -122,7 +123,15 @@ class RepoWrapper:
                 "because there is no repo manifest")
             return None
 
-        fixup_groups = {"ddk"}
+        match self.groups:
+            case "ddk":
+                fixup_groups = {"ddk"}
+            case "all":
+                fixup_groups = None
+            case _:
+                raise KleafProjectSetterError(
+                    f"ERROR: Unsupported --groups value: {self.groups}"
+                )
         preserve_groups = {"ddk-external"}
 
         kleaf_repo_rel = self.kleaf_repo.relative_to(self._superproject_root)

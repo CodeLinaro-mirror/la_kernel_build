@@ -371,6 +371,68 @@ class RepoWrapperTest(parameterized.TestCase):
             mock_call.assert_not_called()
             self.assertEqual(states, ProjectSyncStates(states=set(), synced=True))
 
+    def test_groups_all_keeps_all_projects(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp) / "workspace"
+            default_xml = self._init_fake_repo(workspace)
+            kleaf_repo = workspace / "external/kleaf"
+            kleaf_repo.mkdir(parents=True)
+
+            with mock.patch.object(subprocess, "check_call") as mock_call:
+                states = RepoWrapper(
+                    kleaf_repo=kleaf_repo,
+                    ddk_workspace=workspace,
+                    repo_manifest_of_build=_SAMPLE_MANIFEST,
+                    sync=True,
+                    groups="all",
+                ).run()
+
+            kleaf_xml = workspace / ".repo/manifests/kleaf.xml"
+            self.assertCountEqual(
+                self._read_manifest_project_paths(kleaf_xml),
+                [
+                    "external/kleaf/build/kernel",
+                    "external/kleaf/common",
+                    "external/bazel-skylib",
+                ],
+            )
+            self.assertEqual(
+                self._read_manifest_includes(default_xml),
+                ["kleaf.xml"],
+            )
+            self.assertTrue(states.synced)
+            mock_call.assert_called_once()
+            cmd = mock_call.call_args.args[0]
+            self.assertEqual(cmd[:3], ["repo", "sync", "-c"])
+            self.assertCountEqual(
+                cmd[3:],
+                [
+                    "external/kleaf/build/kernel",
+                    "external/kleaf/common",
+                    "external/bazel-skylib",
+                ],
+            )
+
+    @parameterized.named_parameters(
+        ("Invalid", "invalid"),
+        ("Empty", ""),
+    )
+    def test_invalid_groups_raises(self, groups: str):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp) / "workspace"
+            self._init_fake_repo(workspace)
+            kleaf_repo = workspace / "external/kleaf"
+            kleaf_repo.mkdir(parents=True)
+
+            with self.assertRaises(KleafProjectSetterError):
+                RepoWrapper(
+                    kleaf_repo=kleaf_repo,
+                    ddk_workspace=workspace,
+                    repo_manifest_of_build=_SAMPLE_MANIFEST,
+                    sync=False,
+                    groups=groups,
+                ).run()
+
 
 # This could be run as:
 #   tools/bazel test //build/kernel:repo_wrapper_test --test_output=all

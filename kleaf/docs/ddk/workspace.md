@@ -96,6 +96,50 @@ to point to the latest build on `common-android15-6.6`, simply re-run the
 If you need to use a different branch or build ID, simply re-run the `init.py`
 script with the exact same arguments and modified `--branch` or `--build_id`.
 
+To check out all Git projects from the manifest (including `common/` and
+`external/libcap`) in addition to downloading prebuilts, pass `--groups=all`:
+
+```shell
+$ ( cd /path/to/ddk/workspace && repo init ... )
+$ python3 init.py --build_id 123456 \
+    --ddk_workspace /path/to/ddk/workspace \
+    --kleaf_repo /path/to/ddk/workspace/external/kleaf \
+    --prebuilts_dir /path/to/ddk/workspace/prebuilts/kernel \
+    --groups=all
+```
+
+See [Declare prebuilts repository](#declare-prebuilts-repository) for switching
+between building against `@gki_prebuilts//kernel_aarch64` and
+`@kleaf//common:kernel_aarch64`.
+
+#### Build against sources from a build
+
+To check out the full kernel source tree (including `common/`) from a build
+without downloading prebuilts, omit `--prebuilts_dir` and pass `--groups=all`.
+`/path/to/ddk/workspace` must be initialized with `repo init`:
+
+```shell
+$ ( cd /path/to/ddk/workspace && repo init ... )
+$ python3 init.py --build_id 123456 \
+    --ddk_workspace /path/to/ddk/workspace \
+    --kleaf_repo /path/to/ddk/workspace/external/kleaf \
+    --groups=all
+```
+
+Or against the tip of tree of a branch:
+
+```shell
+$ ( cd /path/to/ddk/workspace && repo init ... )
+$ python3 init.py --branch aosp_kernel-common-android-mainline \
+    --ddk_workspace /path/to/ddk/workspace \
+    --kleaf_repo /path/to/ddk/workspace/external/kleaf \
+    --groups=all
+```
+
+Omitting `--groups` (the default `--groups=ddk`) checks out only Kleaf tooling
+projects (`ddk` and `ddk-external`), which is useful if you provide kernel
+prebuilts separately.
+
 ## Root MODULE.bazel
 
 **Note**: The content below is automatically generated if you are using
