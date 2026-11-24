@@ -1018,6 +1018,8 @@ test_suite(
         ":empty_test",
         ":flag_alias_rewriter_test",
         "//build/kernel:init_ddk_test",
+        "//build/kernel:repo_manifest_parser_test",
+        "//build/kernel:repo_wrapper_test",
         "//build/kernel/kleaf/impl:check_config_test",
         "//build/kernel/kleaf/impl:get_kmi_string_test",
         "//build/kernel/kleaf/impl:visibility_test",
