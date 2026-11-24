@@ -1731,7 +1731,7 @@ load("@kleaf//build/kernel/kleaf:kernel.bzl", "kernel_abi")
 
 kernel_abi(<a href="#kernel_abi-name">name</a>, <a href="#kernel_abi-kernel_build">kernel_build</a>, <a href="#kernel_abi-define_abi_targets">define_abi_targets</a>, <a href="#kernel_abi-kernel_modules">kernel_modules</a>, <a href="#kernel_abi-module_grouping">module_grouping</a>,
            <a href="#kernel_abi-abi_definition_stg">abi_definition_stg</a>, <a href="#kernel_abi-kmi_enforced">kmi_enforced</a>, <a href="#kernel_abi-unstripped_modules_archive">unstripped_modules_archive</a>, <a href="#kernel_abi-kmi_symbol_list_add_only">kmi_symbol_list_add_only</a>,
-           <a href="#kernel_abi-kernel_modules_exclude_list">kernel_modules_exclude_list</a>, <a href="#kernel_abi-enable_add_vmlinux">enable_add_vmlinux</a>, <a href="#kernel_abi-kwargs">**kwargs</a>)
+           <a href="#kernel_abi-kernel_modules_exclude_list">kernel_modules_exclude_list</a>, <a href="#kernel_abi-enable_add_vmlinux">enable_add_vmlinux</a>, <a href="#kernel_abi-enable_update_symbol_list">enable_update_symbol_list</a>, <a href="#kernel_abi-kwargs">**kwargs</a>)
 </pre>
 
 Declare multiple targets to support ABI monitoring.
@@ -1741,7 +1741,7 @@ macro.
 
 For example, you may have the following declaration. (For actual definition
 of `kernel_aarch64`, see
-[`define_common_kernels()`](#define_common_kernels).
+[`common_kernel()`](common_kernels.md#common_kernel).)
 
 ```
 kernel_build(name = "kernel_aarch64", ...)
@@ -1755,26 +1755,27 @@ kernel_abi(
 The `kernel_abi` invocation above defines the following targets:
 - `kernel_aarch64_abi_dump`
   - Building this target extracts the ABI.
-  - Include this target in a [`kernel_abi_dist`](#kernel_abi_dist)
-    target to copy ABI dump to `--dist-dir`.
+  - Requires `kernel_build` (and any `kernel_modules`) to collect unstripped
+    modules via `collect_unstripped_modules = True`, independently of
+    `define_abi_targets` or `abi_definition_stg`.
+  - Include this target in a [`kernel_abi_wrapped_dist`](#kernel_abi_wrapped_dist)
+    target to copy the ABI dump to the distribution directory.
 - `kernel_aarch64_abi`
   - A filegroup that contains `kernel_aarch64_abi_dump`. It also contains other targets
     if `define_abi_targets = True`; see below.
 
 In addition, the following targets are defined if `define_abi_targets = True`:
-- `kernel_aarch64_abi_update_symbol_list`
-  - Running this target updates `kmi_symbol_list`.
+- `kernel_aarch64_abi_update_symbol_list` (if `enable_update_symbol_list = True`)
+  - Running this target updates `kmi_symbol_list` of `kernel_build`
+    (for device kernels; disabled for `common_kernel()` targets).
 - `kernel_aarch64_abi_update`
-  - Running this target updates `abi_definition`.
-- `kernel_aarch64_abi_dump`
-  - Building this target extracts the ABI.
-  - Include this target in a [`kernel_abi_dist`](#kernel_abi_dist)
-    target to copy ABI dump to `--dist-dir`.
+  - Running this target compares and updates `abi_definition_stg` (or fails
+    clearly if `abi_definition_stg` is unset).
 
 To create a distribution, see
 [`kernel_abi_wrapped_dist`](#kernel_abi_wrapped_dist).
 
-See build/kernel/kleaf/abi.md for a conversion chart from `build_abi.sh`
+See `build/kernel/kleaf/docs/abi.md` for a conversion chart from `build_abi.sh`
 commands to Bazel commands.
 
 
@@ -1785,15 +1786,16 @@ commands to Bazel commands.
 | :------------- | :------------- | :------------- |
 | <a id="kernel_abi-name"></a>name |  Name of this target.   |  none |
 | <a id="kernel_abi-kernel_build"></a>kernel_build |  The [`kernel_build`](#kernel_build).   |  none |
-| <a id="kernel_abi-define_abi_targets"></a>define_abi_targets |  Whether the target contains other files to support ABI monitoring. If `None`, defaults to `True`.<br><br>If `False`, this macro is equivalent to just calling <pre><code>kernel_build(name = name, **kwargs)&#10;filegroup(name = name + "_abi", data = [name, abi_dump_target])</code></pre><br><br>If `True`, implies `collect_unstripped_modules = True`. See [`kernel_build.collect_unstripped_modules`](#kernel_build-collect_unstripped_modules).   |  `None` |
+| <a id="kernel_abi-define_abi_targets"></a>define_abi_targets |  nonconfigurable. Whether to declare ABI comparison, update, and (when `enable_update_symbol_list = True`) symbol-list update targets. If `None`, defaults to `True`.<br><br>Note that `<name>_dump` (ABI extraction) is always declared regardless of `define_abi_targets`, and requires the `kernel_build` target to set [`collect_unstripped_modules = True`](#kernel_build-collect_unstripped_modules).   |  `None` |
 | <a id="kernel_abi-kernel_modules"></a>kernel_modules |  A list of external [`kernel_module()`](#kernel_module)s to extract symbols from.   |  `None` |
-| <a id="kernel_abi-module_grouping"></a>module_grouping |  If unspecified or `None`, it is `True` by default. If `True`, then the symbol list will group symbols based on the kernel modules that reference the symbol. Otherwise the symbol list will simply be a sorted list of symbols used by all the kernel modules.   |  `None` |
-| <a id="kernel_abi-abi_definition_stg"></a>abi_definition_stg |  Location of the ABI definition in STG format.   |  `None` |
+| <a id="kernel_abi-module_grouping"></a>module_grouping |  If unspecified or `None`, it is `True` by default. If `True`, then the symbol list will group symbols based on the kernel modules that reference the symbol. Otherwise the symbol list will simply be a sorted list of symbols used by all the kernel modules. Cannot be set when `enable_update_symbol_list = False`.   |  `None` |
+| <a id="kernel_abi-abi_definition_stg"></a>abi_definition_stg |  nonconfigurable. Location of the ABI definition in STG format.   |  `None` |
 | <a id="kernel_abi-kmi_enforced"></a>kmi_enforced |  This is an indicative option to signal that KMI is enforced. If set to `True`, KMI checking tools respects it and reacts to it by failing if KMI differences are detected.   |  `None` |
 | <a id="kernel_abi-unstripped_modules_archive"></a>unstripped_modules_archive |  A [`kernel_unstripped_modules_archive`](#kernel_unstripped_modules_archive) which name is specified in `abi.prop`. DEPRECATED.   |  `None` |
-| <a id="kernel_abi-kmi_symbol_list_add_only"></a>kmi_symbol_list_add_only |  If unspecified or `None`, it is `False` by default. If `True`, then any symbols in the symbol list that would have been removed are preserved (at the end of the file). Symbol list update will fail if there is no pre-existing symbol list file to read from. This property is intended to prevent unintentional shrinkage of a stable ABI.<br><br>This should be set to `True` if `KMI_SYMBOL_LIST_ADD_ONLY=1`.   |  `None` |
-| <a id="kernel_abi-kernel_modules_exclude_list"></a>kernel_modules_exclude_list |  List of base names for in-tree kernel modules to exclude from. i.e. This is the modules built in `kernel_build`, not the `kernel_modules` mentioned above.   |  `None` |
+| <a id="kernel_abi-kmi_symbol_list_add_only"></a>kmi_symbol_list_add_only |  If unspecified or `None`, it is `False` by default. If `True`, then any symbols in the symbol list that would have been removed are preserved (at the end of the file). Symbol list update will fail if there is no pre-existing symbol list file to read from. This property is intended to prevent unintentional shrinkage of a stable ABI.<br><br>This should be set to `True` if `KMI_SYMBOL_LIST_ADD_ONLY=1`. Cannot be set when `enable_update_symbol_list = False`.   |  `None` |
+| <a id="kernel_abi-kernel_modules_exclude_list"></a>kernel_modules_exclude_list |  List of base names for in-tree kernel modules to exclude from. i.e. This is the modules built in `kernel_build`, not the `kernel_modules` mentioned above. Cannot be set when `enable_update_symbol_list = False`.   |  `None` |
 | <a id="kernel_abi-enable_add_vmlinux"></a>enable_add_vmlinux |  If unspecified or `None`, it is `True` by default. If `True`, enable the `kernel_build_add_vmlinux` [transition](https://bazel.build/extending/config#user-defined-transitions) from all targets instantiated by this macro (e.g. produced by abi_dump, extracted_symbols, etc).   |  `None` |
+| <a id="kernel_abi-enable_update_symbol_list"></a>enable_update_symbol_list |  nonconfigurable. If unspecified or `None`, it is `True` by default. If `True` (and `define_abi_targets = True`), define `<name>_update_symbol_list` and its symbol extraction targets to update `kernel_build.kmi_symbol_list`. If `False`, omit symbol list extraction and update targets.   |  `None` |
 | <a id="kernel_abi-kwargs"></a>kwargs |  Additional attributes to the internal rule, e.g. [`visibility`](https://docs.bazel.build/versions/main/visibility.html). See complete list [here](https://docs.bazel.build/versions/main/be/common-definitions.html#common-attributes).   |  none |
 
 
