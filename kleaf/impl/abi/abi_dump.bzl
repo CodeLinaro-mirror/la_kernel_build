@@ -34,7 +34,6 @@ def _abi_dump_impl(ctx):
         ctx.label,
     )
 
-    # Run both methods until STG is fully adopted.
     full_abi_out_file_stg = _abi_dump_full_stg(ctx)
     abi_out_file_stg = _abi_dump_filtered_stg(ctx, full_abi_out_file_stg)
 

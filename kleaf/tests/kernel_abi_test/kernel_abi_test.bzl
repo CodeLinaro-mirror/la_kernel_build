@@ -192,6 +192,7 @@ def kernel_abi_test(name):
     for suffix, expected in (
         ("_dump", True),
         ("_diff_executable", True),
+        ("_diff_executable_xml", False),
         ("_update", True),
         ("_diff", False),
         ("_nodiff_update", False),
@@ -251,6 +252,7 @@ def kernel_abi_test(name):
     for suffix, expected in (
         ("_dump", True),
         ("_diff_executable", True),
+        ("_diff_executable_xml", False),
         ("_update", True),
         ("_diff", False),
         ("_nodiff_update", False),
