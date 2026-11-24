@@ -165,7 +165,7 @@ Example: To examine the information exposed by `KernelBuildAbiInfo` from he
 $ tools/bazel cquery //common:kernel_aarch64 --output=starlark --starlark:expr='providers(target)["//build/kernel/kleaf/impl:common_providers.bzl%KernelBuildAbiInfo"]'
 
 ...
-struct(base_modules_staging_archive = None, combined_abi_symbollist = <generated file common/kernel_aarch64_kmi_symbol_list/abi_symbollist>, kmi_strict_mode_out = <generated file common/kernel_aarch64_kmi_strict_out/kmi_symbol_list_strict_mode_checked>, modules_staging_archive = <generated file common/kernel_aarch64/modules_staging_dir.tar.gz>, src_kmi_symbol_list = <source file common/gki/aarch64/symbols/base>, src_protected_exports_list = <source file common/gki/aarch64/protected_exports>, src_protected_modules_list = <generated file common/gki/aarch64/protected_modules>, trim_nonlisted_kmi = True)
+struct(base_modules_staging_archive = None, combined_abi_symbollist = <generated file common/kernel_aarch64_kmi_symbol_list/abi_symbollist>, kmi_strict_mode_out = <generated file common/kernel_aarch64_kmi_strict_out/kmi_symbol_list_strict_mode_checked>, modules_staging_archive = <generated file common/kernel_aarch64/modules_staging_dir.tar.gz>, src_kmi_symbol_list = None, trim_nonlisted_kmi = True)
 ...
 
 ```

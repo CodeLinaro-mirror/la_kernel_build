@@ -49,8 +49,8 @@ example.
 
 ## Update the KMI symbol list {#update-symbol-list}
 
-Similar to [updating the KMI symbol list for GKI](abi.md#update-symbol-list),
-you may update the `kmi_symbol_list` defined previously with the following.
+You may update the device `kmi_symbol_list` defined previously with the
+following command.
 
 ```shell
 $ tools/bazel run //path/to/package:{name}_abi_update_symbol_list
