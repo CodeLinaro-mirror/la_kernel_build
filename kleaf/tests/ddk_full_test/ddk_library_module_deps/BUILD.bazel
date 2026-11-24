@@ -1,0 +1,99 @@
+# Copyright (C) 2026 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load(
+    "@kleaf//build/kernel/kleaf:kernel.bzl",
+    "ddk_library",
+    "ddk_module",
+)
+
+ddk_module(
+    name = "parent",
+    srcs = ["parent.c"],
+    out = "parent.ko",
+    hdrs = ["parent.h"],
+    includes = ["."],
+    kernel_build = "@kleaf//common:kernel_aarch64",
+    tags = ["manual"],
+    visibility = ["//visibility:private"],
+)
+
+ddk_library(
+    name = "lib_a",
+    srcs = ["lib_a.c"],
+    hdrs = ["lib_a.h"],
+    includes = ["."],
+    kernel_build = "@kleaf//common:kernel_aarch64",
+    tags = ["manual"],
+    visibility = ["//visibility:private"],
+    deps = [":parent"],
+)
+
+ddk_library(
+    name = "lib_b",
+    srcs = ["lib_b.c"],
+    hdrs = ["lib_b.h"],
+    includes = ["."],
+    kernel_build = "@kleaf//common:kernel_aarch64",
+    tags = ["manual"],
+    visibility = ["//visibility:private"],
+    deps = [":parent"],
+)
+
+ddk_module(
+    name = "child",
+    srcs = ["child.c"],
+    out = "child_mod.ko",
+    kernel_build = "@kleaf//common:kernel_aarch64",
+    tags = ["manual"],
+    visibility = ["//visibility:private"],
+    deps = [":lib_a"],
+)
+
+ddk_module(
+    name = "child_with_parent",
+    srcs = ["child_with_parent.c"],
+    out = "child_with_parent_mod.ko",
+    kernel_build = "@kleaf//common:kernel_aarch64",
+    tags = ["manual"],
+    visibility = ["//visibility:private"],
+    deps = [
+        ":lib_a",
+        ":parent",
+    ],
+)
+
+ddk_module(
+    name = "child_diamond",
+    srcs = ["child_diamond.c"],
+    out = "child_diamond_mod.ko",
+    kernel_build = "@kleaf//common:kernel_aarch64",
+    tags = ["manual"],
+    visibility = ["//visibility:private"],
+    deps = [
+        ":lib_a",
+        ":lib_b",
+    ],
+)
+
+build_test(
+    name = "ddk_library_module_deps",
+    targets = [
+        ":child",
+        ":child_diamond",
+        ":child_with_parent",
+    ],
+    visibility = ["//build/kernel/kleaf:__subpackages__"],
+)
