@@ -378,17 +378,21 @@ KernelUnstrippedModulesInfo = provider(
 [`File`](https://bazel.build/rules/lib/File)s, where
 each item points to a directory containing unstripped modules.
 
-Order matters; earlier elements in the traverse order has higher priority. Hence,
-this depset must have `order` argument specified.
+Order matters; earlier elements in the traverse order have higher priority. Hence,
+this depset must specify `order = "postorder"`.
 
-For [`kernel_build()`](kernel.md#kernel_build), this is a directory containing unstripped in-tree modules.
-- This is `None` if and only if `collect_unstripped_modules = False`
-- Never `None` if and only if `collect_unstripped_modules = True`
-- An empty directory if and only if `collect_unstripped_modules = True` and `module_outs` is empty
+For [`kernel_build()`](kernel.md#kernel_build):
+- If `collect_unstripped_modules = True`, includes the unstripped in-tree
+  modules directory (empty when `module_outs` / `module_implicit_outs` are
+  empty).
+- If `base_kernel` is set, also includes `base_kernel`'s `directories` depset.
+- If `collect_unstripped_modules = False` and `base_kernel` is unset, this
+  depset is empty.
 
-For an external [`kernel_module()`](kernel.md#kernel_module), this is a directory containing unstripped external modules.
-- This is `None` if and only if the `kernel_build` argument has `collect_unstripped_modules = False`
-- Never `None` if and only if the `kernel_build` argument has `collect_unstripped_modules = True`
+For an external [`kernel_module()`](kernel.md#kernel_module):
+- Includes the unstripped external modules directory when the `kernel_build`
+  sets `collect_unstripped_modules = True` or the module collects unstripped
+  outputs internally (for example, [`ddk_module()`](kernel.md#ddk_module)).
 """,
     },
 )
