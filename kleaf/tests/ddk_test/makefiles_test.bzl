@@ -15,7 +15,6 @@
 """Tests for ddk/makefiles.bzl."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
@@ -89,10 +88,13 @@ def _makefiles_test_impl(ctx):
                     entry.restore_path
                     for entry in dep[ModuleSymversInfo].entries.to_list()
                 ]
-    asserts.set_equals(
+
+    # Compare sorted lists instead of sets so duplicate paths in the actual
+    # --module-symvers-list argv are caught rather than silently collapsed.
+    asserts.equals(
         env,
-        sets.make(expected_module_symvers),
-        sets.make(argv_dict.get("--module-symvers-list", [])),
+        sorted(set(expected_module_symvers)),
+        sorted(argv_dict.get("--module-symvers-list", [])),
         "--module-symvers-list mismatch",
     )
 
