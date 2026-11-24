@@ -165,6 +165,7 @@ def kernel_abi_test(name):
         kernel_build = no_symbols_build,
         define_abi_targets = False,
         enable_add_vmlinux = False,
+        enable_update_symbol_list = False,
         tags = ["manual"],
     )
     _kernel_build_abi_info_test(
@@ -223,6 +224,7 @@ def kernel_abi_test(name):
         kernel_build = symbols_build,
         define_abi_targets = False,
         enable_add_vmlinux = False,
+        enable_update_symbol_list = False,
         tags = ["manual"],
     )
     _kernel_build_abi_info_test(
@@ -258,6 +260,91 @@ def kernel_abi_test(name):
         ("_diff_symbol_list", False),
     ):
         _add_target_presence_test(tests, symbols_only_abi + suffix, expected)
+
+    # Baseline tracking without symbol lists: committed abi.stg tracked unfiltered.
+    stg_only_abi = name + "_stg_only_abi"
+    kernel_abi(
+        name = stg_only_abi,
+        kernel_build = no_symbols_build,
+        abi_definition_stg = "fake_abi.stg",
+        define_abi_targets = True,
+        enable_add_vmlinux = False,
+        enable_update_symbol_list = False,
+        tags = ["manual"],
+    )
+    _abi_dump_filtering_test(
+        name = name + "_stg_only_dump_unfiltered_test",
+        target_under_test = stg_only_abi + "_dump",
+        expect_filtered = False,
+    )
+    tests.append(name + "_stg_only_dump_unfiltered_test")
+    _nodiff_update_test(
+        name = name + "_stg_only_nodiff_update_test",
+        target_under_test = stg_only_abi + "_nodiff_update",
+        expect_strict_mode_check = False,
+    )
+    tests.append(name + "_stg_only_nodiff_update_test")
+    _analyse_ok_test(
+        name = name + "_stg_only_update_analyse_test",
+        target_under_test = stg_only_abi + "_update",
+    )
+    tests.append(name + "_stg_only_update_analyse_test")
+    for suffix, expected in (
+        ("_dump", True),
+        ("_diff", True),
+        ("_diff_executable", True),
+        ("_nodiff_update", True),
+        ("_update", True),
+        ("_kmi_symbol_checks", True),
+        ("_update_symbol_list", False),
+        ("_extracted_symbols", False),
+        ("_src_kmi_symbol_list", False),
+        ("_diff_symbol_list", False),
+    ):
+        _add_target_presence_test(tests, stg_only_abi + suffix, expected)
+
+    # Full ABI tracking: symbol lists with committed abi.stg and enforcement enabled.
+    full_abi = name + "_full_abi"
+    kernel_abi(
+        name = full_abi,
+        kernel_build = symbols_build,
+        abi_definition_stg = "fake_abi.stg",
+        define_abi_targets = True,
+        enable_add_vmlinux = False,
+        enable_update_symbol_list = False,
+        kmi_enforced = True,
+        tags = ["manual"],
+    )
+    _abi_dump_filtering_test(
+        name = name + "_full_dump_filtered_test",
+        target_under_test = full_abi + "_dump",
+        expect_filtered = True,
+    )
+    tests.append(name + "_full_dump_filtered_test")
+    _nodiff_update_test(
+        name = name + "_full_nodiff_update_test",
+        target_under_test = full_abi + "_nodiff_update",
+        expect_strict_mode_check = True,
+    )
+    tests.append(name + "_full_nodiff_update_test")
+    _analyse_ok_test(
+        name = name + "_full_update_analyse_test",
+        target_under_test = full_abi + "_update",
+    )
+    tests.append(name + "_full_update_analyse_test")
+    for suffix, expected in (
+        ("_dump", True),
+        ("_diff", True),
+        ("_diff_executable", True),
+        ("_nodiff_update", True),
+        ("_update", True),
+        ("_kmi_symbol_checks", True),
+        ("_update_symbol_list", False),
+        ("_extracted_symbols", False),
+        ("_src_kmi_symbol_list", False),
+        ("_diff_symbol_list", False),
+    ):
+        _add_target_presence_test(tests, full_abi + suffix, expected)
 
     # Device / DDK symbol list update (e.g. virtual_device, db845c, out-of-tree DDK modules).
     dev_build = name + "_device_build"
@@ -336,6 +423,78 @@ def kernel_abi_test(name):
         ("_diff_symbol_list", False),
     ):
         _add_target_presence_test(tests, kmi_stg_abi + suffix, expected)
+
+    # Explicit enable_update_symbol_list = True with both kmi_symbol_list and
+    # abi_definition_stg: matches default behaviour and keeps strict-mode check.
+    kmi_stg_enabled_abi = name + "_kmi_stg_enabled_abi"
+    kernel_abi(
+        name = kmi_stg_enabled_abi,
+        kernel_build = kmi_stg_build,
+        abi_definition_stg = "fake_abi.stg",
+        enable_add_vmlinux = False,
+        enable_update_symbol_list = True,
+        tags = ["manual"],
+    )
+    _nodiff_update_test(
+        name = name + "_kmi_stg_enabled_nodiff_update_test",
+        target_under_test = kmi_stg_enabled_abi + "_nodiff_update",
+        expect_strict_mode_check = True,
+    )
+    tests.append(name + "_kmi_stg_enabled_nodiff_update_test")
+    _analyse_ok_test(
+        name = name + "_kmi_stg_enabled_update_analyse_test",
+        target_under_test = kmi_stg_enabled_abi + "_update",
+    )
+    tests.append(name + "_kmi_stg_enabled_update_analyse_test")
+    _analyse_ok_test(
+        name = name + "_kmi_stg_enabled_update_symbol_list_analyse_test",
+        target_under_test = kmi_stg_enabled_abi + "_update_symbol_list",
+    )
+    tests.append(name + "_kmi_stg_enabled_update_symbol_list_analyse_test")
+    for suffix, expected in (
+        ("_src_kmi_symbol_list", True),
+        ("_extracted_symbols", True),
+        ("_update_symbol_list", True),
+        ("_kmi_symbol_checks", True),
+        ("_nodiff_update", True),
+        ("_update", True),
+        ("_diff_symbol_list", False),
+    ):
+        _add_target_presence_test(tests, kmi_stg_enabled_abi + suffix, expected)
+
+    # define_abi_targets = True without abi_definition_stg and with
+    # enable_update_symbol_list = False: _update fails clearly mentioning
+    # abi_definition_stg, and no symbol list update targets are declared.
+    no_stg_abi = name + "_no_stg_abi"
+    kernel_abi(
+        name = no_stg_abi,
+        kernel_build = symbols_build,
+        define_abi_targets = True,
+        enable_add_vmlinux = False,
+        enable_update_symbol_list = False,
+        tags = ["manual"],
+    )
+    failure_test(
+        name = name + "_no_stg_update_fail_test",
+        target_under_test = no_stg_abi + "_update",
+        error_message_substrs = [
+            "`define_abi_targets` is True but `abi_definition_stg` was not provided",
+        ],
+    )
+    tests.append(name + "_no_stg_update_fail_test")
+    for suffix, expected in (
+        ("_dump", True),
+        ("_diff_executable", True),
+        ("_update", True),
+        ("_kmi_symbol_checks", True),
+        ("_diff", False),
+        ("_nodiff_update", False),
+        ("_update_symbol_list", False),
+        ("_extracted_symbols", False),
+        ("_src_kmi_symbol_list", False),
+        ("_diff_symbol_list", False),
+    ):
+        _add_target_presence_test(tests, no_stg_abi + suffix, expected)
 
     # Defensive check: get_src_kmi_symbol_list fails clearly if kmi_symbol_list is unset.
     get_src_kmi_symbol_list(
