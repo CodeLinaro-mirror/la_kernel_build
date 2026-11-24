@@ -239,10 +239,6 @@ def _not_define_abi_targets(
         name = name + "_diff_executable",
         **private_kwargs
     )
-    empty_binary(
-        name = name + "_diff_executable_xml",
-        **private_kwargs
-    )
 
     fail_rule(
         name = name + "_update",
