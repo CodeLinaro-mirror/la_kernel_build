@@ -9,11 +9,11 @@ $ tools/bazel run //common:kernel_aarch64_abi_dist -- --destdir=out/dist
 ```
 
 This compares the current ABI (`abi_definition_stg` of `//common:kernel_aarch64`,
-which is `common/android/abi_gki_aarch64.stg`) and the freshly-generated ABI
+which is `common/gki/aarch64/abi.stg`) and the freshly-generated ABI
 from the built kernel image and modules, and generates a diff report. This also
 builds all ABI-related artifacts for distribution, and copies them to
-`out/dist` (or `out_abi/kernel_aarch64/dist` if `--destdir` is not specified).
-The exit code reflects whether an ABI change is detected in the
+`out/dist` (or `out_abi/kernel_aarch64_abi_dist/dist` if `--destdir` is not
+specified). The exit code reflects whether an ABI change is detected in the
 comparison, just like `build_abi.sh`.
 
 ### Update symbol list
@@ -23,7 +23,7 @@ $ tools/bazel run //common:kernel_aarch64_abi_update_symbol_list
 ```
 
 This updates `kmi_symbol_list` of `//common:kernel_aarch64`, which is
-`common/android/abi_gki_aarch64`.
+`common/gki/aarch64/symbols/base`.
 
 ### Extracting the ABI
 
@@ -37,12 +37,13 @@ $ tools/bazel build //common:kernel_aarch64_abi_dump
 updating the ABI definition. The Bazel command below does not also update
 the source symbol list, unlike the `build_abi.sh` command.
 
-If ABI definition doesn't exists i.e. if this is the first time it is being
-generated then first and empty symbol file needs to be created and the symbol
-list needs to be generated using the `nodiff_update` target as below:
+If the ABI definition does not exist yet (for example, when generating it for
+the first time), create an empty `.stg` file, set `abi_definition_stg` on the
+`common_kernel()` target in `common/BUILD.bazel`, and generate the ABI
+definition using the `nodiff_update` target:
 
 ```shell
-touch common/android/abi_gki_aarch64.stg
+$ touch common/gki/aarch64/abi.stg
 $ tools/bazel run //common:kernel_aarch64_abi_nodiff_update
 ```
 
@@ -53,8 +54,8 @@ as below:
 $ tools/bazel run //common:kernel_aarch64_abi_update
 ```
 
-This compares the ABIs, then updates the `abi_definition`
-of `//common:kernel_aarch64`, which is `common/android/abi_gki_aarch64.stg`. The
+This compares the ABIs, then updates `abi_definition_stg`
+of `//common:kernel_aarch64`, which is `common/gki/aarch64/abi.stg`. The
 exit code reflects whether an ABI change is detected in the comparison, just
 like `build_abi.sh --update`.
 
@@ -72,9 +73,9 @@ Example output:
 $ tools/bazel run //common:kernel_aarch64_abi_update -- --print_git_commands
 [...]
 INFO: Running command line: bazel-bin/common/kernel_aarch64_abi_update.sh --print_git_commands
-  git -C /path/to/common/android commit \
+  git -C /path/to/common/gki/aarch64 commit \
     -F /path/to/bazel-out/k8-fastbuild/bin/common/kernel_aarch64_abi_diff/git_message.txt \
-    --signoff --edit -- abi_gki_aarch64.stg
+    --signoff --edit -- abi.stg
 ```
 
 **NOTE**: The printed command (especially the path to git_message.txt) may
@@ -108,27 +109,27 @@ according to the arguments it's given. So you don't have to look it up here.
 ```shell
 # build_abi.sh --update_symbol_list
 # Update symbol list [1]
-$ tools/bazel run kernel_aarch64_abi_update_symbol_list
+$ tools/bazel run //common:kernel_aarch64_abi_update_symbol_list
 
 # build_abi.sh --nodiff
 # Extract the ABI (but do not compare it) [2]
-$ tools/bazel build kernel_aarch64_abi_dump
+$ tools/bazel build //common:kernel_aarch64_abi_dump
 
 # build_abi.sh --nodiff --update
 # Update symbol list, [1][3]
-$ tools/bazel run kernel_aarch64_abi_update_symbol_list &&
-# Extract the ABI (but do not compare it), then update `abi_definition` [2][3]
-> tools/bazel run kernel_aarch64_abi_nodiff_update
+$ tools/bazel run //common:kernel_aarch64_abi_update_symbol_list &&
+# Extract the ABI (but do not compare it), then update `abi_definition_stg` [2][3]
+> tools/bazel run //common:kernel_aarch64_abi_nodiff_update
 
 # build_abi.sh --update
 # Update symbol list, [1][3]
-$ tools/bazel run kernel_aarch64_abi_update_symbol_list &&
-# Extract the ABI and compare it, then update `abi_definition` [2][3]
-> tools/bazel run kernel_aarch64_abi_update
+$ tools/bazel run //common:kernel_aarch64_abi_update_symbol_list &&
+# Extract the ABI and compare it, then update `abi_definition_stg` [2][3]
+> tools/bazel run //common:kernel_aarch64_abi_update
 
 # build_abi.sh
 # Extract the ABI and compare it, then copy artifacts to distribution directory
-$ tools/bazel run kernel_aarch64_abi_dist
+$ tools/bazel run //common:kernel_aarch64_abi_dist
 ```
 
 Notes:
