@@ -23,7 +23,6 @@ load(":abi/abi_update.bzl", "abi_update")
 load(":abi/extracted_symbols.bzl", "extracted_symbols")
 load(":abi/get_src_kmi_symbol_list.bzl", "get_src_kmi_symbol_list")
 load(":common_providers.bzl", "KernelBuildAbiInfo")
-load(":diff.bzl", "diff")
 load(":empty_binary.bzl", "empty_binary")
 load(":kernel_build.bzl", "kernel_build")
 
@@ -299,7 +298,6 @@ def _define_abi_targets(
         name = name,
         abi_definition_stg = abi_definition_stg,
         kmi_enforced = kmi_enforced,
-        kmi_symbol_list = name + "_src_kmi_symbol_list",
         kmi_symbol_checks = name + "_kmi_symbol_checks",
         **kwargs
     )
@@ -314,7 +312,6 @@ def _define_abi_definition_targets(
         name,
         abi_definition_stg,
         kmi_enforced,
-        kmi_symbol_list,
         kmi_symbol_checks,
         **kwargs):
     """Helper to `_define_abi_targets`.
@@ -377,28 +374,11 @@ def _define_abi_definition_targets(
             **private_kwargs
         )
 
-        diff(
-            name = name + "_diff_symbol_list",
-            file1 = name + "_extracted_symbols",
-            file2 = kmi_symbol_list,
-            failure_message = """\
-symbol list must be updated before updating ABI definition.
-    To update, execute
-        tools/bazel run {}
-    To discover additional files to be updated, execute
-        tools/bazel run -k {}""".format(
-                native.package_relative_label(name + "_update_symbol_list"),
-                native.package_relative_label(name + "_update"),
-            ),
-            **private_kwargs
-        )
-
         update_source_file(
             name = name + "_nodiff_update",
             src = name + "_out_file",
             dst = abi_definition_stg,
             deps = [
-                name + "_diff_symbol_list",
                 # Ensure KMI checks are executed before updating ABI.
                 kmi_symbol_checks,
             ],

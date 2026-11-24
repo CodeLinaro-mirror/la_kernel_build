@@ -111,6 +111,34 @@ _abi_dump_filtering_test = analysistest.make(
     },
 )
 
+def _nodiff_update_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+    runfiles = [f.basename for f in target[DefaultInfo].default_runfiles.files.to_list()]
+    asserts.equals(
+        env,
+        ctx.attr.expect_strict_mode_check,
+        # Matches basename created by _kmi_symbol_list_strict_mode in kernel_build.bzl.
+        "kmi_symbol_list_strict_mode_checked" in runfiles,
+        "kmi_symbol_list_strict_mode_checked mismatch in runfiles: {}".format(runfiles),
+    )
+    return analysistest.end(env)
+
+_nodiff_update_test = analysistest.make(
+    impl = _nodiff_update_test_impl,
+    attrs = {
+        "expect_strict_mode_check": attr.bool(mandatory = True),
+    },
+)
+
+def _analyse_ok_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    return analysistest.end(env)
+
+_analyse_ok_test = analysistest.make(
+    impl = _analyse_ok_test_impl,
+)
+
 def kernel_abi_test(name):
     """Defines tests for ABI extraction, symbol lists, and ABI tracking.
 
@@ -230,6 +258,84 @@ def kernel_abi_test(name):
         ("_diff_symbol_list", False),
     ):
         _add_target_presence_test(tests, symbols_only_abi + suffix, expected)
+
+    # Device / DDK symbol list update (e.g. virtual_device, db845c, out-of-tree DDK modules).
+    dev_build = name + "_device_build"
+    dev_abi = name + "_device_abi"
+    kernel_build(
+        name = dev_build,
+        srcs = [],
+        base_kernel = symbols_build,
+        outs = [],
+        collect_unstripped_modules = True,
+        kmi_symbol_list = "fake_symbol_list_device",
+        make_goals = [],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
+        tags = ["manual"],
+    )
+    kernel_abi(
+        name = dev_abi,
+        kernel_build = dev_build,
+        kmi_symbol_list_add_only = True,
+        tags = ["manual"],
+    )
+    _analyse_ok_test(
+        name = name + "_device_update_symbol_list_analyse_test",
+        target_under_test = dev_abi + "_update_symbol_list",
+    )
+    tests.append(name + "_device_update_symbol_list_analyse_test")
+    for suffix, expected in (
+        ("_src_kmi_symbol_list", True),
+        ("_extracted_symbols", True),
+        ("_update_symbol_list", True),
+        ("_diff_symbol_list", False),
+    ):
+        _add_target_presence_test(tests, dev_abi + suffix, expected)
+
+    # Standalone target with both kmi_symbol_list and abi_definition_stg: verifies
+    # _diff_symbol_list is no longer created even when abi_definition_stg is set.
+    kmi_stg_build = name + "_kmi_stg_build"
+    kmi_stg_abi = name + "_kmi_stg_abi"
+    kernel_build(
+        name = kmi_stg_build,
+        srcs = [],
+        outs = ["vmlinux"],
+        collect_unstripped_modules = True,
+        keep_module_symvers = True,
+        kmi_symbol_list = "fake_symbol_list_base",
+        kmi_symbol_list_strict_mode = True,
+        make_goals = [],
+        pahole = "//build/kernel/kleaf/tests:fake_pahole",
+        tags = ["manual"],
+    )
+    kernel_abi(
+        name = kmi_stg_abi,
+        kernel_build = kmi_stg_build,
+        abi_definition_stg = "fake_abi.stg",
+        enable_add_vmlinux = False,
+        tags = ["manual"],
+    )
+    _nodiff_update_test(
+        name = name + "_kmi_stg_nodiff_update_test",
+        target_under_test = kmi_stg_abi + "_nodiff_update",
+        expect_strict_mode_check = True,
+    )
+    tests.append(name + "_kmi_stg_nodiff_update_test")
+    _analyse_ok_test(
+        name = name + "_kmi_stg_update_analyse_test",
+        target_under_test = kmi_stg_abi + "_update",
+    )
+    tests.append(name + "_kmi_stg_update_analyse_test")
+    for suffix, expected in (
+        ("_src_kmi_symbol_list", True),
+        ("_extracted_symbols", True),
+        ("_update_symbol_list", True),
+        ("_kmi_symbol_checks", True),
+        ("_nodiff_update", True),
+        ("_update", True),
+        ("_diff_symbol_list", False),
+    ):
+        _add_target_presence_test(tests, kmi_stg_abi + suffix, expected)
 
     # Defensive check: get_src_kmi_symbol_list fails clearly if kmi_symbol_list is unset.
     get_src_kmi_symbol_list(
