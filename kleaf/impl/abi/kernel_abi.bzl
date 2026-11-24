@@ -231,6 +231,7 @@ def _not_define_abi_targets(
                       name + "_update",
                   ) +
                   "See kleaf/docs/abi.md for more information.",
+        **kwargs
     )
 
 def _define_abi_targets(
