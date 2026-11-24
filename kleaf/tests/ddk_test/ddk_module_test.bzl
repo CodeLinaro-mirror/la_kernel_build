@@ -17,9 +17,15 @@
 load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
-load("//build/kernel/kleaf/impl:common_providers.bzl", "ModuleSymversInfo")
+load(
+    "//build/kernel/kleaf/impl:common_providers.bzl",
+    "ModuleSymversFileInfo",
+    "ModuleSymversInfo",
+)
 load("//build/kernel/kleaf/impl:ddk/ddk_headers.bzl", "ddk_headers")
+load("//build/kernel/kleaf/impl:ddk/ddk_library.bzl", "ddk_library")
 load("//build/kernel/kleaf/impl:ddk/ddk_module.bzl", "ddk_module")
 load("//build/kernel/kleaf/impl:ddk/ddk_submodule.bzl", "ddk_submodule")
 load("//build/kernel/kleaf/impl:kernel_build.bzl", "kernel_build")
@@ -27,6 +33,7 @@ load("//build/kernel/kleaf/impl:kernel_module.bzl", "kernel_module")
 load("//build/kernel/kleaf/impl:kernel_module_group.bzl", "kernel_module_group")
 load("//build/kernel/kleaf/tests:failure_test.bzl", "failure_test")
 load("//build/kernel/kleaf/tests/utils:contain_lines_test.bzl", "contain_lines_test")
+load("//build/kernel/kleaf/tests/utils:output_group_files.bzl", "output_group_files")
 load(":ddk_headers_test.bzl", "check_ddk_headers_info")
 load(":makefiles_test.bzl", "get_top_level_file")
 
@@ -254,6 +261,298 @@ def _shared_module_symvers_tests(name, kernel_build, base, legacy_module_a, lega
         tests = tests,
     )
 
+def _ddk_library_symvers_action_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target_under_test = analysistest.target_under_test(env)
+
+    mnemonic = "KernelModule"
+    if ctx.attr._config_is_local[BuildSettingInfo].value:
+        mnemonic += "ProcessWrapperSandbox"
+
+    action = None
+    for a in target_under_test.actions:
+        if a.mnemonic == mnemonic:
+            action = a
+    asserts.true(env, action, "Can't find action with mnemonic {}".format(mnemonic))
+
+    symvers_files = ctx.attr.symvers_owner[ModuleSymversFileInfo].module_symvers.to_list()
+    asserts.equals(env, 1, len(symvers_files), "Expected 1 Module.symvers from symvers_owner")
+    symvers_file = symvers_files[0]
+
+    inputs = sets.make(action.inputs.to_list())
+    cmd = action.argv[-1]
+    if ctx.attr.expect_dep_setup:
+        asserts.true(
+            env,
+            sets.contains(inputs, symvers_file),
+            "Expected {} in action inputs".format(symvers_file.path),
+        )
+        asserts.true(
+            env,
+            "dep_setup.sh" in target_under_test[OutputGroupInfo],
+            "Expected dep_setup.sh output group",
+        )
+        dep_setup_files = target_under_test[OutputGroupInfo]["dep_setup.sh"].to_list()
+        asserts.equals(env, 1, len(dep_setup_files), "Expected 1 dep_setup.sh file")
+        asserts.true(
+            env,
+            sets.contains(inputs, dep_setup_files[0]),
+            "Expected {} in action inputs".format(dep_setup_files[0].path),
+        )
+        asserts.true(
+            env,
+            ". " + dep_setup_files[0].path in cmd,
+            "Expected command to source {}".format(dep_setup_files[0].path),
+        )
+    else:
+        asserts.false(
+            env,
+            sets.contains(inputs, symvers_file),
+            "Unexpected {} in action inputs".format(symvers_file.path),
+        )
+        asserts.false(
+            env,
+            "dep_setup.sh" in target_under_test[OutputGroupInfo],
+            "Unexpected dep_setup.sh output group on ddk_library",
+        )
+
+    if ctx.attr.expected_propagated_symvers:
+        asserts.set_equals(
+            env,
+            sets.make(ctx.attr.symvers_owner[ModuleSymversInfo].entries.to_list()),
+            sets.make(target_under_test[ModuleSymversInfo].entries.to_list()),
+            "Expected ddk_library to propagate ModuleSymversInfo.entries",
+        )
+
+    return analysistest.end(env)
+
+_ddk_library_symvers_action_test = analysistest.make(
+    impl = _ddk_library_symvers_action_test_impl,
+    attrs = {
+        "symvers_owner": attr.label(
+            mandatory = True,
+            providers = [ModuleSymversFileInfo, ModuleSymversInfo],
+        ),
+        "expect_dep_setup": attr.bool(mandatory = True),
+        "expected_propagated_symvers": attr.bool(),
+        "_config_is_local": attr.label(
+            default = "//build/kernel/kleaf:config_local",
+        ),
+    },
+)
+
+def _ddk_library_symvers_tests(name, kernel_build, legacy_module_a, legacy_module_b):
+    """Tests Module.symvers propagation through ddk_library."""
+    tests = []
+
+    ddk_module(
+        name = name + "_parent",
+        out = name + "_parent.ko",
+        srcs = ["base.c"],
+        kernel_build = kernel_build,
+        tags = ["manual"],
+    )
+
+    ddk_library(
+        name = name + "_lib_a",
+        srcs = ["dep.c"],
+        kernel_build = kernel_build,
+        deps = [name + "_parent"],
+        tags = ["manual"],
+    )
+
+    ddk_library(
+        name = name + "_lib_b",
+        srcs = ["self.c"],
+        kernel_build = kernel_build,
+        deps = [name + "_parent"],
+        tags = ["manual"],
+    )
+
+    # Baseline direct dep to compare deduplicated dep_setup.sh byte-for-byte.
+    ddk_module(
+        name = name + "_direct_module",
+        out = name + "_direct.ko",
+        srcs = ["self.c"],
+        kernel_build = kernel_build,
+        deps = [name + "_parent"],
+        tags = ["manual"],
+    )
+    output_group_files(
+        name = name + "_direct_dep_setup_sh",
+        src = name + "_direct_module",
+        output_group = "dep_setup.sh",
+        tags = ["manual"],
+    )
+    write_file(
+        name = name + "_expected_dep_setup_sh",
+        out = name + "_expected_dep_setup_sh/dep_setup.sh",
+        content = [
+            "mkdir -p $(dirname ${{COMMON_OUT_DIR}}/{}/{}_parent_Module.symvers)".format(
+                native.package_name(),
+                name,
+            ),
+        ],
+    )
+    contain_lines_test(
+        name = name + "_direct_dep_setup_content_test",
+        expected = name + "_expected_dep_setup_sh",
+        actual = name + "_direct_dep_setup_sh",
+    )
+    tests.append(name + "_direct_dep_setup_content_test")
+
+    # ddk_library propagates ModuleSymversInfo but does not restore symvers in its own action.
+    _ddk_library_symvers_action_test(
+        name = name + "_library_skips_own_restore",
+        target_under_test = name + "_lib_a",
+        symvers_owner = name + "_parent",
+        expect_dep_setup = False,
+        expected_propagated_symvers = True,
+    )
+    tests.append(name + "_library_skips_own_restore")
+
+    # child -> lib_a -> parent
+    ddk_module(
+        name = name + "_child_module",
+        out = name + "_child.ko",
+        srcs = ["self.c"],
+        kernel_build = kernel_build,
+        deps = [name + "_lib_a"],
+        tags = ["manual"],
+    )
+
+    # child -> [parent, lib_a] (duplicate direct + library dep)
+    ddk_module(
+        name = name + "_child_with_parent_module",
+        out = name + "_child_with_parent.ko",
+        srcs = ["self.c"],
+        kernel_build = kernel_build,
+        deps = [
+            name + "_parent",
+            name + "_lib_a",
+        ],
+        tags = ["manual"],
+    )
+
+    # child -> [lib_a, lib_b] -> parent (diamond)
+    ddk_module(
+        name = name + "_child_diamond_module",
+        out = name + "_child_diamond.ko",
+        srcs = ["base.c"],
+        kernel_build = kernel_build,
+        deps = [
+            name + "_lib_a",
+            name + "_lib_b",
+        ],
+        tags = ["manual"],
+    )
+
+    # child -> submodule -> lib_a -> parent
+    ddk_submodule(
+        name = name + "_sub",
+        out = name + "_sub.ko",
+        srcs = ["self.c"],
+        deps = [name + "_lib_a"],
+        tags = ["manual"],
+    )
+    ddk_module(
+        name = name + "_child_via_submodule_module",
+        kernel_build = kernel_build,
+        deps = [name + "_sub"],
+        tags = ["manual"],
+    )
+
+    for suffix in (
+        "child",
+        "child_with_parent",
+        "child_diamond",
+        "child_via_submodule",
+    ):
+        _ddk_library_symvers_action_test(
+            name = "{}_{}".format(name, suffix),
+            target_under_test = "{}_{}_module".format(name, suffix),
+            symvers_owner = name + "_parent",
+            expect_dep_setup = True,
+        )
+        tests.append("{}_{}".format(name, suffix))
+
+        output_group_files(
+            name = "{}_{}_dep_setup_sh".format(name, suffix),
+            src = "{}_{}_module".format(name, suffix),
+            output_group = "dep_setup.sh",
+            tags = ["manual"],
+        )
+        diff_test(
+            name = "{}_{}_dep_setup_diff_test".format(name, suffix),
+            file1 = name + "_direct_dep_setup_sh",
+            file2 = "{}_{}_dep_setup_sh".format(name, suffix),
+        )
+        tests.append("{}_{}_dep_setup_diff_test".format(name, suffix))
+
+    # Distinct conflicting legacy kernel_modules in the same package still fail through ddk_library.
+    ddk_library(
+        name = name + "_lib_legacy_a",
+        srcs = ["dep.c"],
+        kernel_build = kernel_build,
+        deps = [legacy_module_a],
+        tags = ["manual"],
+    )
+    ddk_library(
+        name = name + "_lib_legacy_b",
+        srcs = ["self.c"],
+        kernel_build = kernel_build,
+        deps = [legacy_module_b],
+        tags = ["manual"],
+    )
+    ddk_module(
+        name = name + "_legacy_conflict_via_libs_module",
+        out = name + "_legacy_conflict_via_libs_module.ko",
+        srcs = ["base.c"],
+        kernel_build = kernel_build,
+        deps = [
+            name + "_lib_legacy_a",
+            name + "_lib_legacy_b",
+        ],
+        tags = ["manual"],
+    )
+    failure_test(
+        name = name + "_legacy_conflict_via_libs",
+        target_under_test = name + "_legacy_conflict_via_libs_module",
+        error_message_substrs = [
+            "Conflicting dependencies",
+            legacy_module_a,
+            legacy_module_b,
+        ],
+    )
+    tests.append(name + "_legacy_conflict_via_libs")
+
+    ddk_module(
+        name = name + "_legacy_conflict_direct_and_lib_module",
+        out = name + "_legacy_conflict_direct_and_lib_module.ko",
+        srcs = ["base.c"],
+        kernel_build = kernel_build,
+        deps = [
+            legacy_module_a,
+            name + "_lib_legacy_b",
+        ],
+        tags = ["manual"],
+    )
+    failure_test(
+        name = name + "_legacy_conflict_direct_and_lib",
+        target_under_test = name + "_legacy_conflict_direct_and_lib_module",
+        error_message_substrs = [
+            "Conflicting dependencies",
+            legacy_module_a,
+            legacy_module_b,
+        ],
+    )
+    tests.append(name + "_legacy_conflict_direct_and_lib")
+
+    native.test_suite(
+        name = name,
+        tests = tests,
+    )
+
 def ddk_module_test_suite(name):
     """Tests for `ddk_module`.
 
@@ -428,6 +727,14 @@ def ddk_module_test_suite(name):
         legacy_module_b = name + "_legacy_module_b",
     )
     tests.append(name + "_shared_module_symvers")
+
+    _ddk_library_symvers_tests(
+        name = name + "_ddk_library_symvers",
+        kernel_build = name + "_kernel_build",
+        legacy_module_a = name + "_legacy_module_a",
+        legacy_module_b = name + "_legacy_module_b",
+    )
+    tests.append(name + "_ddk_library_symvers")
 
     native.test_suite(
         name = name,
