@@ -394,30 +394,28 @@ def kernel_build(
 
         kmi_symbol_list: A label referring to the main KMI symbol list file. See `additional_kmi_symbol_lists`.
 
-          This is the Bazel equivalent of `ADDITIONAL_KMI_SYMBOL_LISTS`.
+          This is the Bazel equivalent of `KMI_SYMBOL_LIST`.
         additional_kmi_symbol_lists: A list of labels referring to additional KMI symbol list files.
 
           This is the Bazel equivalent of `ADDITIONAL_KMI_SYMBOL_LISTS`.
 
           Let
           ```
-          all_kmi_symbol_lists = [kmi_symbol_list] + additional_kmi_symbol_list
+          all_kmi_symbol_lists = [kmi_symbol_list] + additional_kmi_symbol_lists
           ```
 
           If `all_kmi_symbol_lists` is a non-empty list, `abi_symbollist` and
-          `abi_symbollist.report` are created and added to the
-          [`DefaultInfo`](https://docs.bazel.build/versions/main/skylark/lib/DefaultInfo.html),
-          and copied to `DIST_DIR` during distribution.
+          `abi_symbollist.raw` are created and copied to `DIST_DIR` during
+          distribution.
 
           If `all_kmi_symbol_lists` is `None` or an empty list, `abi_symbollist` and
-          `abi_symbollist.report` are not created.
+          `abi_symbollist.raw` are not created.
 
           It is possible to use a `glob()` to determine whether `abi_symbollist`
-          and `abi_symbollist.report` should be generated at build time.
+          and `abi_symbollist.raw` should be generated at build time.
           For example:
           ```
-          kmi_symbol_list = "gki/aarch64/symbols/base",
-          additional_kmi_symbol_lists = glob(["gki/aarch64/symbols/*"], exclude = ["gki/aarch64/symbols/base"]),
+          additional_kmi_symbol_lists = glob(["gki/aarch64/symbols/*"]),
           ```
 
         protected_module_names_list: A file containing list of protected module names,
@@ -445,7 +443,9 @@ def kernel_build(
           `[kmi_symbol_list] + additional_kmi_symbol_lists`
           and the KMI resulting from the build, to ensure
           they match 1-1.
-        collect_unstripped_modules: If `True`, provide all unstripped in-tree.
+        collect_unstripped_modules: If `True`, provide all unstripped in-tree
+          modules (required for ABI extraction via [`kernel_abi()`](#kernel_abi),
+          independently of whether `abi_definition_stg` is set).
         kbuild_symtypes: The value of `KBUILD_SYMTYPES`.
 
           This can be set to one of the following:
